@@ -23,8 +23,8 @@ const LoginPage = ({ onLogin }) => {
             <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 m-4">
                 <div className="text-center mb-8">
                     <DollarSign className="w-12 h-12 text-blue-600 mx-auto" />
-                    <h2 className="mt-4 text-3xl font-bold text-gray-800">Bienvenido de Vuelta</h2>
-                    <p className="text-gray-500">Inicia sesión en tu portal de cliente.</p>
+                    <h2 className="mt-4 text-3xl font-bold text-gray-800">Portal de proveedores</h2>
+                    <p className="text-gray-500">Inicia sesión en tu portal de proveedor.</p>
                 </div>
                 {error && <p className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">{error}</p>}
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -34,7 +34,7 @@ const LoginPage = ({ onLogin }) => {
                         </label>
                         <input
                             id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                            className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600 focus:border-blue-500 placeholder-gray-300"
                             placeholder="usuario@dominio.com"
                         />
                     </div>
@@ -44,11 +44,11 @@ const LoginPage = ({ onLogin }) => {
                         </label>
                         <input
                             id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                            className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600 focus:border-blue-500 placeholder-gray-300"
                             placeholder="••••••••"
                         />
                     </div>
-                     <div className="text-center text-xs text-gray-400">
+                     <div className="text-center text-xs text-gray-400 ">
                         <p>Usa <strong>usuario@dominio.com</strong> y <strong>password</strong> para ingresar.</p>
                     </div>
                     <button
