@@ -9,16 +9,26 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@prisma/client": "^6.15.0",
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/xml2js": "^0.4.14",
+    "bcrypt": "^6.0.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.518.0",
+    "netsuite-js": "^0.0.4",
     "next": "15.3.4",
+    "oauth-1.0a": "^2.2.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "resend": "^4.6.0",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "24.0.3",
     "@types/react": "19.1.8",
-    "prisma": "^6.10.1",
+    "prisma": "^6.15.0",
     "tailwindcss": "^4",
     "typescript": "5.8.3"
   }
