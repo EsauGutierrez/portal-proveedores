@@ -55,6 +55,12 @@ const ProfilePage = () => {
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    companyName: '',
+    rfc: '',
+    taxAddress: '',
+  });
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -76,7 +82,7 @@ const ProfilePage = () => {
         const errorData = await response.json();
         throw new Error(errorData.message || 'No se pudo cargar el perfil.');
       }
-      
+
       const data = await response.json();
       setProfile(data);
     } catch (err: any) {
@@ -89,6 +95,43 @@ const ProfilePage = () => {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  const handleEditClick = () => {
+    if (profile?.supplierProfile) {
+      setEditFormData({
+        companyName: profile.supplierProfile.companyName || '',
+        rfc: profile.supplierProfile.rfc || '',
+        taxAddress: profile.supplierProfile.taxAddress || '',
+      });
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setIsLoading(true);
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editFormData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al guardar el perfil.');
+      }
+
+      await fetchProfile();
+      setIsEditing(false);
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+      setIsLoading(false);
+    }
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, documentType: string) => {
     const file = e.target.files?.[0];
@@ -110,7 +153,7 @@ const ProfilePage = () => {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Error al subir el archivo.');
       }
-      
+
       fetchProfile();
 
     } catch (err: any) {
@@ -121,35 +164,35 @@ const ProfilePage = () => {
   // --- CORRECCIÓN: La lógica de los documentos se mueve dentro de su propia sección ---
   const renderDocumentsSection = () => {
     if (!profile || profile.role !== 'SUPPLIER' || !profile.supplierProfile) {
-        return null;
+      return null;
     }
 
     const requiredDocuments = [
-        { type: 'CONSTANCIA_SITUACION_FISCAL', displayName: 'Constancia de Situación Fiscal' },
-        { type: 'OPINION_CUMPLIMIENTO_SAT', displayName: 'Opinión de Cumplimiento (SAT)' },
-        { type: 'IDENTIFICACION_OFICIAL', displayName: 'Identificación Oficial del Representante' },
-        { type: 'COMPROBANTE_DOMICILIO', displayName: 'Comprobante de Domicilio' },
-        { type: 'ACTA_CONSTITUTIVA', displayName: 'Acta Constitutiva' },
+      { type: 'CONSTANCIA_SITUACION_FISCAL', displayName: 'Constancia de Situación Fiscal' },
+      { type: 'OPINION_CUMPLIMIENTO_SAT', displayName: 'Opinión de Cumplimiento (SAT)' },
+      { type: 'IDENTIFICACION_OFICIAL', displayName: 'Identificación Oficial del Representante' },
+      { type: 'COMPROBANTE_DOMICILIO', displayName: 'Comprobante de Domicilio' },
+      { type: 'ACTA_CONSTITUTIVA', displayName: 'Acta Constitutiva' },
     ];
 
     const documentsToShow = requiredDocuments.map(reqDoc => {
-        const uploadedDoc = profile.supplierProfile.documents?.find(doc => doc.documentType === reqDoc.type);
-        return {
-          ...reqDoc,
-          status: uploadedDoc?.status || 'PENDING',
-          fileName: uploadedDoc?.fileName || null,
-        };
+      const uploadedDoc = profile.supplierProfile.documents?.find(doc => doc.documentType === reqDoc.type);
+      return {
+        ...reqDoc,
+        status: uploadedDoc?.status || 'PENDING',
+        fileName: uploadedDoc?.fileName || null,
+      };
     });
 
     return (
-        <div className="mt-10 border-t pt-8">
-            <h4 className="text-lg font-semibold text-gray-700 mb-4">Mis Documentos</h4>
-            <div className="space-y-3">
-                {documentsToShow.map(doc => (
-                    <DocumentRow key={doc.type} doc={doc} onFileSelect={handleFileSelect} />
-                ))}
-            </div>
+      <div className="mt-10 border-t pt-8">
+        <h4 className="text-lg font-semibold text-gray-700 mb-4">Mis Documentos</h4>
+        <div className="space-y-3">
+          {documentsToShow.map(doc => (
+            <DocumentRow key={doc.type} doc={doc} onFileSelect={handleFileSelect} />
+          ))}
         </div>
+      </div>
     );
   };
 
@@ -174,9 +217,45 @@ const ProfilePage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {profile.role === 'SUPPLIER' && profile.supplierProfile ? (
             <>
-              <div><label className="block text-sm font-medium text-gray-500">Razón Social</label><p className="text-gray-800">{profile.supplierProfile.companyName}</p></div>
-              <div><label className="block text-sm font-medium text-gray-500">RFC</label><p className="text-gray-800">{profile.supplierProfile.rfc}</p></div>
-              <div className="col-span-2"><label className="block text-sm font-medium text-gray-500">Dirección Fiscal</label><p className="text-gray-800">{profile.supplierProfile.taxAddress}</p></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500">Razón Social</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editFormData.companyName}
+                    onChange={(e) => setEditFormData({ ...editFormData, companyName: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-gray-800"
+                  />
+                ) : (
+                  <p className="text-gray-800">{profile.supplierProfile.companyName}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500">RFC</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editFormData.rfc}
+                    onChange={(e) => setEditFormData({ ...editFormData, rfc: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-gray-800"
+                  />
+                ) : (
+                  <p className="text-gray-800">{profile.supplierProfile.rfc}</p>
+                )}
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-500">Dirección Fiscal</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editFormData.taxAddress}
+                    onChange={(e) => setEditFormData({ ...editFormData, taxAddress: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-gray-800"
+                  />
+                ) : (
+                  <p className="text-gray-800">{profile.supplierProfile.taxAddress}</p>
+                )}
+              </div>
               {profile.supplierProfile.subsidiary && (
                 <div><label className="block text-sm font-medium text-gray-500">Subsidiaria Asignada</label><p className="text-gray-800">{profile.supplierProfile.subsidiary.name}</p></div>
               )}
@@ -186,9 +265,22 @@ const ProfilePage = () => {
             <div><label className="block text-sm font-medium text-gray-500">Rol</label><p className="text-gray-800">{profile.role}</p></div>
           )}
         </div>
-        <button className="mt-8 w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
-          Editar Perfil
-        </button>
+        <div className="mt-8 flex gap-4">
+          {isEditing ? (
+            <>
+              <button onClick={handleSaveProfile} className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                Guardar Cambios
+              </button>
+              <button onClick={() => setIsEditing(false)} className="w-full md:w-auto bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button onClick={handleEditClick} className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+              Editar Perfil
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Se llama a la nueva función para renderizar la sección de documentos */}

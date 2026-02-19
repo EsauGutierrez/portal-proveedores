@@ -50,7 +50,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval }) => {
                     {/* CAMBIO: Se usa el nuevo ícono */}
                     <User className="w-12 h-12 text-blue-600 mx-auto" />
                     {/* CAMBIO: Se actualizan los textos */}
-                    <h2 className="mt-4 text-3xl font-bold text-gray-800">Portal de Proveedores APP</h2>
+                    <h2 className="mt-4 text-3xl font-bold text-gray-800">Portal de Proveedores</h2>
                     <p className="text-gray-500">Bienvenido a tu portal de proveedor</p>
                 </div>
                 {error && <p className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">{error}</p>}
@@ -61,8 +61,8 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval }) => {
                         <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500" placeholder="usuario@dominio.com" required />
                     </div>
                     <div>
-                         <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
-                         {/* CAMBIO: Se ajusta el borde para que sea más sutil */}
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
+                        {/* CAMBIO: Se ajusta el borde para que sea más sutil */}
                         <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500" placeholder="••••••••" required />
                     </div>
                     <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-400">

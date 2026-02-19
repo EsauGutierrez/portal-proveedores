@@ -8,10 +8,10 @@ const prisma = new PrismaClient();
 // GET: Obtener los datos de un perfil de proveedor específico por su ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
 
     const supplierProfile = await prisma.supplierProfile.findUnique({
       where: { id },
