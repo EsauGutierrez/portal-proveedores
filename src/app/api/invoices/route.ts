@@ -42,7 +42,11 @@ export async function GET(request: Request) {
       include: {
         reception: {
           include: {
-            purchaseOrder: true,
+            purchaseOrder: {
+              include: {
+                subsidiary: true,
+              },
+            },
           },
         },
       },
@@ -69,9 +73,9 @@ export async function GET(request: Request) {
         id: invoice.id,
         folio: invoice.folio,
         fecha: invoice.fecha.toISOString(),
-        subsidiaria: invoice.reception.purchaseOrder.subsidiaria,
-        subtotal: formatCurrency(invoice.subtotal),
-        total: formatCurrency(invoice.total),
+        subsidiaria: invoice.reception.purchaseOrder.subsidiary.name,
+        subtotal: formatCurrency(invoice.subtotal.toString()),
+        total: formatCurrency(invoice.total.toString()),
         ordenDeCompra: invoice.reception.purchaseOrder.folio,
         recepcion: invoice.reception.folio,
         pdfUrl: pdfPresignedUrl || invoice.pdfUrl,

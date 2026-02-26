@@ -50,19 +50,32 @@ export async function GET(request: Request) {
         // Lógica para encontrar o crear el proveedor (usuario) en tu base de datos
         // Esto es crucial para conectar la orden de compra al proveedor correcto.
         const user = await tx.user.upsert({
-            where: { email: `${po.proveedorId}@netsuite.com` }, // Usamos un email único basado en el ID de NetSuite
-            update: { name: po.proveedor },
-            create: { 
-                name: po.proveedor,
-                email: `${po.proveedorId}@netsuite.com` // Email de ejemplo
-            }
+          where: { email: `${po.proveedorId}@netsuite.com` }, // Usamos un email único basado en el ID de NetSuite
+          update: { name: po.proveedor },
+          create: {
+            name: po.proveedor,
+            email: `${po.proveedorId}@netsuite.com` // Email de ejemplo
+          }
+        });
+
+        // Create or find subsidiary
+        const subsidiary = await tx.subsidiary.upsert({
+          where: { rfc: po.subsidiaria || 'GENERIC_RFC' },
+          update: { name: po.subsidiaria || 'GENERIC_NAME' },
+          create: {
+            name: po.subsidiaria || 'GENERIC_NAME',
+            rfc: po.subsidiaria || 'GENERIC_RFC',
+            businessName: po.subsidiaria || 'GENERIC_NAME',
+            taxRegime: 'GENERIC_REGIME',
+            taxAddress: 'GENERIC_ADDRESS'
+          }
         });
 
         // Mapeo de datos
         const purchaseOrderData = {
           folio: po.folio,
           fecha: new Date(po.fecha),
-          subsidiaria: po.subsidiaria,
+          subsidiaryId: subsidiary.id,
           subtotal: parseFloat(po.subtotal),
           total: parseFloat(po.total),
           userId: user.id, // Asignamos el ID del usuario/proveedor encontrado o creado
@@ -74,11 +87,11 @@ export async function GET(request: Request) {
           update: purchaseOrderData,
           create: purchaseOrderData,
         });
-        
+
         if (record.createdAt.getTime() === record.updatedAt.getTime()) {
-            createdCount++;
+          createdCount++;
         } else {
-            updatedCount++;
+          updatedCount++;
         }
       }
       return { createdCount, updatedCount };
@@ -91,6 +104,6 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error('Error durante la sincronización con NetSuite:', error);
-    return NextResponse.json({ message: 'Error interno del servidor durante la sincronización.', error: error.message }, { status: 500 });
+    return NextResponse.json({ message: 'Error interno del servidor durante la sincronización.', error: (error as Error).message }, { status: 500 });
   }
 }
