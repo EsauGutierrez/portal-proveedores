@@ -24,6 +24,7 @@ export async function GET(request: Request) {
         recepciones: {
           include: {
             articles: true,
+            invoice: true, // We include this to hide the upload button if the invoice exists
           },
         },
         user: true,
@@ -77,10 +78,10 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating purchase order:', error);
     if ((error as any).code === 'P2002') {
-        return NextResponse.json({ message: `El folio '${(error as any).meta.target}' ya existe.` }, { status: 409 });
+      return NextResponse.json({ message: `El folio '${(error as any).meta.target}' ya existe.` }, { status: 409 });
     }
     if ((error as any).code === 'P2025') {
-        return NextResponse.json({ message: 'El proveedor o la subsidiaria especificados no existen.' }, { status: 404 });
+      return NextResponse.json({ message: 'El proveedor o la subsidiaria especificados no existen.' }, { status: 404 });
     }
     return NextResponse.json({ message: 'Error al crear la orden de compra.' }, { status: 500 });
   }

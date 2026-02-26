@@ -9,6 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.994.0",
+    "@aws-sdk/client-sqs": "^3.999.0",
+    "@aws-sdk/s3-request-presigner": "^3.994.0",
     "@prisma/client": "^6.15.0",
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.10",

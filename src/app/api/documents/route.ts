@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
-
+import { uploadFileToS3 } from '../../lib/s3';
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
@@ -37,10 +37,15 @@ export async function POST(request: Request) {
     }
     const supplierProfileId = user.supplierProfile.id;
 
-    // 4. Lógica para subir el archivo a un servicio de almacenamiento (ej. S3)
-    // Por ahora, simulamos este paso.
-    console.log(`Subiendo archivo ${file.name} para el documento ${documentType}`);
-    const fileUrl = `https://storage.example.com/documents/${supplierProfileId}/${file.name}`;
+    // 4. Lógica para subir el archivo a un servicio de almacenamiento AWS S3
+    console.log(`Subiendo archivo ${file.name} para el documento ${documentType} a S3...`);
+    let fileUrl = '';
+
+    try {
+      fileUrl = await uploadFileToS3(file, `documents/${supplierProfileId}`);
+    } catch (uploadError) {
+      return NextResponse.json({ message: 'Error al subir el documento a S3.' }, { status: 500 });
+    }
 
     // 5. Guardar o actualizar el registro del documento en la base de datos
     const document = await prisma.supplierDocument.upsert({

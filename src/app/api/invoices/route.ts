@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js'; // Se añade la importación para leer XML
-
+import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 const prisma = new PrismaClient();
 
 // Helper para formatear moneda
@@ -50,7 +50,22 @@ export async function GET(request: Request) {
     });
 
     // 3. Formateo de datos para el frontend
-    const formattedInvoices = invoices.map(invoice => ({
+    const formattedInvoices = await Promise.all(invoices.map(async (invoice) => {
+      let pdfPresignedUrl = '';
+      let xmlPresignedUrl = '';
+
+      try {
+        if (invoice.pdfUrl) {
+          pdfPresignedUrl = await getPresignedUrl(invoice.pdfUrl);
+        }
+        if (invoice.xmlUrl) {
+          xmlPresignedUrl = await getPresignedUrl(invoice.xmlUrl);
+        }
+      } catch (e) {
+        console.error("Error generando presigned url para factura", invoice.folio);
+      }
+
+      return {
         id: invoice.id,
         folio: invoice.folio,
         fecha: invoice.fecha.toISOString(),
@@ -59,8 +74,9 @@ export async function GET(request: Request) {
         total: formatCurrency(invoice.total),
         ordenDeCompra: invoice.reception.purchaseOrder.folio,
         recepcion: invoice.reception.folio,
-        pdfUrl: invoice.pdfUrl,
-        xmlUrl: invoice.xmlUrl,
+        pdfUrl: pdfPresignedUrl || invoice.pdfUrl,
+        xmlUrl: xmlPresignedUrl || invoice.xmlUrl,
+      };
     }));
 
     return NextResponse.json(formattedInvoices, { status: 200 });
@@ -87,10 +103,10 @@ export async function POST(request: Request) {
     // --- LÓGICA DE VALIDACIÓN DEL XML ---
     const xmlText = await xmlFile.text();
     const xmlData = await parseStringPromise(xmlText, { explicitArray: false, trim: true });
-    
+
     const comprobante = xmlData['cfdi:Comprobante'];
     if (!comprobante) {
-        return NextResponse.json({ message: 'El archivo XML no es un CFDI válido.' }, { status: 400 });
+      return NextResponse.json({ message: 'El archivo XML no es un CFDI válido.' }, { status: 400 });
     }
 
     const emisor = comprobante['cfdi:Emisor'].$;
@@ -100,17 +116,17 @@ export async function POST(request: Request) {
     const folioFiscal = comprobante['cfdi:Complemento']['tfd:TimbreFiscalDigital'].$.UUID;
 
     const userProfile = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { supplierProfile: { include: { subsidiary: true } } }
+      where: { id: userId },
+      include: { supplierProfile: { include: { subsidiary: true } } }
     });
 
     const reception = await prisma.reception.findUnique({
-        where: { id: receptionId },
-        include: { articles: true }
+      where: { id: receptionId },
+      include: { articles: true }
     });
 
     if (!userProfile?.supplierProfile || !reception) {
-        return NextResponse.json({ message: 'No se encontró el proveedor o la recepción asociada.' }, { status: 404 });
+      return NextResponse.json({ message: 'No se encontró el proveedor o la recepción asociada.' }, { status: 404 });
     }
 
     const supplier = userProfile.supplierProfile;
@@ -118,7 +134,7 @@ export async function POST(request: Request) {
 
     const receptionSubtotal = reception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
     const receptionTotal = reception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
-    
+
     const errors: string[] = [];
     if (emisor.Rfc !== supplier.rfc) {
       errors.push(`El RFC del emisor en el XML (${emisor.Rfc}) no coincide con el del proveedor (${supplier.rfc}).`);
@@ -127,10 +143,10 @@ export async function POST(request: Request) {
       errors.push(`El RFC del receptor en el XML (${receptor.Rfc}) no coincide con el de la subsidiaria (${subsidiary.rfc}).`);
     }
     if (emisor.Nombre !== supplier.companyName) {
-        errors.push(`La razón social del emisor en el XML no coincide.`);
+      errors.push(`La razón social del emisor en el XML no coincide.`);
     }
     if (receptor.Nombre !== subsidiary.businessName) {
-        errors.push(`La razón social del receptor en el XML no coincide.`);
+      errors.push(`La razón social del receptor en el XML no coincide.`);
     }
     if (Math.abs(xmlSubtotal - receptionSubtotal) > 0.01) {
       errors.push(`El subtotal del XML ($${xmlSubtotal}) no coincide con el de la recepción ($${receptionSubtotal.toFixed(2)}).`);
@@ -144,8 +160,18 @@ export async function POST(request: Request) {
     }
     // --- FIN DE LA LÓGICA DE VALIDACIÓN ---
 
-    const mockPdfUrl = `https://storage.example.com/invoices/${pdfFile.name}`;
-    const mockXmlUrl = `https://storage.example.com/invoices/${xmlFile.name}`;
+    // --- SUBIDA A AWS S3 ---
+    let pdfUrl = '';
+    let xmlUrl = '';
+
+    try {
+      // Subimos primero los archivos a S3. 
+      // Si fallan, no guardamos el registro inconsistente en la base de datos.
+      pdfUrl = await uploadFileToS3(pdfFile, `invoices/${userId}/${receptionId}`);
+      xmlUrl = await uploadFileToS3(xmlFile, `invoices/${userId}/${receptionId}`);
+    } catch (uploadError) {
+      return NextResponse.json({ message: 'Error al subir los archivos a S3.', error: (uploadError as Error).message }, { status: 500 });
+    }
 
     const newInvoice = await prisma.invoice.create({
       data: {
@@ -153,8 +179,8 @@ export async function POST(request: Request) {
         fecha: new Date(comprobante.$.Fecha),
         subtotal: xmlSubtotal,
         total: xmlTotal,
-        pdfUrl: mockPdfUrl,
-        xmlUrl: mockXmlUrl,
+        pdfUrl: pdfUrl,
+        xmlUrl: xmlUrl,
         syncStatus: 'PENDING_SYNC',
         user: { connect: { id: userId } },
         reception: { connect: { id: receptionId } },

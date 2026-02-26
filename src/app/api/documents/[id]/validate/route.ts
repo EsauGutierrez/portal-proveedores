@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 1. Autenticar y autorizar al administrador
@@ -24,7 +24,7 @@ export async function PATCH(
     }
 
     // 2. Obtener datos de la petición
-    const documentId = params.id;
+    const documentId = (await params).id;
     const body = await request.json();
     const { status } = body;
 
@@ -44,7 +44,7 @@ export async function PATCH(
   } catch (error) {
     console.error('Error al validar el documento:', error);
     if ((error as any).code === 'P2025') {
-        return NextResponse.json({ message: 'Documento no encontrado.' }, { status: 404 });
+      return NextResponse.json({ message: 'Documento no encontrado.' }, { status: 404 });
     }
     return NextResponse.json({ message: 'Error al procesar la solicitud.' }, { status: 500 });
   }
