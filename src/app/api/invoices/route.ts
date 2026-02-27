@@ -5,6 +5,8 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js'; // Se añade la importación para leer XML
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+
 const prisma = new PrismaClient();
 
 // Helper para formatear moneda
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
     }
 
-    // --- LÓGICA DE VALIDACIÓN DEL XML ---
+    // --- EXTRACCIÓN BÁSICA DEL XML ---
     const xmlText = await xmlFile.text();
     const xmlData = await parseStringPromise(xmlText, { explicitArray: false, trim: true });
 
@@ -113,70 +115,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'El archivo XML no es un CFDI válido.' }, { status: 400 });
     }
 
-    const emisor = comprobante['cfdi:Emisor'].$;
-    const receptor = comprobante['cfdi:Receptor'].$;
-    const xmlSubtotal = parseFloat(comprobante.$.SubTotal);
-    const xmlTotal = parseFloat(comprobante.$.Total);
-    const folioFiscal = comprobante['cfdi:Complemento']['tfd:TimbreFiscalDigital'].$.UUID;
+    const xmlSubtotal = parseFloat(comprobante.$.SubTotal) || 0;
+    const xmlTotal = parseFloat(comprobante.$.Total) || 0;
 
-    const userProfile = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { supplierProfile: { include: { subsidiary: true } } }
-    });
-
-    const reception = await prisma.reception.findUnique({
-      where: { id: receptionId },
-      include: { articles: true }
-    });
-
-    if (!userProfile?.supplierProfile || !reception) {
-      return NextResponse.json({ message: 'No se encontró el proveedor o la recepción asociada.' }, { status: 404 });
+    // UUID is required to uniquely identify the invoice document on databases
+    let folioFiscal = '';
+    try {
+      folioFiscal = comprobante['cfdi:Complemento']['tfd:TimbreFiscalDigital'].$.UUID;
+    } catch (e) {
+      return NextResponse.json({ message: 'No se encontró el UUID (TimbreFiscalDigital) en el XML.' }, { status: 400 });
     }
-
-    const supplier = userProfile.supplierProfile;
-    const subsidiary = supplier.subsidiary;
-
-    const receptionSubtotal = reception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
-    const receptionTotal = reception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
-
-    const errors: string[] = [];
-    if (emisor.Rfc !== supplier.rfc) {
-      errors.push(`El RFC del emisor en el XML (${emisor.Rfc}) no coincide con el del proveedor (${supplier.rfc}).`);
-    }
-    if (receptor.Rfc !== subsidiary.rfc) {
-      errors.push(`El RFC del receptor en el XML (${receptor.Rfc}) no coincide con el de la subsidiaria (${subsidiary.rfc}).`);
-    }
-    if (emisor.Nombre !== supplier.companyName) {
-      errors.push(`La razón social del emisor en el XML no coincide.`);
-    }
-    if (receptor.Nombre !== subsidiary.businessName) {
-      errors.push(`La razón social del receptor en el XML no coincide.`);
-    }
-    if (Math.abs(xmlSubtotal - receptionSubtotal) > 0.01) {
-      errors.push(`El subtotal del XML ($${xmlSubtotal}) no coincide con el de la recepción ($${receptionSubtotal.toFixed(2)}).`);
-    }
-    if (Math.abs(xmlTotal - receptionTotal) > 0.01) {
-      errors.push(`El total del XML ($${xmlTotal}) no coincide con el de la recepción ($${receptionTotal.toFixed(2)}).`);
-    }
-
-    if (errors.length > 0) {
-      return NextResponse.json({ message: 'El archivo XML contiene errores de validación.', errors }, { status: 400 });
-    }
-    // --- FIN DE LA LÓGICA DE VALIDACIÓN ---
 
     // --- SUBIDA A AWS S3 ---
     let pdfUrl = '';
     let xmlUrl = '';
-
     try {
-      // Subimos primero los archivos a S3. 
-      // Si fallan, no guardamos el registro inconsistente en la base de datos.
       pdfUrl = await uploadFileToS3(pdfFile, `invoices/${userId}/${receptionId}`);
       xmlUrl = await uploadFileToS3(xmlFile, `invoices/${userId}/${receptionId}`);
     } catch (uploadError) {
-      return NextResponse.json({ message: 'Error al subir los archivos a S3.', error: (uploadError as Error).message }, { status: 500 });
+      return NextResponse.json({ message: 'Error al subir los archivos a AWS S3.', error: (uploadError as Error).message }, { status: 500 });
     }
 
+    // --- GUARDADO INICIAL EN BASE DE DATOS COMO PENDING ---
     const newInvoice = await prisma.invoice.create({
       data: {
         folio: folioFiscal,
@@ -191,7 +151,35 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ message: 'Factura validada y recibida correctamente.', invoice: newInvoice }, { status: 201 });
+    // --- ENVIAR MENSAJE A SQS PARA VALIDACIÓN ASÍNCRONA ---
+    const sqsClient = new SQSClient({
+      region: process.env.AWS_REGION || 'us-east-2',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+      }
+    });
+
+    try {
+      await sqsClient.send(new SendMessageCommand({
+        QueueUrl: process.env.AWS_SQS_INVOICES_URL,
+        MessageBody: JSON.stringify({
+          invoiceId: newInvoice.id,
+          userId: userId,
+          receptionId: receptionId
+        })
+      }));
+      console.log(`Mensaje SQS enviado para la factura: ${newInvoice.id}`);
+    } catch (sqsError) {
+      console.error('Error enviando mensaje a SQS:', sqsError);
+      // We still return 201 because the database was created successfully 
+      // We can add a mechanism to retry failed messages later
+    }
+
+    return NextResponse.json({
+      message: 'Archivos recibidos. La factura será validada en breve.',
+      invoice: newInvoice
+    }, { status: 201 });
 
   } catch (error) {
     console.error('Error al procesar la factura:', error);
