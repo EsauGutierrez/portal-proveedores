@@ -105,8 +105,8 @@ export async function POST(request: Request) {
             // 7. Sincronización a NETSUITE mediante RESTlet
             try {
                 // TODO: CAMBIAR ESTOS IDs POR LOS REALES EN NETSUITE
-                const SCRIPT_ID = 'customscript_imr_portal_facturas_rl';
-                const DEPLOY_ID = 'customdeploy_imr_portal_facturas_rl_1';
+                const SCRIPT_ID = 'customscript_imr_portal_fact';
+                const DEPLOY_ID = 'customdeploy_imr_pp_facturas_rest';
 
                 const netsuitePayload = {
                     proveedorId: supplier.rfc, // O usar el internal ID de NetSuite si lo tienes mapeado
