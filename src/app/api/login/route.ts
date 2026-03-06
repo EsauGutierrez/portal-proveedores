@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        supplierProfile: true, // Incluimos el perfil para verificar si está activo
+        supplierProfile: true, // Incluimos el perfil si es proveedor
+        tenant: true,          // Y también incluimos su Tenant para saber a qué empresa pertenece
       },
     });
 
@@ -35,24 +36,38 @@ export async function POST(request: Request) {
         { status: 401 } // Unauthorized
       );
     }
-    
+
     // 4. Lógica de autorización basada en el rol
     if (user.role === 'SUPPLIER') {
-        // Si es un proveedor, verificar que su perfil esté ACTIVO
-        if (user.supplierProfile?.status !== 'ACTIVE') {
-            // Si el proveedor no está activo, devolvemos un código de error específico
-            // y el ID de su perfil para que el frontend sepa a dónde redirigir.
-            return NextResponse.json(
-                { 
-                  errorCode: 'PENDING_APPROVAL',
-                  message: 'Tu cuenta está pendiente de aprobación.',
-                  supplierProfileId: user.supplierProfile?.id 
-                },
-                { status: 403 } // Forbidden
-            );
-        }
+      // Si es un proveedor, verificar que su perfil esté ACTIVO
+      if (user.supplierProfile?.status !== 'ACTIVE') {
+        return NextResponse.json(
+          {
+            errorCode: 'PENDING_APPROVAL',
+            message: 'Tu cuenta está pendiente de aprobación.',
+            supplierProfileId: user.supplierProfile?.id
+          },
+          { status: 403 }
+        );
+      }
+
+      // Verificar que el Tenant de este proveedor esté activo
+      if (user.tenant && !user.tenant.isActive) {
+        return NextResponse.json(
+          { message: 'El acceso al portal de esta empresa está suspendido.' },
+          { status: 403 }
+        );
+      }
+    } else if (user.role === 'TENANT_ADMIN') {
+      // Si es administrador del cliente, verificar que su empresa (Tenant) siga activa
+      if (!user.tenant?.isActive) {
+        return NextResponse.json(
+          { message: 'La cuenta de tu empresa está suspendida. Contacta a soporte.' },
+          { status: 403 }
+        );
+      }
     }
-    // Si el rol es 'ADMIN', no se necesita ninguna verificación adicional del perfil.
+    // Si el rol es 'SUPERADMIN', tiene acceso global y no se hacen estas verificaciones.
 
     // 5. Comparar la contraseña proporcionada con la guardada (hasheada)
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -70,7 +85,9 @@ export async function POST(request: Request) {
         userId: user.id,
         email: user.email,
         name: user.name,
-        role: user.role, // Incluimos el rol en el token
+        role: user.role, // Puede ser SUPERADMIN, TENANT_ADMIN o SUPPLIER
+        tenantId: user.tenantId, // ! IMPORTANTE: Añadimos el tenantId al token
+        supplierProfileId: user.supplierProfile?.id || null, // Opcional pero útil para el Frontend
       },
       process.env.JWT_SECRET!,
       {

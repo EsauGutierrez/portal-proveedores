@@ -52,12 +52,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    // Se esperan los IDs del proveedor (userId) y la subsidiaria (subsidiaryId)
-    const { folio, fecha, subtotal, total, userId, subsidiaryId } = body;
+    // Se esperan los IDs del proveedor, la subsidiaria y ahora el tenant
+    const { folio, fecha, subtotal, total, userId, subsidiaryId, tenantId } = body;
 
     // Validación de los datos de entrada
-    if (!folio || !fecha || !subtotal || !total || !userId || !subsidiaryId) {
-      return NextResponse.json({ message: 'Faltan datos requeridos para crear la orden de compra.' }, { status: 400 });
+    if (!folio || !fecha || !subtotal || !total || !userId || !subsidiaryId || !tenantId) {
+      return NextResponse.json({ message: 'Faltan datos requeridos (incluyendo tenantId) para crear la orden de compra.' }, { status: 400 });
     }
 
     // Creación de la nueva orden de compra
@@ -67,9 +67,10 @@ export async function POST(request: Request) {
         fecha: new Date(fecha),
         subtotal,
         total,
-        // Se conecta con el usuario (proveedor) y la subsidiaria por sus IDs
+        // Se conecta con el usuario (proveedor), subsidiaria y Tenant
         user: { connect: { id: userId } },
         subsidiary: { connect: { id: subsidiaryId } },
+        tenant: { connect: { id: tenantId } }, // <-- INYECTAR TENANT
       },
     });
 

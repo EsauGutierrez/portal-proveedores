@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    
+
     const email = formData.get('email') as string;
     const name = formData.get('name') as string;
     const companyName = formData.get('companyName') as string;
@@ -16,11 +16,11 @@ export async function POST(request: Request) {
     const taxAddress = formData.get('taxAddress') as string;
 
     const files = {
-        CONSTANCIA_SITUACION_FISCAL: formData.get('constanciaFiscal') as File,
-        OPINION_CUMPLIMIENTO_SAT: formData.get('opinionSat') as File,
-        IDENTIFICACION_OFICIAL: formData.get('identificacionOficial') as File,
-        COMPROBANTE_DOMICILIO: formData.get('comprobanteDomicilio') as File,
-        ACTA_CONSTITUTIVA: formData.get('actaConstitutiva') as File,
+      CONSTANCIA_SITUACION_FISCAL: formData.get('constanciaFiscal') as File,
+      OPINION_CUMPLIMIENTO_SAT: formData.get('opinionSat') as File,
+      IDENTIFICACION_OFICIAL: formData.get('identificacionOficial') as File,
+      COMPROBANTE_DOMICILIO: formData.get('comprobanteDomicilio') as File,
+      ACTA_CONSTITUTIVA: formData.get('actaConstitutiva') as File,
     };
 
     if (!email || !name || !companyName || !rfc || !taxAddress) {
@@ -31,8 +31,8 @@ export async function POST(request: Request) {
     if (existingUser) {
       return NextResponse.json({ message: 'El correo electrónico ya está registrado.' }, { status: 409 });
     }
-    
-    const existingSupplier = await prisma.supplierProfile.findUnique({ where: { rfc } });
+
+    const existingSupplier = await prisma.supplierProfile.findFirst({ where: { rfc } });
     if (existingSupplier) {
       return NextResponse.json({ message: 'El RFC ya está registrado.' }, { status: 409 });
     }
@@ -46,7 +46,17 @@ export async function POST(request: Request) {
     const defaultSubsidiaryId = 'cmd3jy2l60003sc0ma034cha4'; // <-- ¡IMPORTANTE: Reemplaza esto!
 
     const newUserAndProfile = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { email, name } });
+
+      const subsidiary = await tx.subsidiary.findUnique({
+        where: { id: defaultSubsidiaryId },
+        select: { tenantId: true, id: true }
+      });
+
+      if (!subsidiary) {
+        throw new Error('Subsidiaria por defecto no encontrada. (P2025)');
+      }
+
+      const user = await tx.user.create({ data: { email, name, tenantId: subsidiary.tenantId } });
 
       const supplierProfile = await tx.supplierProfile.create({
         data: {
@@ -55,7 +65,8 @@ export async function POST(request: Request) {
           taxAddress,
           status: 'PENDING',
           userId: user.id,
-          subsidiaryId: defaultSubsidiaryId, // Se usa el ID por defecto
+          subsidiaryId: subsidiary.id,
+          tenantId: subsidiary.tenantId, // <-- Se hereda de la subsidiaria
         },
       });
 
@@ -82,10 +93,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newUserAndProfile, { status: 201 });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error en el registro:', error);
-    if ((error as any).code === 'P2025') {
-        return NextResponse.json({ message: 'La subsidiaria por defecto no existe. Revisa la configuración.' }, { status: 500 });
+    if (error.code === 'P2025' || error.message.includes('P2025')) {
+      return NextResponse.json({ message: 'La subsidiaria por defecto no existe. Revisa la configuración.' }, { status: 500 });
     }
     return NextResponse.json({ message: 'Error al procesar el registro.' }, { status: 500 });
   }

@@ -19,7 +19,8 @@ enum SupplierStatus {
 }
 
 enum Role {
-  ADMIN
+  SUPERADMIN
+  TENANT_ADMIN
   SUPPLIER
 }
 
@@ -29,152 +30,210 @@ enum InvoiceSyncStatus {
   FAILED
 }
 
-// NUEVA ENUMERACIÓN: Para el estado de los documentos
 enum DocumentStatus {
-  PENDING   // Aún no se ha cargado
-  UPLOADED  // Cargado y pendiente de revisión
-  APPROVED  // Revisado y aprobado
-  REJECTED  // Revisado y rechazado
+  PENDING
+  UPLOADED
+  APPROVED
+  REJECTED
 }
-
 
 // --- MODELOS DE LA APLICACIÓN ---
 
-model User {
-  id                  String                @id @default(cuid())
-  name                String?
-  email               String?               @unique
-  password            String?
-  role                Role                  @default(SUPPLIER)
-  emailVerified       DateTime?
-  image               String?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  
-  purchaseOrders      PurchaseOrder[]
-  invoices            Invoice[]
-  paymentComplements  PaymentComplement[]
+// NUEVO MODELO: Organización / Cliente
+model Tenant {
+  id       String  @id @default(cuid())
+  name     String
+  isActive Boolean @default(true)
 
-  supplierProfile     SupplierProfile?
+  // Credenciales NetSuite
+  netsuiteAccountId   String?
+  netsuiteConsumerKey String?
+  netsuiteConsumerSec String?
+  netsuiteTokenId     String?
+  netsuiteTokenSecret String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  subsidiaries       Subsidiary[]
+  supplierProfiles   SupplierProfile[]
+  purchaseOrders     PurchaseOrder[]
+  receptions         Reception[]
+  invoices           Invoice[]
+  paymentComplements PaymentComplement[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String?
+  role          Role      @default(SUPPLIER)
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenantId String? // Opcional porque SUPERADMIN puede no tener tenant
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  purchaseOrders     PurchaseOrder[]
+  invoices           Invoice[]
+  paymentComplements PaymentComplement[]
+  supplierProfile    SupplierProfile?
 }
 
 model SupplierProfile {
-  id            String          @id @default(cuid())
-  companyName   String
-  rfc           String          @unique
-  taxAddress    String
-  status        SupplierStatus  @default(PENDING)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id          String         @id @default(cuid())
+  companyName String
+  rfc         String
+  taxAddress  String
+  status      SupplierStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  userId        String          @unique
-  user          User            @relation(fields: [userId], references: [id])
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  subsidiaryId  String
-  subsidiary    Subsidiary      @relation(fields: [subsidiaryId], references: [id])
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
-  // CAMBIO: Se añade la relación con los documentos
-  documents     SupplierDocument[]
+  subsidiaryId String
+  subsidiary   Subsidiary @relation(fields: [subsidiaryId], references: [id])
+
+  documents SupplierDocument[]
+
+  @@unique([tenantId, rfc])
 }
 
-// NUEVO MODELO: Para los documentos del proveedor
 model SupplierDocument {
-  id                String          @id @default(cuid())
-  documentType      String          // e.g., 'CONSTANCIA_SITUACION_FISCAL'
-  fileName          String
-  fileUrl           String
-  status            DocumentStatus  @default(PENDING)
-  uploadedAt        DateTime        @default(now())
-  
+  id           String         @id @default(cuid())
+  documentType String
+  fileName     String
+  fileUrl      String
+  status       DocumentStatus @default(PENDING)
+  uploadedAt   DateTime       @default(now())
+
   supplierProfileId String
   supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id])
 
-  @@unique([supplierProfileId, documentType]) // Un proveedor solo puede tener un documento de cada tipo
+  @@unique([supplierProfileId, documentType])
 }
 
-
 model Subsidiary {
-  id            String    @id @default(cuid())
-  name          String
-  rfc           String    @unique
-  businessName  String
-  taxRegime     String
-  taxAddress    String
-  logoUrl       String?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  rfc          String?
+  businessName String
+  taxRegime    String
+  taxAddress   String
+  logoUrl      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  purchaseOrders PurchaseOrder[]
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  purchaseOrders   PurchaseOrder[]
   supplierProfiles SupplierProfile[]
 }
 
-// ... (El resto de tus modelos no cambian)
 model PurchaseOrder {
-  id            String      @id @default(cuid())
-  folio         String      @unique
-  fecha         DateTime
-  subtotal      Decimal     @db.Decimal(10, 2)
-  total         Decimal     @db.Decimal(10, 2)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  userId        String
-  user          User        @relation(fields: [userId], references: [id])
-  subsidiaryId  String
-  subsidiary    Subsidiary  @relation(fields: [subsidiaryId], references: [id])
-  recepciones   Reception[]
+  id        String   @id @default(cuid())
+  folio     String
+  fecha     DateTime
+  subtotal  Decimal  @db.Decimal(10, 2)
+  total     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  subsidiaryId String
+  subsidiary   Subsidiary  @relation(fields: [subsidiaryId], references: [id])
+  recepciones  Reception[]
+
+  @@unique([tenantId, folio])
 }
+
 model Reception {
-  id            String      @id @default(cuid())
-  folio         String      @unique
-  fecha         DateTime
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id        String   @id @default(cuid())
+  folio     String
+  fecha     DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   purchaseOrderId String
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  articles      ReceptionArticle[]
-  invoice       Invoice?
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  articles        ReceptionArticle[]
+  invoice         Invoice?
+
+  @@unique([tenantId, folio])
 }
+
 model ReceptionArticle {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   articleName String
   quantity    Int
-  unitPrice   Decimal   @db.Decimal(10, 2)
-  subtotal    Decimal   @db.Decimal(10, 2)
-  tax         Decimal   @db.Decimal(10, 2)
-  total       Decimal   @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  subtotal    Decimal @db.Decimal(10, 2)
+  tax         Decimal @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
+
   receptionId String
-  reception   Reception @relation(fields: [receptionId], references: [id])
+  reception   Reception @relation(fields: [receptionId], references: [id], onDelete: Cascade)
 }
+
 model Invoice {
-  id            String      @id @default(cuid())
-  folio         String      @unique
-  fecha         DateTime
-  subtotal      Decimal     @db.Decimal(10, 2)
-  total         Decimal     @db.Decimal(10, 2)
-  pdfUrl        String?
-  xmlUrl        String?
-  syncStatus    InvoiceSyncStatus @default(PENDING_SYNC)
-  syncError     String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  userId        String
-  user          User        @relation(fields: [userId], references: [id])
-  receptionId   String      @unique
-  reception     Reception   @relation(fields: [receptionId], references: [id])
+  id         String            @id @default(cuid())
+  folio      String
+  fecha      DateTime
+  subtotal   Decimal           @db.Decimal(10, 2)
+  total      Decimal           @db.Decimal(10, 2)
+  pdfUrl     String?
+  xmlUrl     String?
+  syncStatus InvoiceSyncStatus @default(PENDING_SYNC)
+  syncError  String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId             String
+  user               User                @relation(fields: [userId], references: [id])
+  receptionId        String              @unique
+  reception          Reception           @relation(fields: [receptionId], references: [id])
   paymentComplements PaymentComplement[]
+
+  @@unique([tenantId, folio])
 }
+
 model PaymentComplement {
-  id            String    @id @default(cuid())
-  folio         String    @unique
-  fecha         DateTime
-  total         Decimal   @db.Decimal(10, 2)
-  pdfUrl        String?
-  xmlUrl        String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  invoiceId     String
-  invoice       Invoice   @relation(fields: [invoiceId], references: [id])
+  id        String   @id @default(cuid())
+  folio     String
+  fecha     DateTime
+  total     Decimal  @db.Decimal(10, 2)
+  pdfUrl    String?
+  xmlUrl    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@unique([tenantId, folio])
 }

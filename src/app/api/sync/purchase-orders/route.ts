@@ -10,8 +10,14 @@ const prisma = new PrismaClient();
 export async function GET(request: Request) {
   // 1. Seguridad: Asegurarse de que solo un servicio autorizado pueda iniciar la sincronización
   const apiKey = request.headers.get('x-sync-key');
+  const tenantId = request.headers.get('x-tenant-id'); // <-- Requerimos saber a qué empresa estamos mapeando los datos de NetSuite
+
   if (apiKey !== process.env.SYNC_API_KEY) {
     return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
+  }
+
+  if (!tenantId) {
+    return NextResponse.json({ message: 'Falta cabecera x-tenant-id' }, { status: 400 });
   }
 
   try {
@@ -54,22 +60,29 @@ export async function GET(request: Request) {
           update: { name: po.proveedor },
           create: {
             name: po.proveedor,
-            email: `${po.proveedorId}@netsuite.com` // Email de ejemplo
+            email: `${po.proveedorId}@netsuite.com`, // Email de ejemplo
+            tenantId // Asociar al proveedor con este tenant específico
           }
         });
 
-        // Create or find subsidiary
-        const subsidiary = await tx.subsidiary.upsert({
-          where: { rfc: po.subsidiaria || 'GENERIC_RFC' },
-          update: { name: po.subsidiaria || 'GENERIC_NAME' },
-          create: {
-            name: po.subsidiaria || 'GENERIC_NAME',
-            rfc: po.subsidiaria || 'GENERIC_RFC',
-            businessName: po.subsidiaria || 'GENERIC_NAME',
-            taxRegime: 'GENERIC_REGIME',
-            taxAddress: 'GENERIC_ADDRESS'
-          }
+        // Buscar subsidiaria por nombre dentro de este tenant (ya que rfc no es globalmente único)
+        let subsidiary = await tx.subsidiary.findFirst({
+          where: { tenantId, name: po.subsidiaria || 'GENERIC_NAME' }
         });
+
+        // Si no existe, crearla
+        if (!subsidiary) {
+          subsidiary = await tx.subsidiary.create({
+            data: {
+              name: po.subsidiaria || 'GENERIC_NAME',
+              rfc: po.subsidiaria || 'GENERIC_RFC',
+              businessName: po.subsidiaria || 'GENERIC_NAME',
+              taxRegime: 'GENERIC_REGIME',
+              taxAddress: 'GENERIC_ADDRESS',
+              tenantId // <- Asociar subsidiaria al tenant
+            }
+          })
+        }
 
         // Mapeo de datos
         const purchaseOrderData = {
@@ -79,11 +92,12 @@ export async function GET(request: Request) {
           subtotal: parseFloat(po.subtotal),
           total: parseFloat(po.total),
           userId: user.id, // Asignamos el ID del usuario/proveedor encontrado o creado
+          tenantId, // <-- INYECTAR TENANT
         };
 
-        // Operación "upsert": crea si no existe, actualiza si ya existe
+        // Operación "upsert": crea si no existe, actualiza si ya existe usando el UNIQUE COMPUESTO
         const record = await tx.purchaseOrder.upsert({
-          where: { folio: purchaseOrderData.folio },
+          where: { tenantId_folio: { tenantId, folio: purchaseOrderData.folio } },
           update: purchaseOrderData,
           create: purchaseOrderData,
         });

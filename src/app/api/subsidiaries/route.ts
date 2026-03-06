@@ -27,10 +27,11 @@ export async function POST(request: Request) {
     const businessName = formData.get('businessName') as string;
     const taxRegime = formData.get('taxRegime') as string;
     const taxAddress = formData.get('taxAddress') as string;
+    const tenantId = formData.get('tenantId') as string; // <-- Nuevo campo necesario para Multitenancy
     const logo = formData.get('logo') as File | null;
 
-    if (!name || !rfc || !businessName || !taxRegime || !taxAddress) {
-      return NextResponse.json({ message: 'Todos los campos son requeridos' }, { status: 400 });
+    if (!name || !rfc || !businessName || !taxRegime || !taxAddress || !tenantId) {
+      return NextResponse.json({ message: 'Todos los campos y el tenantId son requeridos' }, { status: 400 });
     }
 
     // Simulación de subida de logo
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
         taxRegime,
         taxAddress,
         logoUrl,
+        tenantId, // <-- INYECTAR TENANT
       },
     });
 

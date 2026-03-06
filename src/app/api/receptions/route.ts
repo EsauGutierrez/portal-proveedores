@@ -20,12 +20,21 @@ export async function POST(request: Request) {
     }
 
     const newReception = await prisma.$transaction(async (tx) => {
-      // Se elimina la generación automática del folio
+      // 1. Obtener la orden de compra para heredar su tenantId
+      const purchaseOrder = await tx.purchaseOrder.findUnique({
+        where: { id: purchaseOrderId },
+        select: { tenantId: true }
+      });
+
+      if (!purchaseOrder) {
+        throw { code: 'P2025', message: 'Orden de compra no encontrada' };
+      }
 
       const reception = await tx.reception.create({
         data: {
           folio: folio, // <-- CAMBIO: Se usa el folio recibido desde la API
           fecha: new Date(fecha),
+          tenant: { connect: { id: purchaseOrder.tenantId } }, // <-- INYECTAR TENANT HEREDADO
           purchaseOrder: {
             connect: { id: purchaseOrderId },
           },
@@ -34,7 +43,7 @@ export async function POST(request: Request) {
 
       for (const articleData of articles) {
         if (!articleData.articleName || !articleData.quantity || !articleData.unitPrice) {
-            throw new Error('Cada artículo debe tener articleName, quantity y unitPrice.');
+          throw new Error('Cada artículo debe tener articleName, quantity y unitPrice.');
         }
 
         const subtotal = articleData.quantity * articleData.unitPrice;
@@ -67,14 +76,14 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating reception:', error);
     if (error.code === 'P2025') {
-        return NextResponse.json({ message: 'La orden de compra especificada no existe.' }, { status: 404 });
+      return NextResponse.json({ message: 'La orden de compra especificada no existe.' }, { status: 404 });
     }
     // Manejo de error para folios duplicados
     if (error.code === 'P2002') {
-        return NextResponse.json(
-            { message: `El folio de recepción '${error.meta.target}' ya existe.` },
-            { status: 409 } // Conflict
-        );
+      return NextResponse.json(
+        { message: `El folio de recepción '${error.meta.target}' ya existe.` },
+        { status: 409 } // Conflict
+      );
     }
     return NextResponse.json({ message: 'Error al crear la recepción.', error: error.message }, { status: 500 });
   }

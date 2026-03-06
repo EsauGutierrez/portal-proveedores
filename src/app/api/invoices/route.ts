@@ -136,6 +136,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Error al subir los archivos a AWS S3.', error: (uploadError as Error).message }, { status: 500 });
     }
 
+    // --- OBTENER EL TENANT ID DE LA RECEPCIÓN ---
+    const receptionContext = await prisma.reception.findUnique({
+      where: { id: receptionId },
+      select: { tenantId: true }
+    });
+
+    if (!receptionContext) {
+      return NextResponse.json({ message: 'La recepción asociada no existe.' }, { status: 404 });
+    }
+
     // --- GUARDADO INICIAL EN BASE DE DATOS COMO PENDING ---
     const newInvoice = await prisma.invoice.create({
       data: {
@@ -146,6 +156,7 @@ export async function POST(request: Request) {
         pdfUrl: pdfUrl,
         xmlUrl: xmlUrl,
         syncStatus: 'PENDING_SYNC',
+        tenant: { connect: { id: receptionContext.tenantId } }, // <-- INYECTAR TENANT DEL PROCESO
         user: { connect: { id: userId } },
         reception: { connect: { id: receptionId } },
       },
