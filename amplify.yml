@@ -4,7 +4,7 @@ frontend:
     preBuild:
       commands:
         - npm ci
-        - env | grep -e DATABASE_URL >> .env.production
+        - env | grep -e DATABASE_URL -e JWT_SECRET >> .env.production
         - npx prisma generate
     build:
       commands:
