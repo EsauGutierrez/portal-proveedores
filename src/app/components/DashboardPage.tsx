@@ -10,17 +10,21 @@ import DocumentationPage from './DocumentationPage';
 import ChatWidget from './ChatWidget';
 import SupplierApprovalPage from './SupplierApprovalPage';
 import SubsidiariesPage from './SubsidiariesPage';
+import SuperAdminTenantsPage from './SuperAdminTenantsPage';
+import AdminInvoicesPage from './AdminInvoicesPage';
 
 const DashboardPage = ({ user, onLogout }) => {
     // La vista inicial ahora depende del rol del usuario.
-    const [activeView, setActiveView] = useState(user.role === 'ADMIN' ? 'proveedores' : 'ordenes');
+    const [activeView, setActiveView] = useState(
+        user.role === 'SUPERADMIN' ? 'empresas' : (user.role === 'ADMIN' || user.role === 'TENANT_ADMIN' ? 'facturas_admin' : 'ordenes')
+    );
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['perfil', 'documentacion', 'proveedores', 'subsidiarias'].includes(activeView)) {
+        if (['perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -28,7 +32,7 @@ const DashboardPage = ({ user, onLogout }) => {
         const fetchData = async () => {
             setIsLoading(true);
             setError(null);
-            
+
             const token = localStorage.getItem('token');
             if (!token) {
                 setError('No se encontró el token de autenticación. Por favor, inicia sesión de nuevo.');
@@ -37,19 +41,19 @@ const DashboardPage = ({ user, onLogout }) => {
             }
 
             let endpoint = '';
-            switch(activeView) {
-                case 'ordenes': 
-                    endpoint = '/api/purchase-orders'; 
+            switch (activeView) {
+                case 'ordenes':
+                    endpoint = '/api/purchase-orders';
                     break;
-                case 'facturas': 
-                    endpoint = '/api/invoices'; 
+                case 'facturas':
+                    endpoint = '/api/invoices';
                     break;
-                case 'pagos': 
-                    setData([]); 
-                    setIsLoading(false); 
+                case 'pagos':
+                    setData([]);
+                    setIsLoading(false);
                     return;
-                default: 
-                    setIsLoading(false); 
+                default:
+                    setIsLoading(false);
                     return;
             }
 
@@ -92,6 +96,8 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'documentacion': return <DocumentationPage />;
             case 'proveedores': return <SupplierApprovalPage />;
             case 'subsidiarias': return <SubsidiariesPage />;
+            case 'empresas': return <SuperAdminTenantsPage />;
+            case 'facturas_admin': return <AdminInvoicesPage />;
             default: return <DataTable title="Órdenes de Compra" data={data} />;
         }
     };
@@ -99,7 +105,7 @@ const DashboardPage = ({ user, onLogout }) => {
     const NavLink = ({ view, icon: Icon, label }) => (
         <button
             onClick={() => setActiveView(view)}
-            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${ activeView === view ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-800' }`}
+            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${activeView === view ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-800'}`}
         >
             <Icon className="w-5 h-5 mr-3" />
             {label}
@@ -114,7 +120,7 @@ const DashboardPage = ({ user, onLogout }) => {
                     <h1 className="text-xl font-bold text-gray-800">Portal de proveedores</h1>
                 </div>
                 <nav className="flex-grow space-y-2">
-                    
+
                     {user && user.role === 'SUPPLIER' && (
                         <>
                             <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
@@ -122,11 +128,18 @@ const DashboardPage = ({ user, onLogout }) => {
                             <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
                         </>
                     )}
-                    
-                    {user && user.role === 'ADMIN' && (
+
+                    {user && (user.role === 'ADMIN' || user.role === 'TENANT_ADMIN') && (
                         <>
+                            <NavLink view="facturas_admin" icon={FileText} label="Facturas y Documentos" />
                             <NavLink view="proveedores" icon={Users} label="Proveedores" />
                             <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
+                        </>
+                    )}
+
+                    {user && user.role === 'SUPERADMIN' && (
+                        <>
+                            <NavLink view="empresas" icon={Building2} label="Gestión de Clientes (Tenants)" />
                         </>
                     )}
 

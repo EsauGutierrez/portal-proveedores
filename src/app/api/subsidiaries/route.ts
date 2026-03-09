@@ -5,6 +5,9 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Expresión regular para validar formato RFC de Personas Morales (12 caracteres) o Físicas (13 caracteres)
+const RFC_REGEX = /^([A-ZÑ&]{3,4})\d{6}([A-Z0-9]{3})$/i;
+
 // GET: Obtener todas las subsidiarias
 export async function GET() {
   try {
@@ -34,6 +37,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Todos los campos y el tenantId son requeridos' }, { status: 400 });
     }
 
+    const cleanRfc = rfc.trim().toUpperCase();
+
+    // Validación: Formato estructural del RFC
+    if (!RFC_REGEX.test(cleanRfc)) {
+      return NextResponse.json({ message: 'El formato del RFC introducido no es válido. Debe contener 3 o 4 letras, seguidas de 6 números (YYMMDD) y 3 caracteres alfanuméricos (homoclave).' }, { status: 400 });
+    }
+
     // Simulación de subida de logo
     let logoUrl = 'https://placehold.co/100x40/E2E8F0/4A5568?text=Logo';
     if (logo) {
@@ -42,15 +52,25 @@ export async function POST(request: Request) {
       logoUrl = `https://storage.example.com/logos/${Date.now()}-${logo.name}`;
     }
 
+    // Validación: Verificar que el RFC no exista ya en la base de datos
+    const existingSubsidiary = await prisma.subsidiary.findFirst({
+      where: { rfc: cleanRfc }
+    });
+    if (existingSubsidiary) {
+      return NextResponse.json({ message: `El RFC ${cleanRfc} ya se encuentra registrado.` }, { status: 400 });
+    }
+
     const newSubsidiary = await prisma.subsidiary.create({
       data: {
         name,
-        rfc,
+        rfc: cleanRfc,
         businessName,
         taxRegime,
         taxAddress,
         logoUrl,
-        tenantId, // <-- INYECTAR TENANT
+        tenant: {
+          connect: { id: tenantId }
+        },
       },
     });
 
@@ -58,5 +78,78 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating subsidiary:', error);
     return NextResponse.json({ message: 'Error al crear la subsidiaria' }, { status: 500 });
+  }
+}
+
+// PUT: Editar una subsidiaria
+export async function PUT(request: Request) {
+  try {
+    const formData = await request.formData();
+    const id = formData.get('id') as string;
+    const name = formData.get('name') as string;
+    const rfc = formData.get('rfc') as string;
+    const businessName = formData.get('businessName') as string;
+    const taxRegime = formData.get('taxRegime') as string;
+    const taxAddress = formData.get('taxAddress') as string;
+
+    if (!id || !name || !rfc || !businessName || !taxRegime || !taxAddress) {
+      return NextResponse.json({ message: 'Campos requeridos faltantes' }, { status: 400 });
+    }
+
+    const cleanRfc = rfc.trim().toUpperCase();
+
+    // Validación: Formato estructural del RFC
+    if (!RFC_REGEX.test(cleanRfc)) {
+      return NextResponse.json({ message: 'El formato del RFC introducido no es válido. Debe contener 3 o 4 letras, seguidas de 6 números (YYMMDD) y 3 caracteres alfanuméricos (homoclave).' }, { status: 400 });
+    }
+
+    // Validación: Verificar que el RFC no exista en OTRA subsidiaria diferente
+    const existingSubsidiary = await prisma.subsidiary.findFirst({
+      where: {
+        rfc: cleanRfc,
+        id: { not: id } // Excluir la subsidiaria actual que estamos editando
+      }
+    });
+
+    if (existingSubsidiary) {
+      return NextResponse.json({ message: `El RFC ${cleanRfc} ya está siendo utilizado por otra subsidiaria.` }, { status: 400 });
+    }
+
+    const updatedSubsidiary = await prisma.subsidiary.update({
+      where: { id },
+      data: {
+        name,
+        rfc,
+        businessName,
+        taxRegime,
+        taxAddress,
+      },
+    });
+
+    return NextResponse.json(updatedSubsidiary);
+  } catch (error) {
+    console.error('Error updating subsidiary:', error);
+    return NextResponse.json({ message: 'Error al actualizar la subsidiaria' }, { status: 500 });
+  }
+}
+
+// DELETE: Eliminar una subsidiaria
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const { id } = body;
+
+    if (!id) {
+      return NextResponse.json({ message: 'ID es requerido' }, { status: 400 });
+    }
+
+    await prisma.subsidiary.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ message: 'Subsidiaria eliminada con éxito' });
+  } catch (error) {
+    console.error('Error deleting subsidiary:', error);
+    return NextResponse.json({ message: 'Error al eliminar la subsidiaria' }, { status: 500 });
   }
 }
