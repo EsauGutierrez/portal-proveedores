@@ -2,16 +2,25 @@
 import crypto from 'crypto';
 import OAuth from 'oauth-1.0a'; // Aún lo usamos para la codificación y el nonce
 
+export interface NetSuiteCredentials {
+  accountId: string;
+  consumerKey: string;
+  consumerSecret: string;
+  tokenId: string;
+  tokenSecret: string;
+}
+
 /**
  * Realiza una consulta a la API de SuiteQL de NetSuite.
  * @param q La consulta de SuiteQL que se va a ejecutar.
+ * @param creds Credenciales de NetSuite
  * @returns La respuesta JSON parseada desde la API.
  */
-export async function querySuiteQL(q: string) {
+export async function querySuiteQL(q: string, creds: NetSuiteCredentials) {
   const oauth = new OAuth({
     consumer: {
-      key: "4f6f1ab755722a38d7ccf6d76e308b9e92907d74a98615d112f6350f885ea89e",//process.env.NETSUITE_CONSUMER_KEY!,
-      secret: "23a83f09072a8a45b596e30c93f75132cf579971099595b8dd6a9606067f609e"//process.env.NETSUITE_CONSUMER_SECRET!,
+      key: creds.consumerKey,
+      secret: creds.consumerSecret,
     },
     signature_method: 'HMAC-SHA256',
     hash_function(base_string, key) {
@@ -19,12 +28,12 @@ export async function querySuiteQL(q: string) {
     },
   });
 
-  const accountId = process.env.NETSUITE_ACCOUNT!;
+  const accountId = creds.accountId;
   const suiteqlUrl = `https://${accountId.replace(/_/g, '-')}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql`;
 
   const token = {
-    key: "d5b042892a6b7d2b41ec36f29cfc5b72a637a8c8a26a978192e27677f435160a",//process.env.NETSUITE_TOKEN_ID!,
-    secret: "d379f8f5599714f4f5000bfe6b9cc1a352d4c9ce30f28bb0828ceb8894ca14f9"//process.env.NETSUITE_TOKEN_SECRET!,
+    key: creds.tokenId,
+    secret: creds.tokenSecret,
   };
 
   // 1. Generar parámetros OAuth manualmente
@@ -96,13 +105,14 @@ export async function querySuiteQL(q: string) {
  * @param scriptId El ID interno o string del script (ej. 'customscript_imr_portal_restlet')
  * @param deployId El ID del despliegue (ej. 'customdeploy_imr_portal_restlet_1')
  * @param method El método HTTP ('GET', 'POST', 'PUT', 'DELETE')
+ * @param creds Credenciales de NetSuite
  * @param body El cuerpo de la petición (opcional)
  */
-export async function invokeRestlet(scriptId: string, deployId: string, method: string = 'POST', body?: any) {
+export async function invokeRestlet(scriptId: string, deployId: string, creds: NetSuiteCredentials, method: string = 'POST', body?: any) {
   const oauth = new OAuth({
     consumer: {
-      key: "4f6f1ab755722a38d7ccf6d76e308b9e92907d74a98615d112f6350f885ea89e", // process.env.NETSUITE_CONSUMER_KEY!
-      secret: "23a83f09072a8a45b596e30c93f75132cf579971099595b8dd6a9606067f609e" // process.env.NETSUITE_CONSUMER_SECRET!
+      key: creds.consumerKey,
+      secret: creds.consumerSecret,
     },
     signature_method: 'HMAC-SHA256',
     hash_function(base_string, key) {
@@ -110,12 +120,12 @@ export async function invokeRestlet(scriptId: string, deployId: string, method: 
     },
   });
 
-  const accountId = process.env.NETSUITE_ACCOUNT!;
+  const accountId = creds.accountId;
   const restletUrl = `https://${accountId.replace(/_/g, '-')}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${deployId}`;
 
   const token = {
-    key: "d5b042892a6b7d2b41ec36f29cfc5b72a637a8c8a26a978192e27677f435160a", // process.env.NETSUITE_TOKEN_ID!
-    secret: "d379f8f5599714f4f5000bfe6b9cc1a352d4c9ce30f28bb0828ceb8894ca14f9" // process.env.NETSUITE_TOKEN_SECRET!
+    key: creds.tokenId,
+    secret: creds.tokenSecret,
   };
 
   const request_data = {

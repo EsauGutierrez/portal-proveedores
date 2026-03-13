@@ -12,19 +12,19 @@ import SupplierApprovalPage from './SupplierApprovalPage';
 import SubsidiariesPage from './SubsidiariesPage';
 import SuperAdminTenantsPage from './SuperAdminTenantsPage';
 import AdminInvoicesPage from './AdminInvoicesPage';
+import OverviewPage from './OverviewPage';
+import { LayoutDashboard } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
     // La vista inicial ahora depende del rol del usuario.
-    const [activeView, setActiveView] = useState(
-        user.role === 'SUPERADMIN' ? 'empresas' : (user.role === 'ADMIN' || user.role === 'TENANT_ADMIN' ? 'facturas_admin' : 'ordenes')
-    );
+    const [activeView, setActiveView] = useState('resumen');
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -89,6 +89,7 @@ const DashboardPage = ({ user, onLogout }) => {
         }
 
         switch (activeView) {
+            case 'resumen': return <OverviewPage user={user} />;
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <DataTable title="Complementos de Pago" data={[]} />;
@@ -98,7 +99,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'subsidiarias': return <SubsidiariesPage />;
             case 'empresas': return <SuperAdminTenantsPage />;
             case 'facturas_admin': return <AdminInvoicesPage />;
-            default: return <DataTable title="Órdenes de Compra" data={data} />;
+            default: return <OverviewPage user={user} />;
         }
     };
 
@@ -120,6 +121,7 @@ const DashboardPage = ({ user, onLogout }) => {
                     <h1 className="text-xl font-bold text-gray-800">Portal de proveedores</h1>
                 </div>
                 <nav className="flex-grow space-y-2">
+                    <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
 
                     {user && user.role === 'SUPPLIER' && (
                         <>

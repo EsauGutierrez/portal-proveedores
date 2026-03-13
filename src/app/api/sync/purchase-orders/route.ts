@@ -20,6 +20,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: 'Falta cabecera x-tenant-id' }, { status: 400 });
   }
 
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant || !tenant.netsuiteAccountId || !tenant.netsuiteConsumerKey || !tenant.netsuiteConsumerSec || !tenant.netsuiteTokenId || !tenant.netsuiteTokenSecret) {
+    return NextResponse.json({ message: 'Credenciales de NetSuite incompletas o empresa no encontrada' }, { status: 400 });
+  }
+
+  const creds = {
+    accountId: tenant.netsuiteAccountId,
+    consumerKey: tenant.netsuiteConsumerKey,
+    consumerSecret: tenant.netsuiteConsumerSec,
+    tokenId: tenant.netsuiteTokenId,
+    tokenSecret: tenant.netsuiteTokenSecret
+  };
+
   try {
     console.log('Iniciando sincronización de órdenes de compra desde NetSuite...');
 
@@ -40,7 +53,7 @@ export async function GET(request: Request) {
     `;
 
     // 3. Ejecutar la consulta en NetSuite
-    const results = await querySuiteQL(suiteqlQuery);
+    const results = await querySuiteQL(suiteqlQuery, creds);
     console.log(`Se encontraron ${results.length} órdenes de compra en NetSuite.`);
 
     if (results.length === 0) {

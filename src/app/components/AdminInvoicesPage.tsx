@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, Search, Filter, FileText, Download, Eye, AlertCircle, FileDigit } from 'lucide-react';
+import { Loader2, Search, Filter, FileText, Download, Eye, AlertCircle, FileDigit, RefreshCw } from 'lucide-react';
 
 const AdminInvoicesPage = () => {
     const [documents, setDocuments] = useState<any[]>([]);
     const [suppliers, setSuppliers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Filtros
@@ -104,6 +105,30 @@ const AdminInvoicesPage = () => {
         }
     };
 
+    const handleSyncNetSuite = async () => {
+        setIsSyncing(true);
+        setError(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/admin/sync', {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                const backendMsg = data?.error ? `\nMotivo Interno: ${data.error}` : '';
+                const stackMsg = data?.stack ? `\nStack: ${data.stack.slice(0, 150)}...` : '';
+                throw new Error((data?.message || 'Error al intentar sincronizar con NetSuite') + backendMsg + stackMsg);
+            }
+            alert('Sincronización de Órdenes y Proveedores completada exitosamente.');
+            fetchDocuments();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
             style: 'currency',
@@ -168,8 +193,16 @@ const AdminInvoicesPage = () => {
             </div>
 
             {/* Panel de Acciones Adicionales */}
-            {documents.length > 0 && (
-                <div className="flex justify-end">
+            <div className="flex justify-end space-x-4">
+                <button
+                    onClick={handleSyncNetSuite}
+                    disabled={isSyncing || isLoading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 px-4 rounded shadow flex items-center justify-center font-medium transition-colors disabled:opacity-50"
+                >
+                    {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    {isSyncing ? 'Sincronizando...' : 'Extraer desde NetSuite'}
+                </button>
+                {documents.length > 0 && (
                     <button
                         onClick={handleDownloadZip}
                         disabled={isDownloading || isLoading}
@@ -178,8 +211,8 @@ const AdminInvoicesPage = () => {
                         {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
                         {isDownloading ? 'Generando ZIP...' : 'Descargar Resultados (ZIP)'}
                     </button>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Error handling */}
             {error && <div className="text-red-500 flex items-center bg-red-50 p-3 rounded-md border border-red-200"><AlertCircle className="w-5 h-5 mr-2" /> {error}</div>}

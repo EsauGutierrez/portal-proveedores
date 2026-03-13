@@ -8,12 +8,39 @@ const prisma = new PrismaClient();
 // Expresión regular para validar formato RFC de Personas Morales (12 caracteres) o Físicas (13 caracteres)
 const RFC_REGEX = /^([A-ZÑ&]{3,4})\d{6}([A-Z0-9]{3})$/i;
 
-// GET: Obtener todas las subsidiarias
-export async function GET() {
+import jwt from 'jsonwebtoken';
+
+// GET: Obtener las subsidiarias por Tenant
+export async function GET(request: Request) {
   try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // Logica fallback para que el login/registro siga funcionando si consultan sin auth (opcional, pero mejor ser estricto)
+      // De hecho, en portal-proveedores el front-end a veces no mandaba token al registrar, 
+      // pero para protegerlo, si no hay token retornaremos vacío.
+      return NextResponse.json([]);
+    }
+
+    const token = authHeader.split(' ')[1];
+    let decodedToken: any;
+    try {
+      decodedToken = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (err) {
+      return NextResponse.json({ message: 'Token inválido' }, { status: 401 });
+    }
+
+    let queryWhere = {};
+
+    // Si NO es Super Admin, limitamos la búsqueda al tenant en curso
+    if (decodedToken.role !== 'SUPERADMIN' && decodedToken.tenantId) {
+      queryWhere = { tenantId: decodedToken.tenantId };
+    }
+
     const subsidiaries = await prisma.subsidiary.findMany({
+      where: queryWhere,
       orderBy: { name: 'asc' },
     });
+
     return NextResponse.json(subsidiaries);
   } catch (error) {
     console.error('Error fetching subsidiaries:', error);
@@ -70,7 +97,7 @@ export async function POST(request: Request) {
         logoUrl,
         tenant: {
           connect: { id: tenantId }
-        },
+        }
       },
     });
 

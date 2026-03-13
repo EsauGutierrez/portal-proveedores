@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Edit, ToggleLeft, ToggleRight, Loader2, X, Upload } from 'lucide-react';
+import { PlusCircle, Edit, Loader2, X, Upload, Power, PowerOff, AlertTriangle, CheckCircle } from 'lucide-react';
 
 // --- Componente Modal para Agregar/Editar Subsidiaria ---
 const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
@@ -61,7 +61,7 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
           <input name="name" value={formData.name} onChange={handleChange} placeholder="Nombre de la Subsidiaria" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" required />
           <input name="rfc" value={formData.rfc} onChange={handleChange} placeholder="RFC" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" required />
           <input name="businessName" value={formData.businessName} onChange={handleChange} placeholder="Razón Social" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" required />
-          
+
           <div>
             <label htmlFor="taxRegime" className="block text-sm font-medium text-gray-700 mb-1">Régimen Fiscal</label>
             <select
@@ -104,20 +104,73 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
   );
 };
 
+// --- Componente Modal Confirmación Cambio Estatus ---
+const ConfirmToggleModal = ({ subsidiary, isOpen, onClose, onConfirm }) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  if (!isOpen || !subsidiary) return null;
+
+  const isCurrentlyActive = subsidiary.isActive;
+
+  const handleConfirm = async () => {
+    setIsProcessing(true);
+    await onConfirm(subsidiary);
+    setIsProcessing(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md text-center">
+        <div className="mb-4">
+          {isCurrentlyActive ? (
+            <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto" />
+          ) : (
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
+          )}
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-2">
+          {isCurrentlyActive ? '¿Inactivar Subsidiaria?' : '¿Reactivar Subsidiaria?'}
+        </h3>
+        <p className="text-gray-600 mb-6 font-medium">
+          {isCurrentlyActive ? (
+            <>¿Estás seguro de que deseas INACTIVAR a <span className="text-gray-900 font-bold">"{subsidiary.name}"</span>? {subsidiary.businessName}</>
+          ) : (
+            <>¿Estás seguro de que deseas REACTIVAR a <span className="text-gray-900 font-bold">"{subsidiary.name}"</span>?</>
+          )}
+        </p>
+        <div className="flex justify-center space-x-3">
+          <button type="button" disabled={isProcessing} onClick={onClose} className="px-5 py-2.5 border rounded-lg text-gray-600 hover:bg-gray-50 font-semibold disabled:opacity-50">Cancelar</button>
+          <button type="button" disabled={isProcessing} onClick={handleConfirm} className={`px-5 py-2.5 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center justify-center ${isCurrentlyActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
+            {isProcessing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {isCurrentlyActive ? 'Sí, Inactivar' : 'Sí, Reactivar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Componente Principal de la Página ---
 const SubsidiariesPage = () => {
   const [subsidiaries, setSubsidiaries] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubsidiary, setEditingSubsidiary] = useState(null);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [subsidiaryToToggle, setSubsidiaryToToggle] = useState(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSubsidiaries = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/subsidiaries');
-      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/subsidiaries', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Error al cargar las subsidiarias.');
@@ -126,9 +179,9 @@ const SubsidiariesPage = () => {
       const data = await response.json();
       setSubsidiaries(data);
     } catch (err: any) {
-        setError(err.message);
+      setError(err.message);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -146,12 +199,29 @@ const SubsidiariesPage = () => {
       }
     });
 
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        if (userObj.tenantId) {
+          data.append('tenantId', userObj.tenantId);
+        }
+      }
+    } catch (e) { }
+
     // Lógica para crear (POST) o actualizar (PUT)
     const url = id ? `/api/subsidiaries/${id}` : '/api/subsidiaries';
     const method = id ? 'PUT' : 'POST';
+    const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(url, { method, body: data });
+      const response = await fetch(url, {
+        method,
+        body: data,
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       if (!response.ok) {
         throw new Error('No se pudo guardar la subsidiaria.');
       }
@@ -165,28 +235,30 @@ const SubsidiariesPage = () => {
     fetchSubsidiaries();
   };
 
-  const handleDeactivate = async (id: string, isActive: boolean) => {
-    const confirmation = confirm(`¿Estás seguro de que quieres ${isActive ? 'desactivar' : 'activar'} esta subsidiaria?`);
-    if (!confirmation) {
-        return;
-    }
+  const handleToggleClick = (subsidiary: any) => {
+    setSubsidiaryToToggle(subsidiary);
+    setIsConfirmModalOpen(true);
+  };
 
+  const confirmToggleStatus = async (subsidiary: any) => {
     try {
-        const response = await fetch(`/api/subsidiaries/${id}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ isActive: !isActive }),
-        });
-        if (!response.ok) {
-            throw new Error('No se pudo actualizar el estado.');
-        }
-        // Recargar la lista para mostrar el cambio
-        fetchSubsidiaries();
+      const response = await fetch(`/api/subsidiaries/${subsidiary.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isActive: !subsidiary.isActive }),
+      });
+      if (!response.ok) {
+        throw new Error('No se pudo actualizar el estado.');
+      }
+      // Recargar la lista para mostrar el cambio
+      fetchSubsidiaries();
+      setIsConfirmModalOpen(false);
+      setSubsidiaryToToggle(null);
     } catch (error) {
-        console.error("Error al cambiar el estado de la subsidiaria:", error);
-        alert("No se pudo actualizar el estado de la subsidiaria.");
+      console.error("Error al cambiar el estado de la subsidiaria:", error);
+      alert("No se pudo actualizar el estado de la subsidiaria.");
     }
   };
 
@@ -234,11 +306,15 @@ const SubsidiariesPage = () => {
                       {sub.isActive ? 'Activa' : 'Inactiva'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center space-x-2">
-                    <button onClick={() => handleEdit(sub)} className="text-blue-600 hover:text-blue-800 p-1"><Edit className="w-5 h-5" /></button>
-                    <button onClick={() => handleDeactivate(sub.id, sub.isActive)} className={`p-1 ${sub.isActive ? 'text-gray-500 hover:text-red-600' : 'text-green-500 hover:text-green-700'}`}>
-                      {sub.isActive ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
-                    </button>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center space-x-2">
+                      <button onClick={() => handleEdit(sub)} className="bg-white text-gray-600 p-1.5 rounded hover:bg-gray-100 hover:text-blue-600 transition-colors border border-gray-200" title="Editar">
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleToggleClick(sub)} className={`p-1.5 rounded border transition-colors ${sub.isActive ? 'bg-white text-red-500 border-gray-200 hover:bg-red-50' : 'bg-red-50 text-green-600 border-red-200 hover:bg-green-50'}`} title={sub.isActive ? "Inactivar" : "Reactivar"}>
+                        {sub.isActive ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -251,6 +327,12 @@ const SubsidiariesPage = () => {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
         subsidiary={editingSubsidiary}
+      />
+      <ConfirmToggleModal
+        subsidiary={subsidiaryToToggle}
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmToggleStatus}
       />
     </>
   );

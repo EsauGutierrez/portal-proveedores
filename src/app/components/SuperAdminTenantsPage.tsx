@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, Plus, Power, Users, Building2, Server, Edit, ChevronDown, ChevronRight, AlertTriangle, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Power, Users, Building2, Server, Edit, ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus } from 'lucide-react';
 
 const REGIMENES_FISCALES = [
     { code: '601', name: 'General de Ley Personas Morales' },
@@ -26,7 +26,7 @@ const REGIMENES_FISCALES = [
 ];
 
 // Componente individual para la fila con Desplegable
-const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteSubsidiary }: any) => {
+const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteSubsidiary, onAddAdmin }: any) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
@@ -78,10 +78,16 @@ const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteS
                     <td colSpan={5} className="px-10 py-5">
                         <div className="flex justify-between items-center mb-3">
                             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Subsidiarias Asignadas</h4>
-                            <button onClick={() => onEditSubsidiary({ tenantId: tenant.id })} className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center">
-                                <Plus className="w-3 h-3 mr-1" />
-                                Añadir Subsidiaria
-                            </button>
+                            <div className="flex space-x-4">
+                                <button onClick={() => onAddAdmin({ tenantId: tenant.id, tenantName: tenant.name })} className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center">
+                                    <UserPlus className="w-3 h-3 mr-1" />
+                                    Crear Admin.
+                                </button>
+                                <button onClick={() => onEditSubsidiary({ tenantId: tenant.id })} className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center">
+                                    <Plus className="w-3 h-3 mr-1" />
+                                    Añadir Subsidiaria
+                                </button>
+                            </div>
                         </div>
                         {tenant.subsidiaries && tenant.subsidiaries.length > 0 ? (
                             <div className="bg-white rounded border border-gray-200 overflow-hidden shadow-sm">
@@ -133,6 +139,7 @@ const SuperAdminTenantsPage = () => {
     const [editingTenant, setEditingTenant] = useState<any>(null);
     const [editingSubsidiary, setEditingSubsidiary] = useState<any>(null);
     const [deletingSubsidiary, setDeletingSubsidiary] = useState<any>(null);
+    const [creatingAdminFor, setCreatingAdminFor] = useState<any>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const fetchTenants = async () => {
@@ -261,6 +268,37 @@ const SuperAdminTenantsPage = () => {
         }
     };
 
+    const handleSaveAdmin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/tenants/admins', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    tenantId: creatingAdminFor.tenantId,
+                    name: creatingAdminFor.name || '',
+                    email: creatingAdminFor.email || '',
+                    password: creatingAdminFor.password || ''
+                })
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => null);
+                throw new Error(errorData?.message || 'Error al crear administrador');
+            }
+
+            setErrorMessage("Administrador creado con éxito."); // Abusa del errorMessage modal para el success :P
+            setCreatingAdminFor(null);
+            fetchTenants();
+        } catch (err: any) {
+            setErrorMessage(err.message);
+        }
+    };
+
     if (isLoading) return <div className="flex justify-center items-center h-full"><Loader2 className="w-12 h-12 text-indigo-600 animate-spin" /></div>;
     if (error) return <div className="text-red-500 bg-red-50 p-4 rounded">{error}</div>;
 
@@ -304,6 +342,7 @@ const SuperAdminTenantsPage = () => {
                                 onEdit={setEditingTenant}
                                 onEditSubsidiary={setEditingSubsidiary}
                                 onDeleteSubsidiary={setDeletingSubsidiary}
+                                onAddAdmin={setCreatingAdminFor}
                             />
                         ))}
 
@@ -457,6 +496,42 @@ const SuperAdminTenantsPage = () => {
                                 Eliminar Definitivamente
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal para Mantenimiento de Usuario / Admin */}
+            {creatingAdminFor && (
+                <div className="fixed inset-0 overflow-y-auto h-full w-full flex items-center justify-center z-50 pointer-events-none">
+                    <div className="bg-white p-6 rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg text-left pointer-events-auto relative">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                            <UserPlus className="w-5 h-5 mr-2 text-indigo-500" />
+                            Añadir Administrador
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Crea un usuario administrador para gestionar la empresa: <strong>{creatingAdminFor.tenantName}</strong>
+                        </p>
+                        <form onSubmit={handleSaveAdmin} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Nombre Completo</label>
+                                <input required type="text" value={creatingAdminFor.name || ''} onChange={(e) => setCreatingAdminFor({ ...creatingAdminFor, name: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white" placeholder="Ej: Juan Pérez" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Correo Electrónico (Login)</label>
+                                <input required type="email" value={creatingAdminFor.email || ''} onChange={(e) => setCreatingAdminFor({ ...creatingAdminFor, email: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white" placeholder="Ej: juan@cliente.com" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Contraseña Local</label>
+                                <input required type="password" value={creatingAdminFor.password || ''} onChange={(e) => setCreatingAdminFor({ ...creatingAdminFor, password: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white" placeholder="***" />
+                            </div>
+
+                            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                                <button type="button" onClick={() => setCreatingAdminFor(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded">Cancelar</button>
+                                <button type="submit" className="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm">
+                                    Crear Administrador
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
