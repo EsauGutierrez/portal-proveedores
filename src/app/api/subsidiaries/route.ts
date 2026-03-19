@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 
 const prisma = new PrismaClient();
 
@@ -41,7 +42,18 @@ export async function GET(request: Request) {
       orderBy: { name: 'asc' },
     });
 
-    return NextResponse.json(subsidiaries);
+    // Generar presigned URLs para logos si la logoUrl es una key de S3
+    const subsidiariesWithLogos = await Promise.all(
+      subsidiaries.map(async (sub) => {
+        if (sub.logoUrl && !sub.logoUrl.startsWith('http')) {
+          const signedUrl = await getPresignedUrl(sub.logoUrl);
+          return { ...sub, logoUrl: signedUrl };
+        }
+        return sub;
+      })
+    );
+
+    return NextResponse.json(subsidiariesWithLogos);
   } catch (error) {
     console.error('Error fetching subsidiaries:', error);
     return NextResponse.json({ message: 'Error al obtener las subsidiarias' }, { status: 500 });
@@ -71,12 +83,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'El formato del RFC introducido no es válido. Debe contener 3 o 4 letras, seguidas de 6 números (YYMMDD) y 3 caracteres alfanuméricos (homoclave).' }, { status: 400 });
     }
 
-    // Simulación de subida de logo
-    let logoUrl = 'https://placehold.co/100x40/E2E8F0/4A5568?text=Logo';
-    if (logo) {
-      // En una app real, aquí iría la lógica para subir a AWS S3 y obtener la URL
-      console.log('Subiendo logo:', logo.name);
-      logoUrl = `https://storage.example.com/logos/${Date.now()}-${logo.name}`;
+    // Subida de logo a S3
+    let logoUrl = 'https://placehold.co/200x80/E2E8F0/4A5568?text=Logo';
+    if (logo && logo.size > 0) {
+      try {
+        logoUrl = await uploadFileToS3(logo, `subsidiaries/logos`);
+      } catch (uploadErr) {
+        console.error('Error subiendo logo a S3:', uploadErr);
+      }
     }
 
     // Validación: Verificar que el RFC no exista ya en la base de datos

@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { uploadFileToS3 } from '../../../lib/s3';
 
 const prisma = new PrismaClient();
 
@@ -67,9 +68,12 @@ export async function PUT(
       taxAddress,
     };
 
-    if (logo && typeof logo !== 'string') {
-      console.log('Subiendo nuevo logo:', logo.name);
-      updateData.logoUrl = `https://storage.example.com/logos/${Date.now()}-${logo.name}`;
+    if (logo && logo.size > 0) {
+      try {
+        updateData.logoUrl = await uploadFileToS3(logo, `subsidiaries/logos`);
+      } catch (uploadErr) {
+        console.error('Error subiendo logo a S3:', uploadErr);
+      }
     }
 
     const updatedSubsidiary = await prisma.subsidiary.update({

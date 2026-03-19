@@ -42,14 +42,15 @@ export async function GET(request: Request) {
     const invoices = await prisma.invoice.findMany({
       where: { userId: userId },
       include: {
-        reception: {
+        receptions: {
           include: {
             purchaseOrder: {
-              include: {
-                subsidiary: true,
-              },
+              include: { subsidiary: true },
             },
           },
+        },
+        purchaseOrder: {
+          include: { subsidiary: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -71,15 +72,29 @@ export async function GET(request: Request) {
         console.error("Error generando presigned url para factura", invoice.folio);
       }
 
+      let subsidiaryName = 'Desconocida';
+      let poFolio = 'N/A';
+      let receptionFolio = 'N/A';
+
+      if (invoice.receptions && invoice.receptions.length > 0) {
+        receptionFolio = invoice.receptions.map((r: any) => r.folio).join(', ');
+        poFolio = invoice.receptions[0].purchaseOrder?.folio || 'N/A';
+        subsidiaryName = invoice.receptions[0].purchaseOrder?.subsidiary?.name || 'Desconocida';
+      } else if (invoice.purchaseOrder) {
+        receptionFolio = 'Varias / Integra';
+        poFolio = invoice.purchaseOrder.folio;
+        subsidiaryName = invoice.purchaseOrder.subsidiary?.name || 'Desconocida';
+      }
+
       return {
         id: invoice.id,
         folio: invoice.folio,
         fecha: invoice.fecha.toISOString(),
-        subsidiaria: invoice.reception.purchaseOrder.subsidiary.name,
+        subsidiaria: subsidiaryName,
         subtotal: formatCurrency(invoice.subtotal.toString()),
         total: formatCurrency(invoice.total.toString()),
-        ordenDeCompra: invoice.reception.purchaseOrder.folio,
-        recepcion: invoice.reception.folio,
+        ordenDeCompra: poFolio,
+        recepcion: receptionFolio,
         pdfUrl: pdfPresignedUrl || invoice.pdfUrl,
         xmlUrl: xmlPresignedUrl || invoice.xmlUrl,
       };

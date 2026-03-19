@@ -18,16 +18,14 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
     { code: '626', name: 'Régimen Simplificado de Confianza' },
   ];
 
+  const isEditing = !!subsidiary;
+
   const [formData, setFormData] = useState(
-    subsidiary || {
-      name: '',
-      rfc: '',
-      businessName: '',
-      taxRegime: '',
-      taxAddress: '',
-      logo: null,
-    }
+    subsidiary
+      ? { ...subsidiary, logo: null }
+      : { name: '', rfc: '', businessName: '', taxRegime: '', taxAddress: '', logo: null }
   );
+  const [logoPreview, setLogoPreview] = useState<string | null>(subsidiary?.logoUrl || null);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -37,7 +35,12 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFormData((prev) => ({ ...prev, logo: e.target.files[0] }));
+      const file = e.target.files[0];
+      setFormData((prev) => ({ ...prev, logo: file }));
+      // Preview local
+      const reader = new FileReader();
+      reader.onloadend = () => setLogoPreview(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -82,15 +85,30 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
           </div>
 
           <input name="taxAddress" value={formData.taxAddress} onChange={handleChange} placeholder="Domicilio Fiscal" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" required />
+          {/* --- Campo Logo con Preview --- */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Logo</label>
-            <label htmlFor="logo-upload" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500">
-              <div className="text-center">
-                <Upload className="mx-auto w-8 h-8 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">{formData.logo ? (formData.logo as File).name : 'Haz clic para adjuntar el logo'}</p>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Logo de la Subsidiaria</label>
+            <div className="flex items-start gap-4">
+              {/* Preview */}
+              <div className="w-28 h-20 rounded-lg border-2 border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {logoPreview ? (
+                  <img src={logoPreview} alt="Logo preview" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <span className="text-xs text-gray-400 text-center px-2">Sin logo</span>
+                )}
               </div>
-            </label>
-            <input id="logo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+              {/* Upload zone */}
+              <label htmlFor="logo-upload" className="flex-1 flex items-center justify-center px-4 py-5 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                <div className="text-center">
+                  <Upload className="mx-auto w-8 h-8 text-gray-400" />
+                  <p className="mt-1 text-sm font-medium text-gray-600">
+                    {formData.logo ? (formData.logo as File).name : 'Haz clic para subir el logo'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">PNG, JPG, SVG, WEBP (máx. 2MB)</p>
+                </div>
+              </label>
+              <input id="logo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+            </div>
           </div>
           <div className="flex justify-end space-x-4 pt-4">
             <button type="button" onClick={onClose} className="px-6 py-2 border rounded-lg">Cancelar</button>

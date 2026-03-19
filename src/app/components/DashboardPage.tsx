@@ -21,6 +21,7 @@ const DashboardPage = ({ user, onLogout }) => {
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [subsidiaryLogo, setSubsidiaryLogo] = useState<string | null>(null);
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
@@ -80,6 +81,31 @@ const DashboardPage = ({ user, onLogout }) => {
         fetchData();
     }, [activeView]);
 
+    // Cargar logo de la subsidiaria para proveedores
+    useEffect(() => {
+        if (user?.role !== 'SUPPLIER') return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // El perfil incluye supplierProfile.subsidiary con logoUrl (S3 key)
+        // Usamos /api/subsidiaries que ya devuelve presigned URLs
+        fetch('/api/profile', { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : null)
+            .then(async profile => {
+                const subsidiaryId = profile?.supplierProfile?.subsidiaryId;
+                if (!subsidiaryId) return;
+
+                const subsRes = await fetch('/api/subsidiaries', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!subsRes.ok) return;
+                const subs: any[] = await subsRes.json();
+                const sub = subs.find(s => s.id === subsidiaryId);
+                if (sub?.logoUrl) setSubsidiaryLogo(sub.logoUrl);
+            })
+            .catch(() => {});
+    }, [user]);
+
     const renderContent = () => {
         if (isLoading) {
             return <div className="flex justify-center items-center h-96"><Loader2 className="w-16 h-16 text-blue-600 animate-spin" /></div>;
@@ -116,9 +142,18 @@ const DashboardPage = ({ user, onLogout }) => {
     return (
         <div className="min-h-screen bg-gray-100 flex">
             <aside className="w-64 bg-white shadow-lg flex flex-col p-4">
-                {/* CAMBIO: Se actualiza el título y se elimina el ícono */}
-                <div className="flex items-center mb-8">
-                    <h1 className="text-xl font-bold text-gray-800">Portal de proveedores</h1>
+                {/* Logo de subsidiaria o título */}
+                <div className="flex items-center justify-center mb-8 min-h-[56px]">
+                    {subsidiaryLogo ? (
+                        <img
+                            src={subsidiaryLogo}
+                            alt="Logo subsidiaria"
+                            className="max-h-14 max-w-[180px] object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                    ) : (
+                        <h1 className="text-xl font-bold text-gray-800">Portal de proveedores</h1>
+                    )}
                 </div>
                 <nav className="flex-grow space-y-2">
                     <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
