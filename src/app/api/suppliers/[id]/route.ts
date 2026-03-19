@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -45,31 +46,80 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, companyName, rfc, contactName } = body;
+    const { status, companyName, rfc, contactName, email, password } = body;
+
+    // Primero obtenemos el perfil para conocer el userId asociado
+    const currentProfile = await prisma.supplierProfile.findUnique({
+      where: { id },
+      select: { userId: true }
+    });
+
+    if (!currentProfile || !currentProfile.userId) {
+      return NextResponse.json({ message: 'Proveedor o usuario no encontrado.' }, { status: 404 });
+    }
+
+    let userDataToUpdate: any = {};
+    if (contactName) userDataToUpdate.name = contactName;
+
+    if (email) {
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      // Validar si el correo ya está en uso por otro usuario
+      const existingEmailUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true }
+      });
+
+      if (existingEmailUser && existingEmailUser.id !== currentProfile.userId) {
+        return NextResponse.json(
+          { message: `El correo '${normalizedEmail}' ya está siendo usado por otro usuario.` },
+          { status: 409 }
+        );
+      }
+      userDataToUpdate.email = normalizedEmail;
+    }
+
+    if (password && password.trim() !== '') {
+      userDataToUpdate.password = await bcrypt.hash(password, 10);
+    }
 
     let dataToUpdate: any = {};
     if (status) dataToUpdate.status = status;
     if (companyName) dataToUpdate.companyName = companyName;
     if (rfc) dataToUpdate.rfc = rfc.toUpperCase().trim();
 
-    // Actualizamos primero el perfil del proveedor
-    const updatedProfile = await prisma.supplierProfile.update({
-      where: { id },
-      data: dataToUpdate,
-      include: { user: true }
-    });
-
-    // Si se envió un nuevo nombre de contacto, actualizamos al usuario
-    if (contactName && updatedProfile.userId) {
-      await prisma.user.update({
-        where: { id: updatedProfile.userId },
-        data: { name: contactName }
-      });
-      updatedProfile.user.name = contactName;
+    // Actualizamos el usuario (si es necesario) y el perfil en una transacción
+    const transactionQueries = [];
+    
+    if (Object.keys(userDataToUpdate).length > 0) {
+      transactionQueries.push(
+        prisma.user.update({
+          where: { id: currentProfile.userId },
+          data: userDataToUpdate
+        })
+      );
     }
 
+    if (Object.keys(dataToUpdate).length > 0) {
+      transactionQueries.push(
+        prisma.supplierProfile.update({
+          where: { id },
+          data: dataToUpdate,
+          include: { user: true }
+        })
+      );
+    }
+
+    // Si no enviaron nada para perfil (ej. solo email), obligamos a pedir el nuevo estado del perfil
+    const results = await prisma.$transaction([
+      ...transactionQueries,
+      prisma.supplierProfile.findUnique({ where: { id }, include: { user: true } })
+    ]);
+
+    const finalProfile = results[results.length - 1];
+
     return NextResponse.json(
-      { message: 'Proveedor actualizado correctamente.', supplierProfile: updatedProfile },
+      { message: 'Proveedor actualizado correctamente.', supplierProfile: finalProfile },
       { status: 200 }
     );
   } catch (error) {

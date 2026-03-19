@@ -3,10 +3,10 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, Check, X, Eye, Download, AlertTriangle, Clock, CheckCircle, XCircle, Edit, Power, PowerOff } from 'lucide-react';
+import { Loader2, Check, X, Eye, Download, AlertTriangle, Clock, CheckCircle, XCircle, Edit, Power, PowerOff, Search, ChevronUp, ChevronDown } from 'lucide-react';
 
 const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
-  const [formData, setFormData] = useState({ companyName: '', rfc: '', contactName: '' });
+  const [formData, setFormData] = useState({ companyName: '', rfc: '', contactName: '', email: '', password: '' });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -14,7 +14,9 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
       setFormData({
         companyName: supplier.companyName || '',
         rfc: supplier.rfc || '',
-        contactName: supplier.user?.name || ''
+        contactName: supplier.user?.name || '',
+        email: supplier.user?.email || '',
+        password: '', // Siempre vacío por seguridad, solo se envía si se escribe algo nuevo
       });
     }
   }, [supplier]);
@@ -24,7 +26,12 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    await onSave(supplier.id, formData);
+    // Eliminar password del payload si está vacío
+    const payload = { ...formData };
+    if (!payload.password || payload.password.trim() === '') {
+      delete payload.password;
+    }
+    await onSave(supplier.id, payload);
     setIsSaving(false);
   };
 
@@ -36,21 +43,35 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Razón Social</label>
-            <input required type="text" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 text-gray-900 font-medium bg-white" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Razón Social</label>
+              <input required type="text" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 font-medium bg-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">RFC</label>
+              <input required type="text" value={formData.rfc} onChange={e => setFormData({ ...formData, rfc: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm uppercase text-gray-900 font-medium bg-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Nombre del Contacto</label>
+              <input required type="text" value={formData.contactName} onChange={e => setFormData({ ...formData, contactName: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 font-medium bg-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+              <input required type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 font-medium bg-white" />
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">RFC</label>
-            <input required type="text" value={formData.rfc} onChange={e => setFormData({ ...formData, rfc: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 uppercase text-gray-900 font-medium bg-white" />
+            <label className="block text-sm font-medium text-gray-700">
+              Nueva Contraseña <span className="text-gray-400 font-normal text-xs">(Dejar en blanco para no cambiar)</span>
+            </label>
+            <input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="••••••••" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Contacto</label>
-            <input required type="text" value={formData.contactName} onChange={e => setFormData({ ...formData, contactName: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 text-gray-900 font-medium bg-white" />
-          </div>
-          <div className="flex justify-end pt-5 space-x-3">
-            <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center">
+          <div className="flex justify-end pt-5 space-x-3 border-t mt-4 border-gray-100">
+            <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 font-medium">Cancelar</button>
+            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center font-medium">
               {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Guardar Cambios
             </button>
           </div>
@@ -198,6 +219,13 @@ const SupplierApprovalPage = () => {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [supplierToToggle, setSupplierToToggle] = useState(null);
 
+  // Estados para búsqueda, ordenamiento y paginación
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'companyName', direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const pageOptions = [10, 50, 100, 500];
+
   const fetchSuppliers = async () => {
     setIsLoading(true);
     setError(null);
@@ -216,6 +244,67 @@ const SupplierApprovalPage = () => {
   useEffect(() => {
     fetchSuppliers();
   }, []);
+
+  // Lógica de filtrado y ordenamiento
+  const filteredAndSortedSuppliers = React.useMemo(() => {
+    let result = [...suppliers];
+
+    // Filtrado
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(supplier =>
+        supplier.companyName?.toLowerCase().includes(lowerSearch) ||
+        supplier.rfc?.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    // Ordenamiento
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        // Manejar campos anidados si es necesario (ej. user.name)
+        if (sortConfig.key === 'contact') {
+          aValue = a.user?.name || '';
+          bValue = b.user?.name || '';
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [suppliers, searchTerm, sortConfig]);
+
+  // Resetear página cuando cambia la búsqueda o el orden
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, sortConfig, itemsPerPage]);
+
+  // Paginación final
+  const totalPages = Math.ceil(filteredAndSortedSuppliers.length / itemsPerPage);
+  const paginatedSuppliers = filteredAndSortedSuppliers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const requestSort = (key: string) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: string }) => {
+    if (sortConfig.key !== columnKey) return <div className="w-4 h-4 ml-1 opacity-20"><ChevronUp className="w-3 h-3" /></div>;
+    return sortConfig.direction === 'asc' ?
+      <ChevronUp className="w-4 h-4 ml-1 text-blue-600" /> :
+      <ChevronDown className="w-4 h-4 ml-1 text-blue-600" />;
+  };
 
   const handleApprove = async (supplierId: string) => {
     try {
@@ -257,7 +346,6 @@ const SupplierApprovalPage = () => {
     }
   };
 
-  // CAMBIO: Se añade la función para manejar la aprobación de documentos pendientes
   const handleApprovePending = async (supplierProfileId: string, documentType: string) => {
     const token = localStorage.getItem('token');
     try {
@@ -338,51 +426,152 @@ const SupplierApprovalPage = () => {
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Gestión de Proveedores</h2>
-        <div className="overflow-x-auto">
+    <div className="bg-white rounded-lg shadow-md p-6">
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <h2 className="text-2xl font-bold text-gray-800">Gestión de Proveedores</h2>
+
+          {/* Barra de Búsqueda */}
+          <div className="relative max-w-md w-full">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar por Razón Social o RFC..."
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm shadow-sm transition-all text-gray-900"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto border border-gray-100 rounded-lg mb-4">
           <table className="w-full text-left table-auto">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50/50 border-b border-gray-100">
               <tr>
-                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Razón Social</th>
-                <th className="px-4 py-3 text-sm font-semibold text-gray-600">RFC</th>
-                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Contacto</th>
-                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Estado</th>
+                <th
+                  className="px-4 py-3 text-sm font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => requestSort('companyName')}
+                >
+                  <div className="flex items-center">
+                    Razón Social <SortIcon columnKey="companyName" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-sm font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => requestSort('rfc')}
+                >
+                  <div className="flex items-center">
+                    RFC <SortIcon columnKey="rfc" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-sm font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => requestSort('contact')}
+                >
+                  <div className="flex items-center">
+                    Contacto <SortIcon columnKey="contact" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-sm font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => requestSort('status')}
+                >
+                  <div className="flex items-center">
+                    Estado <SortIcon columnKey="status" />
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
-              {suppliers.map((supplier: any) => (
-                <tr key={supplier.id} className="border-b hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{supplier.companyName}</td>
-                  <td className="px-4 py-3 text-gray-700">{supplier.rfc}</td>
-                  <td className="px-4 py-3 text-gray-700">{supplier.user.name}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-1 text-xs rounded-full font-medium ${supplier.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-                      supplier.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                      {supplier.status === 'REJECTED' ? 'INACTIVO' : supplier.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      <button onClick={() => handleOpenModal(supplier)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-100 flex items-center transition-colors border border-blue-200" title="Validar Documentos">
-                        <Eye className="w-4 h-4 mr-1" /> Validar
-                      </button>
-                      <button onClick={() => handleOpenEditModal(supplier)} className="bg-white text-gray-600 p-1.5 rounded hover:bg-gray-100 hover:text-indigo-600 transition-colors border border-gray-200" title="Editar">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleToggleStatus(supplier)} className={`p-1.5 rounded border transition-colors ${supplier.status === 'ACTIVE' ? 'bg-white text-red-500 border-gray-200 hover:bg-red-50' : 'bg-red-50 text-green-600 border-red-200 hover:bg-green-50'}`} title={supplier.status === 'ACTIVE' ? "Inactivar Acceso" : "Reactivar Acceso"}>
-                        {supplier.status === 'ACTIVE' ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
-                      </button>
-                    </div>
+            <tbody className="divide-y divide-gray-100 text-gray-900">
+              {paginatedSuppliers.length > 0 ? (
+                paginatedSuppliers.map((supplier: any) => (
+                  <tr key={supplier.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-4 text-sm font-medium text-gray-800">{supplier.companyName}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700 font-mono">{supplier.rfc}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700">{supplier.user?.name || '---'}</td>
+                    <td className="px-4 py-4 text-sm">
+                      <span className={`inline-flex px-2.5 py-1 text-xs rounded-full font-semibold ${supplier.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border border-green-100' :
+                        supplier.status === 'PENDING' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
+                          'bg-red-50 text-red-700 border border-red-100'
+                        }`}>
+                        {supplier.status === 'REJECTED' ? 'INACTIVO' : supplier.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button onClick={() => handleOpenModal(supplier)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-100 flex items-center transition-colors border border-blue-200 shadow-sm" title="Validar Documentos">
+                          <Eye className="w-4 h-4 mr-1" /> Validar
+                        </button>
+                        <button onClick={() => handleOpenEditModal(supplier)} className="bg-white text-gray-600 p-1.5 rounded hover:bg-gray-100 hover:text-indigo-600 transition-colors border border-gray-200 shadow-sm" title="Editar">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleToggleStatus(supplier)} className={`p-1.5 rounded border transition-colors shadow-sm ${supplier.status === 'ACTIVE' ? 'bg-white text-red-500 border-gray-200 hover:bg-red-50' : 'bg-red-50 text-green-600 border-red-200 hover:bg-green-50'}`} title={supplier.status === 'ACTIVE' ? "Inactivar Acceso" : "Reactivar Acceso"}>
+                          {supplier.status === 'ACTIVE' ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
+                    No se encontraron proveedores que coincidan con la búsqueda.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Controles de Paginación Estandarizados */}
+        {filteredAndSortedSuppliers.length > 0 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center mt-6 text-sm text-gray-600">
+            <div className="flex items-center space-x-2 mb-4 sm:mb-0">
+              <span>Mostrar</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+              >
+                {pageOptions.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              <span>registros por página</span>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <span>
+                Mostrando del {filteredAndSortedSuppliers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} al {Math.min(currentPage * itemsPerPage, filteredAndSortedSuppliers.length)} de {filteredAndSortedSuppliers.length} registros
+              </span>
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                <div className="px-3 py-1 font-semibold text-gray-800 border border-transparent">
+                  Página {currentPage} de {totalPages || 1}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <DocumentValidationModal
         supplier={selectedSupplier}

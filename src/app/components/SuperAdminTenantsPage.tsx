@@ -140,6 +140,10 @@ const SuperAdminTenantsPage = () => {
     const [editingSubsidiary, setEditingSubsidiary] = useState<any>(null);
     const [deletingSubsidiary, setDeletingSubsidiary] = useState<any>(null);
     const [creatingAdminFor, setCreatingAdminFor] = useState<any>(null);
+
+    // --- Paginación ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const fetchTenants = async () => {
@@ -302,6 +306,11 @@ const SuperAdminTenantsPage = () => {
     if (isLoading) return <div className="flex justify-center items-center h-full"><Loader2 className="w-12 h-12 text-indigo-600 animate-spin" /></div>;
     if (error) return <div className="text-red-500 bg-red-50 p-4 rounded">{error}</div>;
 
+    // --- Paginación Variables ---
+    const totalItems = tenants.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const paginatedTenants = tenants.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -334,7 +343,7 @@ const SuperAdminTenantsPage = () => {
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {tenants.map((tenant) => (
+                        {paginatedTenants.map((tenant) => (
                             <TenantRow
                                 key={tenant.id}
                                 tenant={tenant}
@@ -356,6 +365,54 @@ const SuperAdminTenantsPage = () => {
                         )}
                     </tbody>
                 </table>
+
+                {/* --- Controles de Paginación --- */}
+                {tenants.length > 0 && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-gray-200 text-sm text-gray-600 bg-white">
+                        <div className="flex items-center space-x-2 mb-4 sm:mb-0">
+                            <span>Mostrar</span>
+                            <select
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value={10}>10</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                                <option value={500}>500</option>
+                            </select>
+                            <span>registros por página</span>
+                        </div>
+
+                        <div className="flex items-center space-x-4">
+                            <span>
+                                Mostrando del {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} al {Math.min(currentPage * pageSize, totalItems)} de {totalItems} registros
+                            </span>
+                            <div className="flex items-center space-x-1">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Anterior
+                                </button>
+                                <div className="px-3 py-1 font-semibold text-gray-800 border border-transparent">
+                                    Página {currentPage} de {totalPages || 1}
+                                </div>
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Siguiente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Modal para Editar/Guardar Tenant */}

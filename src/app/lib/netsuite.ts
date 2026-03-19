@@ -28,52 +28,21 @@ export async function querySuiteQL(q: string, creds: NetSuiteCredentials) {
     },
   });
 
-  const accountId = creds.accountId;
-  const suiteqlUrl = `https://${accountId.replace(/_/g, '-')}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql`;
+  const accountId = creds.accountId.toUpperCase();
+  const suiteqlUrl = `https://${accountId.replace(/_/g, '-').toLowerCase()}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql`;
 
   const token = {
     key: creds.tokenId,
     secret: creds.tokenSecret,
   };
 
-  // 1. Generar parámetros OAuth manualmente
-  const oauth_timestamp = Math.floor(Date.now() / 1000).toString();
-  const oauth_nonce = oauth.getNonce();
-
-  const oauthParameters = {
-    oauth_consumer_key: oauth.consumer.key,
-    oauth_nonce: oauth_nonce,
-    oauth_signature_method: 'HMAC-SHA256',
-    oauth_timestamp: oauth_timestamp,
-    oauth_token: token.key,
-    oauth_version: '1.0',
+  const request_data = {
+    url: suiteqlUrl,
+    method: 'POST',
   };
 
-  // 2. Crear la cadena de parámetros ordenada y codificada
-  const parameterString = Object.keys(oauthParameters)
-    .sort()
-    .map(key => `${key}=${oauth.percentEncode(oauthParameters[key])}`)
-    .join('&');
-
-  // 3. Crear la "base string" para la firma
-  const baseString = `POST&${oauth.percentEncode(suiteqlUrl)}&${oauth.percentEncode(parameterString)}`;
-
-  // 4. Crear la clave para la firma
-  const signingKey = `${oauth.percentEncode(oauth.consumer.secret)}&${oauth.percentEncode(token.secret)}`;
-
-  // 5. Generar la firma
-  const oauth_signature = oauth.hash_function(baseString, signingKey);
-
-  // 6. Construir el encabezado de autorización final
-  const realm = accountId;
-  const header = `OAuth realm="${realm}",` +
-    `oauth_consumer_key="${oauth.percentEncode(oauthParameters.oauth_consumer_key)}",` +
-    `oauth_token="${oauth.percentEncode(oauthParameters.oauth_token)}",` +
-    `oauth_signature_method="${oauth.percentEncode(oauthParameters.oauth_signature_method)}",` +
-    `oauth_timestamp="${oauth.percentEncode(oauthParameters.oauth_timestamp)}",` +
-    `oauth_nonce="${oauth.percentEncode(oauthParameters.oauth_nonce)}",` +
-    `oauth_version="${oauth.percentEncode(oauthParameters.oauth_version)}",` +
-    `oauth_signature="${oauth.percentEncode(oauth_signature)}"`;
+  const authHeader = oauth.toHeader(oauth.authorize(request_data, token));
+  authHeader.Authorization += `, realm="${accountId}"`;
 
   try {
     const response = await fetch(suiteqlUrl, {
@@ -81,7 +50,7 @@ export async function querySuiteQL(q: string, creds: NetSuiteCredentials) {
       headers: {
         'Content-Type': 'application/json',
         'prefer': 'transient',
-        'Authorization': header,
+        'Authorization': authHeader.Authorization,
       },
       body: JSON.stringify({ q }),
     });
@@ -120,8 +89,8 @@ export async function invokeRestlet(scriptId: string, deployId: string, creds: N
     },
   });
 
-  const accountId = creds.accountId;
-  const restletUrl = `https://${accountId.replace(/_/g, '-')}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${deployId}`;
+  const accountId = creds.accountId.toUpperCase();
+  const restletUrl = `https://${accountId.replace(/_/g, '-').toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${deployId}`;
 
   const token = {
     key: creds.tokenId,

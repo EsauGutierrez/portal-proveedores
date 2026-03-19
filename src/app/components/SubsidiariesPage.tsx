@@ -160,6 +160,9 @@ const SubsidiariesPage = () => {
   const [subsidiaryToToggle, setSubsidiaryToToggle] = useState(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const fetchSubsidiaries = async () => {
     setIsLoading(true);
     setError(null);
@@ -271,6 +274,11 @@ const SubsidiariesPage = () => {
     return <div className="flex justify-center items-center h-96"><Loader2 className="w-16 h-16 text-blue-600 animate-spin" /></div>;
   }
 
+  // --- Paginación ---
+  const totalItems = subsidiaries.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const paginatedSubsidiaries = subsidiaries.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <>
       <div className="bg-white rounded-lg shadow-md p-8">
@@ -296,7 +304,7 @@ const SubsidiariesPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {subsidiaries.map((sub: any) => (
+              {paginatedSubsidiaries.map((sub: any) => (
                 <tr key={sub.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{sub.name}</td>
                   <td className="px-4 py-3 text-gray-700">{sub.rfc}</td>
@@ -321,6 +329,54 @@ const SubsidiariesPage = () => {
             </tbody>
           </table>
         </div>
+
+        {/* --- Controles de Paginación --- */}
+        {subsidiaries.length > 0 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center mt-6 text-sm text-gray-600">
+            <div className="flex items-center space-x-2 mb-4 sm:mb-0">
+              <span>Mostrar</span>
+              <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={10}>10</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={500}>500</option>
+              </select>
+              <span>registros por página</span>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <span>
+                Mostrando del {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} al {Math.min(currentPage * pageSize, totalItems)} de {totalItems} registros
+              </span>
+              <div className="flex items-center space-x-1">
+                <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                <div className="px-3 py-1 font-semibold text-gray-800 border border-transparent">
+                  Página {currentPage} de {totalPages || 1}
+                </div>
+                <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <SubsidiaryModal
         isOpen={isModalOpen}

@@ -53,78 +53,113 @@ export async function GET(request: Request) {
             baseWhere.fecha = dateFilter;
         }
 
+        // Determinar modo de búsqueda
+        const isPurchaseOrderMode = docType === 'PURCHASE_ORDER';
+
         let results: any[] = [];
 
-        // Facturas
-        if (!docType || docType === 'ALL' || docType === 'INVOICE') {
-            const invoices = await prisma.invoice.findMany({
-                where: baseWhere,
+        if (isPurchaseOrderMode) {
+            // ===== ÓRDENES DE COMPRA =====
+            const poWhere: any = {};
+            if (role !== 'SUPERADMIN') poWhere.tenantId = tenantId;
+            if (supplierId) poWhere.userId = supplierId;
+            if (dateFilter) poWhere.fecha = dateFilter;
+
+            const purchaseOrders = await prisma.purchaseOrder.findMany({
+                where: poWhere,
                 include: {
-                    user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
-                    reception: { include: { purchaseOrder: { include: { subsidiary: { select: { name: true } } } } } }
+                    user: {
+                        select: {
+                            name: true,
+                            supplierProfile: { select: { companyName: true, rfc: true } }
+                        }
+                    },
+                    subsidiary: { select: { name: true } }
                 },
                 orderBy: { fecha: 'desc' }
             });
 
-            invoices.forEach(inv => {
+            purchaseOrders.forEach(po => {
                 results.push({
-                    id: inv.id,
-                    tipo: 'Factura',
-                    folio: inv.folio,
-                    fecha: inv.fecha.toISOString(),
-                    proveedor: inv.user?.supplierProfile?.companyName || inv.user?.name || 'Desconocido',
-                    rfc: inv.user?.supplierProfile?.rfc || 'N/A',
-                    subsidiaria: inv.reception?.purchaseOrder?.subsidiary?.name || 'N/A',
-                    total: Number(inv.total),
-                    pdfUrl: inv.pdfUrl,
-                    xmlUrl: inv.xmlUrl,
-                    estadoCentral: inv.syncStatus
-                });
-            });
-        }
-
-        // Complementos de Pago
-        if (!docType || docType === 'ALL' || docType === 'PAYMENT') {
-            const payments = await prisma.paymentComplement.findMany({
-                where: baseWhere,
-                include: {
-                    user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
-                },
-                orderBy: { fecha: 'desc' }
-            });
-            payments.forEach(pay => {
-                results.push({
-                    id: pay.id,
-                    tipo: 'Complemento de Pago',
-                    folio: pay.folio,
-                    fecha: pay.fecha.toISOString(),
-                    proveedor: pay.user?.supplierProfile?.companyName || pay.user?.name || 'Desconocido',
-                    rfc: pay.user?.supplierProfile?.rfc || 'N/A',
-                    subsidiaria: 'N/A',
-                    total: Number(pay.total),
-                    pdfUrl: pay.pdfUrl,
-                    xmlUrl: pay.xmlUrl,
+                    id: po.id,
+                    tipo: 'Orden de Compra',
+                    folio: po.folio,
+                    fecha: po.fecha.toISOString(),
+                    proveedor: po.user?.supplierProfile?.companyName || po.user?.name || 'Desconocido',
+                    rfc: po.user?.supplierProfile?.rfc || 'N/A',
+                    subsidiaria: po.subsidiary?.name || 'N/A',
+                    total: Number(po.total),
+                    pdfUrl: null,
+                    xmlUrl: null,
                     estadoCentral: 'SYNCED'
                 });
             });
+
+        } else {
+            // ===== FACTURAS =====
+            if (!docType || docType === 'ALL' || docType === 'INVOICE') {
+                const invoices = await prisma.invoice.findMany({
+                    where: baseWhere,
+                    include: {
+                        user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
+                        reception: { include: { purchaseOrder: { include: { subsidiary: { select: { name: true } } } } } }
+                    },
+                    orderBy: { fecha: 'desc' }
+                });
+
+                invoices.forEach(inv => {
+                    results.push({
+                        id: inv.id,
+                        tipo: 'Factura',
+                        folio: inv.folio,
+                        fecha: inv.fecha.toISOString(),
+                        proveedor: inv.user?.supplierProfile?.companyName || inv.user?.name || 'Desconocido',
+                        rfc: inv.user?.supplierProfile?.rfc || 'N/A',
+                        subsidiaria: inv.reception?.purchaseOrder?.subsidiary?.name || 'N/A',
+                        total: Number(inv.total),
+                        pdfUrl: inv.pdfUrl,
+                        xmlUrl: inv.xmlUrl,
+                        estadoCentral: inv.syncStatus
+                    });
+                });
+            }
+
+            // ===== COMPLEMENTOS DE PAGO =====
+            if (!docType || docType === 'ALL' || docType === 'PAYMENT') {
+                const payments = await prisma.paymentComplement.findMany({
+                    where: baseWhere,
+                    include: {
+                        user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
+                    },
+                    orderBy: { fecha: 'desc' }
+                });
+                payments.forEach(pay => {
+                    results.push({
+                        id: pay.id,
+                        tipo: 'Complemento de Pago',
+                        folio: pay.folio,
+                        fecha: pay.fecha.toISOString(),
+                        proveedor: pay.user?.supplierProfile?.companyName || pay.user?.name || 'Desconocido',
+                        rfc: pay.user?.supplierProfile?.rfc || 'N/A',
+                        subsidiaria: 'N/A',
+                        total: Number(pay.total),
+                        pdfUrl: pay.pdfUrl,
+                        xmlUrl: pay.xmlUrl,
+                        estadoCentral: 'SYNCED'
+                    });
+                });
+            }
         }
 
         results.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
-        // Agregamos también la lista de proveedores para llenar el desplegable del filtro en el frontend
+        // Lista de proveedores para el filtro del frontend
         const filterSuppliersWhere: any = {};
         if (role !== 'SUPERADMIN') filterSuppliersWhere.tenantId = tenantId;
 
-        // Solo devolvemos los proveedores que pertenecen al Tenant
         const suppliers = await prisma.user.findMany({
-            where: {
-                role: 'SUPPLIER',
-                ...filterSuppliersWhere
-            },
-            select: {
-                id: true,
-                supplierProfile: { select: { companyName: true, rfc: true } }
-            }
+            where: { role: 'SUPPLIER', ...filterSuppliersWhere },
+            select: { id: true, supplierProfile: { select: { companyName: true, rfc: true } } }
         });
 
         const formattedSuppliers = suppliers
@@ -132,6 +167,7 @@ export async function GET(request: Request) {
             .map(s => ({ id: s.id, name: s.supplierProfile?.companyName, rfc: s.supplierProfile?.rfc }));
 
         return NextResponse.json({ documents: results, suppliers: formattedSuppliers }, { status: 200 });
+
 
     } catch (error) {
         console.error('Error fetching admin documents:', error);

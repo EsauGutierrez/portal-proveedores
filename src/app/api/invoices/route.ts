@@ -97,12 +97,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const receptionId = formData.get('receptionId') as string;
+    const receptionIdsRaw = formData.get('receptionIds') as string | null; // JSON array string
+    const receptionIds: string[] = receptionIdsRaw ? JSON.parse(receptionIdsRaw) : [];
+    const purchaseOrderId = formData.get('purchaseOrderId') as string | null;
     const userId = formData.get('userId') as string;
     const xmlFile = formData.get('xmlFile') as File;
     const pdfFile = formData.get('pdfFile') as File;
 
-    if (!receptionId || !userId || !xmlFile || !pdfFile) {
+    if ((!receptionIds.length && !purchaseOrderId) || !userId || !xmlFile || !pdfFile) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
     }
 
@@ -130,20 +132,33 @@ export async function POST(request: Request) {
     let pdfUrl = '';
     let xmlUrl = '';
     try {
-      pdfUrl = await uploadFileToS3(pdfFile, `invoices/${userId}/${receptionId}`);
-      xmlUrl = await uploadFileToS3(xmlFile, `invoices/${userId}/${receptionId}`);
+      const folderId = receptionIds[0] || purchaseOrderId;
+      pdfUrl = await uploadFileToS3(pdfFile, `invoices/${userId}/${folderId}`);
+      xmlUrl = await uploadFileToS3(xmlFile, `invoices/${userId}/${folderId}`);
     } catch (uploadError) {
       return NextResponse.json({ message: 'Error al subir los archivos a AWS S3.', error: (uploadError as Error).message }, { status: 500 });
     }
 
-    // --- OBTENER EL TENANT ID DE LA RECEPCIÓN ---
-    const receptionContext = await prisma.reception.findUnique({
-      where: { id: receptionId },
-      select: { tenantId: true }
-    });
-
-    if (!receptionContext) {
-      return NextResponse.json({ message: 'La recepción asociada no existe.' }, { status: 404 });
+    // --- OBTENER EL TENANT ID ---
+    let tenantIdStr = '';
+    if (receptionIds.length) {
+      const receptionContext = await prisma.reception.findUnique({
+        where: { id: receptionIds[0] },
+        select: { tenantId: true }
+      });
+      if (!receptionContext) {
+        return NextResponse.json({ message: 'La recepción asociada no existe.' }, { status: 404 });
+      }
+      tenantIdStr = receptionContext.tenantId;
+    } else if (purchaseOrderId) {
+      const poContext = await prisma.purchaseOrder.findUnique({
+        where: { id: purchaseOrderId },
+        select: { tenantId: true }
+      });
+      if (!poContext) {
+        return NextResponse.json({ message: 'La orden de compra asociada no existe.' }, { status: 404 });
+      }
+      tenantIdStr = poContext.tenantId;
     }
 
     // --- GUARDADO INICIAL EN BASE DE DATOS COMO PENDING ---
@@ -156,10 +171,11 @@ export async function POST(request: Request) {
         pdfUrl: pdfUrl,
         xmlUrl: xmlUrl,
         syncStatus: 'PENDING_SYNC',
-        tenant: { connect: { id: receptionContext.tenantId } }, // <-- INYECTAR TENANT DEL PROCESO
+        tenant: { connect: { id: tenantIdStr } },
         user: { connect: { id: userId } },
-        reception: { connect: { id: receptionId } },
-      },
+        ...(purchaseOrderId ? { purchaseOrder: { connect: { id: purchaseOrderId } } } : {}),
+        ...(receptionIds.length ? { receptions: { connect: receptionIds.map(id => ({ id })) } } : {}),
+      } as any,
     });
 
     // --- ENVIAR MENSAJE A SQS PARA VALIDACIÓN ASÍNCRONA ---
@@ -177,7 +193,8 @@ export async function POST(request: Request) {
         MessageBody: JSON.stringify({
           invoiceId: newInvoice.id,
           userId: userId,
-          receptionId: receptionId
+          receptionIds: receptionIds,
+          purchaseOrderId: purchaseOrderId || null
         })
       }));
       console.log(`Mensaje SQS enviado para la factura: ${newInvoice.id}`);

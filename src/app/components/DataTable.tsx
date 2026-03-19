@@ -16,7 +16,7 @@ const formatCurrency = (number) => {
 const ReceptionDetailsModal = ({ isOpen, onClose, reception }) => {
   if (!isOpen || !reception) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-4xl flex flex-col">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -59,8 +59,8 @@ const ReceptionDetailsModal = ({ isOpen, onClose, reception }) => {
   );
 };
 
-// --- Componente: Modal para Subir Factura (de una recepción) ---
-const UploadInvoiceModal = ({ isOpen, onClose, reception, order }) => {
+// --- Componente: Modal para Subir Factura ---
+const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = [] }: { isOpen: boolean, onClose: () => void, reception?: any, order?: any, receptionIds?: string[] }) => {
   if (!isOpen) return null;
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -70,6 +70,10 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order }) => {
   const resetState = () => { setXmlFile(null); setPdfFile(null); setStatus('idle'); setErrorMessage(''); };
   const handleClose = () => { resetState(); onClose(); };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => { if (e.target.files && e.target.files[0]) { setFile(e.target.files[0]); } };
+
+  // Determinar modo: recepciones múltiples, 1 recepción, o OC entera
+  const isMultiReception = receptionIds.length > 1;
+  const isSingleReception = receptionIds.length === 1 && !reception;
 
   const handleSubmit = async () => {
     if (!xmlFile || !pdfFile) {
@@ -81,7 +85,12 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order }) => {
     setErrorMessage('');
 
     const formData = new FormData();
-    formData.append('receptionId', reception.id);
+    // Si hay recepciones seleccionadas, mandamos el array; si no, mandamos purchaseOrderId
+    if (receptionIds.length > 0) {
+      formData.append('receptionIds', JSON.stringify(receptionIds));
+    } else if (order?.id) {
+      formData.append('purchaseOrderId', order.id);
+    }
     formData.append('userId', order.userId);
     formData.append('xmlFile', xmlFile);
     formData.append('pdfFile', pdfFile);
@@ -112,17 +121,30 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order }) => {
       case 'loading': return (<div className="text-center py-12"><Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto" /><p className="mt-4 text-lg font-semibold text-gray-700">Validando factura...</p></div>);
       case 'success': return (<div className="text-center py-12"><CheckCircle className="w-20 h-20 text-green-500 mx-auto" /><h4 className="mt-4 text-2xl font-bold text-gray-800">¡Factura Recibida!</h4><p className="text-gray-600 mt-2">Tu factura ha sido validada y está en proceso de sincronización.</p><div className="mt-8"><button onClick={handleClose} className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700">Finalizar</button></div></div>);
       case 'error': return (<div className="text-center py-12"><AlertTriangle className="w-20 h-20 text-red-500 mx-auto" /><h4 className="mt-4 text-2xl font-bold text-gray-800">Error de Validación</h4><p className="text-gray-600 mt-2 text-left whitespace-pre-wrap bg-red-50 p-4 rounded-md">{errorMessage}</p><div className="mt-8"><button onClick={resetState} className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700">Reintentar</button></div></div>);
-      default: return (<><div className="flex justify-between items-center mb-6"><h3 className="text-2xl font-bold text-gray-800">Subir Factura</h3><button onClick={handleClose} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button></div><div className="grid grid-cols-2 gap-y-4 gap-x-4 mb-6 bg-gray-50 p-4 rounded-lg"><div><label className="block text-sm font-medium text-gray-500">Folio Orden de Compra</label><p className="text-lg font-semibold text-gray-800">{order.folio}</p></div><div><label className="block text-sm font-medium text-gray-500">Folio Recepción</label><p className="text-lg font-semibold text-gray-800">{reception.folio}</p></div><div><label className="block text-sm font-medium text-gray-500">Subtotal Recepción</label><p className="text-lg font-semibold text-gray-800">${reception.subtotal}</p></div><div><label className="block text-sm font-medium text-gray-500">Total Recepción</label><p className="text-lg font-semibold text-gray-800">${reception.total}</p></div></div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo XML</label><label htmlFor="xml-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{xmlFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{xmlFile ? <span className="font-semibold">{xmlFile.name}</span> : 'Adjuntar XML'}</p></div></label><input id="xml-upload-invoice" type="file" className="hidden" accept=".xml,text/xml" onChange={(e) => handleFileChange(e, setXmlFile)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo PDF</label><label htmlFor="pdf-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{pdfFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{pdfFile ? <span className="font-semibold">{pdfFile.name}</span> : 'Adjuntar PDF'}</p></div></label><input id="pdf-upload-invoice" type="file" className="hidden" accept="application/pdf" onChange={(e) => handleFileChange(e, setPdfFile)} /></div></div><div className="mt-8 flex justify-end space-x-4"><button onClick={handleClose} className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-100">Cancelar</button><button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300" disabled={!xmlFile || !pdfFile}>Subir Factura</button></div></>);
+      default: return (<><div className="flex justify-between items-center mb-6"><h3 className="text-2xl font-bold text-gray-800">Subir Factura</h3><button onClick={handleClose} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button></div><div className="grid grid-cols-2 gap-y-4 gap-x-4 mb-6 bg-gray-50 p-4 rounded-lg"><div><label className="block text-sm font-medium text-gray-500">Folio Orden de Compra</label><p className="text-lg font-semibold text-gray-800">{order?.folio}</p></div>
+        {isMultiReception ? (
+          <div className="col-span-2 mt-2">
+            <p className="text-sm text-center text-purple-800 bg-purple-100 p-3 rounded-md border border-purple-200 font-medium">
+              Estás cargando 1 factura para <span className="font-bold">{receptionIds.length} recepciones</span> seleccionadas.
+            </p>
+          </div>
+        ) : reception ? (<><div><label className="block text-sm font-medium text-gray-500">Folio Recepción</label><p className="text-lg font-semibold text-gray-800">{reception.folio}</p></div><div><label className="block text-sm font-medium text-gray-500">Subtotal Recepción</label><p className="text-lg font-semibold text-gray-800">${reception.subtotal}</p></div><div><label className="block text-sm font-medium text-gray-500">Total Recepción</label><p className="text-lg font-semibold text-gray-800">${reception.total}</p></div></>) : (
+          <div className="col-span-2 mt-2">
+            <p className="text-sm text-center text-blue-800 bg-blue-100 p-3 rounded-md border border-blue-200 font-medium">
+              Estás cargando 1 sola factura integral para la Orden de Compra <span className="font-bold">{order?.folio}</span>.
+            </p>
+          </div>
+        )}</div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo XML</label><label htmlFor="xml-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{xmlFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{xmlFile ? <span className="font-semibold">{xmlFile.name}</span> : 'Adjuntar XML'}</p></div></label><input id="xml-upload-invoice" type="file" className="hidden" accept=".xml,text/xml" onChange={(e) => handleFileChange(e, setXmlFile)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo PDF</label><label htmlFor="pdf-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{pdfFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{pdfFile ? <span className="font-semibold">{pdfFile.name}</span> : 'Adjuntar PDF'}</p></div></label><input id="pdf-upload-invoice" type="file" className="hidden" accept="application/pdf" onChange={(e) => handleFileChange(e, setPdfFile)} /></div></div><div className="mt-8 flex justify-end space-x-4"><button onClick={handleClose} className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-100">Cancelar</button><button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300" disabled={!xmlFile || !pdfFile}>Subir Factura</button></div></>);
     }
   };
-  return <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"><div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">{renderContent()}</div></div>;
+  return <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50"><div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">{renderContent()}</div></div>;
 };
 
 // --- Se añade la definición del componente que faltaba ---
 const UploadPaymentProofModal = ({ isOpen, onClose, payment }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-bold text-gray-800">Subir Comprobante de Pago</h3>
@@ -141,9 +163,20 @@ export const DataTable = ({ title, data }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, pageSize]);
+
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  // Receptions checkbox state
+  const [selectedReceptionsId, setSelectedReceptionsId] = useState<Record<string, string[]>>({});
 
   const [selectedItem, setSelectedItem] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
@@ -179,7 +212,17 @@ export const DataTable = ({ title, data }) => {
   };
 
   const handleRowClick = (folio) => { setExpandedRows(prev => prev.includes(folio) ? prev.filter(f => f !== folio) : [...prev, folio]); };
-  const handleOpenUploadModal = (recepcion, order) => { setSelectedItem(recepcion); setCurrentOrder(order); setIsUploadModalOpen(true); };
+  const handleOpenUploadModal = (recepcion, order) => {
+    setSelectedItem(recepcion);
+    setCurrentOrder(order);
+    setIsUploadModalOpen(true);
+  };
+  const handleOpenUploadModalForOrder = (order) => {
+    const selectedIds = selectedReceptionsId[order.folio] || [];
+    setSelectedItem(null);
+    setCurrentOrder({ ...order, selectedReceptionIds: selectedIds });
+    setIsUploadModalOpen(true);
+  };
   const handleCloseUploadModal = () => setIsUploadModalOpen(false);
   const handleOpenDetailsModal = (recepcion) => { setSelectedItem(recepcion); setIsDetailsModalOpen(true); };
   const handleCloseDetailsModal = () => setIsDetailsModalOpen(false);
@@ -202,6 +245,11 @@ export const DataTable = ({ title, data }) => {
   const isInvoiceTable = title === 'Facturas';
   const isPaymentTable = title === 'Complementos de Pago';
 
+  // Computed data para paginación
+  const totalItems = sortedData.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const paginatedData = sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <>
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -217,13 +265,15 @@ export const DataTable = ({ title, data }) => {
                 <SortableHeader columnKey="fecha">Fecha</SortableHeader>
                 <SortableHeader columnKey="subsidiaria">Subsidiaria</SortableHeader>
                 <SortableHeader columnKey="subtotal" className="text-right">Monto Subtotal</SortableHeader>
+                <SortableHeader columnKey="tax" className="text-right">Monto Impuestos</SortableHeader>
                 <SortableHeader columnKey="total" className="text-right">Monto Total</SortableHeader>
+                {isExpandable && <th className="px-4 py-3 w-32 text-center text-xs font-semibold text-gray-500">Facturación</th>}
                 {isInvoiceTable && <><th className="px-4 py-3 w-28 text-center"></th><th className="px-4 py-3 w-28 text-center"></th></>}
                 {isPaymentTable && <th className="px-4 py-3 w-28 text-center"></th>}
               </tr>
             </thead>
             <tbody>
-              {sortedData.map((item) => {
+              {paginatedData.map((item) => {
                 const isExpanded = expandedRows.includes(item.folio);
                 const canExpand = isExpandable && item.recepciones && item.recepciones.length > 0;
                 return (
@@ -236,23 +286,36 @@ export const DataTable = ({ title, data }) => {
                       {/* CORRECCIÓN: Se añade una validación para la fecha antes de formatearla */}
                       <td className="px-4 py-3 text-sm text-gray-500">{item.fecha ? new Date(item.fecha).toLocaleDateString('es-MX') : 'N/A'}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{item.subsidiaria}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${item.subtotal}</td>
-                      <td className="px-4 py-3 text-sm text-gray-800 font-bold text-right">${item.total}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${formatCurrency(Math.abs(Number(item.subtotal)))}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${formatCurrency(Math.abs(Number(item.tax || 0)))}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800 font-bold text-right">${formatCurrency(Math.abs(Number(item.total)))}</td>
+                      {isExpandable && (
+                        <td className="px-4 py-2 text-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleOpenUploadModalForOrder(item); }}
+                            className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200 shadow-sm whitespace-nowrap"
+                          >
+                            {selectedReceptionsId[item.folio]?.length > 0 ? `Subir factura (${selectedReceptionsId[item.folio].length} rec.)` : 'Subir factura'}
+                          </button>
+                        </td>
+                      )}
                       {isInvoiceTable && <><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
                       {isPaymentTable && (<td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); handleOpenPaymentModal(item); }} className="bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Subir Comprobante</button></td>)}
                     </tr>
                     {canExpand && isExpanded && (
                       <tr className="bg-gray-50">
-                        <td colSpan={7} className="p-0">
+                        <td colSpan={8} className="p-0">
                           <div className="p-4 pl-16">
                             <h4 className="text-md font-semibold text-gray-700 mb-2">Detalle de Recepciones</h4>
                             <table className="w-full text-sm">
                               <thead className="bg-gray-100 rounded-lg">
                                 <tr>
+                                  <th className="px-4 py-2 font-semibold text-center text-gray-600 w-10"></th>
                                   <th className="px-4 py-2 font-semibold text-left text-gray-600">Folio Recepción</th>
                                   <th className="px-4 py-2 font-semibold text-left text-gray-600">Fecha</th>
                                   <th className="px-4 py-2 font-semibold text-right text-gray-600">Cantidad</th>
                                   <th className="px-4 py-2 font-semibold text-right text-gray-600">Subtotal</th>
+                                  <th className="px-4 py-2 font-semibold text-right text-gray-600">Impuestos</th>
                                   <th className="px-4 py-2 font-semibold text-right text-gray-600">Total</th>
                                   <th className="px-4 py-2 font-semibold text-center text-gray-600"></th>
                                   <th className="px-4 py-2 font-semibold text-center text-gray-600"></th>
@@ -262,14 +325,36 @@ export const DataTable = ({ title, data }) => {
                                 {item.recepciones.map(recepcion => {
                                   const cantidadTotal = recepcion.articles.reduce((sum, article) => sum + article.quantity, 0);
                                   const subtotal = recepcion.articles.reduce((sum, article) => sum + parseFloat(article.subtotal), 0);
+                                  const tax = recepcion.articles.reduce((sum, article) => sum + parseFloat(article.tax), 0);
                                   const total = recepcion.articles.reduce((sum, article) => sum + parseFloat(article.total), 0);
-                                  const recepcionConTotales = { ...recepcion, cantidadTotal, subtotal: formatCurrency(subtotal), total: formatCurrency(total) };
+                                  const recepcionConTotales = { ...recepcion, cantidadTotal, subtotal: formatCurrency(subtotal), tax: formatCurrency(tax), total: formatCurrency(total) };
                                   return (
                                     <tr key={recepcion.id} className="border-b border-gray-200 last:border-b-0">
+                                      <td className="px-4 py-2 text-center">
+                                        {!recepcion.invoice && (
+                                          <input
+                                            type="checkbox"
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                            checked={(selectedReceptionsId[item.folio] || []).includes(recepcion.id)}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              setSelectedReceptionsId(prev => {
+                                                const currentList = prev[item.folio] || [];
+                                                if (checked) {
+                                                  return { ...prev, [item.folio]: [...currentList, recepcion.id] };
+                                                } else {
+                                                  return { ...prev, [item.folio]: currentList.filter(id => id !== recepcion.id) };
+                                                }
+                                              });
+                                            }}
+                                          />
+                                        )}
+                                      </td>
                                       <td className="px-4 py-2 text-gray-600">{recepcion.folio}</td>
                                       <td className="px-4 py-2 text-gray-600">{new Date(recepcion.fecha).toLocaleDateString('es-MX')}</td>
                                       <td className="px-4 py-2 text-gray-600 text-right">{cantidadTotal} uds.</td>
                                       <td className="px-4 py-2 text-gray-600 text-right">${formatCurrency(subtotal)}</td>
+                                      <td className="px-4 py-2 text-gray-600 text-right">${formatCurrency(tax)}</td>
                                       <td className="px-4 py-2 text-gray-800 font-semibold text-right">${formatCurrency(total)}</td>
                                       <td className="px-4 py-2 text-center">
                                         <button onClick={(e) => { e.stopPropagation(); handleOpenDetailsModal(recepcion); }} className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver detalles</button>
@@ -296,8 +381,57 @@ export const DataTable = ({ title, data }) => {
             </tbody>
           </table>
         </div>
+
+        {/* --- Controles de Paginación --- */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mt-6 text-sm text-gray-600">
+          <div className="flex items-center space-x-2 mb-4 sm:mb-0">
+            <span>Mostrar</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value={10}>10</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={500}>500</option>
+            </select>
+            <span>registros por página</span>
+          </div>
+
+          <div className="flex items-center space-x-4">
+            <span>
+              Mostrando del {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} al {Math.min(currentPage * pageSize, totalItems)} de {totalItems} registros
+            </span>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Anterior
+              </button>
+              <div className="px-3 py-1 font-semibold text-gray-800 border border-transparent">
+                Página {currentPage} de {totalPages || 1}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-      <UploadInvoiceModal isOpen={isUploadModalOpen} onClose={handleCloseUploadModal} reception={selectedItem} order={currentOrder} />
+      <UploadInvoiceModal
+        isOpen={isUploadModalOpen}
+        onClose={handleCloseUploadModal}
+        reception={selectedItem}
+        order={currentOrder}
+        receptionIds={currentOrder?.selectedReceptionIds || []}
+      />
       <ReceptionDetailsModal isOpen={isDetailsModalOpen} onClose={handleCloseDetailsModal} reception={selectedItem} />
       <UploadPaymentProofModal isOpen={isPaymentModalOpen} onClose={handleClosePaymentModal} payment={selectedItem} />
     </>
