@@ -102,12 +102,20 @@ export async function GET(request: Request) {
                     where: baseWhere,
                     include: {
                         user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
-                        reception: { include: { purchaseOrder: { include: { subsidiary: { select: { name: true } } } } } }
+                        receptions: { include: { purchaseOrder: { include: { subsidiary: { select: { name: true } } } } } },
+                        purchaseOrder: { include: { subsidiary: { select: { name: true } } } }
                     },
                     orderBy: { fecha: 'desc' }
                 });
 
-                invoices.forEach(inv => {
+                invoices.forEach((inv: any) => {
+                    let subName = 'N/A';
+                    if (inv.receptions && inv.receptions.length > 0) {
+                        subName = inv.receptions[0].purchaseOrder?.subsidiary?.name || 'N/A';
+                    } else if (inv.purchaseOrder) {
+                        subName = inv.purchaseOrder.subsidiary?.name || 'N/A';
+                    }
+
                     results.push({
                         id: inv.id,
                         tipo: 'Factura',
@@ -115,7 +123,7 @@ export async function GET(request: Request) {
                         fecha: inv.fecha.toISOString(),
                         proveedor: inv.user?.supplierProfile?.companyName || inv.user?.name || 'Desconocido',
                         rfc: inv.user?.supplierProfile?.rfc || 'N/A',
-                        subsidiaria: inv.reception?.purchaseOrder?.subsidiary?.name || 'N/A',
+                        subsidiaria: subName,
                         total: Number(inv.total),
                         pdfUrl: inv.pdfUrl,
                         xmlUrl: inv.xmlUrl,
