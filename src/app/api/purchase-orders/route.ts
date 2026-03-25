@@ -21,10 +21,13 @@ export async function GET(request: Request) {
       where: { userId },
       include: {
         subsidiary: true,
+        invoice: {
+          select: { id: true, syncStatus: true, pdfUrl: true, xmlUrl: true },
+        },
         recepciones: {
           include: {
             articles: true,
-            invoice: true, // We include this to hide the upload button if the invoice exists
+            invoice: true,
           },
         },
         user: true,

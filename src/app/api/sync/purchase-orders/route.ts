@@ -96,6 +96,7 @@ export async function GET(request: Request) {
         BUILTIN.DF(t.subsidiary) AS subsidiaria,
         BUILTIN.DF(t.entity) AS proveedor,
         t.foreigntotal       AS total,
+        t.subtotal           AS subtotalns,
         t.taxtotal           AS taxtotal,
         t.entity             AS proveedorId,
         v.vatregnumber       AS rfc
@@ -172,7 +173,10 @@ export async function GET(request: Request) {
 
         const valTotal = Math.abs(parseFloat(po.total) || 0);
         const valTax = Math.abs(parseFloat(po.taxtotal) || 0);
-        const valSubtotal = valTotal - valTax;
+        // Usar subtotal directo de NetSuite; si viene vacío, derivar como total - tax
+        const valSubtotal = po.subtotalns != null && po.subtotalns !== ''
+          ? Math.abs(parseFloat(po.subtotalns) || 0)
+          : valTotal - valTax;
 
         const purchaseOrderData = {
           netsuiteId: po.po_netsuite_id,

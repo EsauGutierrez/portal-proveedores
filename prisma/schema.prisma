@@ -165,6 +165,7 @@ model Invoice {
   folio              String
   fecha              DateTime
   subtotal           Decimal             @db.Decimal(10, 2)
+  tax                Decimal             @db.Decimal(10, 2) @default(0)
   total              Decimal             @db.Decimal(10, 2)
   pdfUrl             String?
   xmlUrl             String?

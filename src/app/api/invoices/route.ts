@@ -92,6 +92,7 @@ export async function GET(request: Request) {
         fecha: invoice.fecha.toISOString(),
         subsidiaria: subsidiaryName,
         subtotal: formatCurrency(invoice.subtotal.toString()),
+        tax: formatCurrency(invoice.tax.toString()),
         total: formatCurrency(invoice.total.toString()),
         ordenDeCompra: poFolio,
         recepcion: receptionFolio,
@@ -196,10 +197,12 @@ export async function POST(request: Request) {
     }
 
     // --- VALIDACIÓN 3: DESGLOSE DE IVA POR CONCEPTO ---
+    let xmlTax = 0;
     try {
       const impuestosGlobal = comprobante['cfdi:Impuestos'];
       if (impuestosGlobal) {
         const totalImpuestosTrasladados = parseFloat(impuestosGlobal.$.TotalImpuestosTrasladados || '0') || 0;
+        xmlTax = totalImpuestosTrasladados;
 
         // 3a. SubTotal + IVA total debe igualar el Total declarado
         const calculatedTotal = xmlSubtotal + totalImpuestosTrasladados;
@@ -276,6 +279,7 @@ export async function POST(request: Request) {
         folio: folioFiscal,
         fecha: new Date(comprobante.$.Fecha),
         subtotal: xmlSubtotal,
+        tax: xmlTax,
         total: xmlTotal,
         pdfUrl: pdfUrl,
         xmlUrl: xmlUrl,

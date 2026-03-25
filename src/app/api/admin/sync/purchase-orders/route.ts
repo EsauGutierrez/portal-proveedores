@@ -130,6 +130,7 @@ export async function POST(request: Request) {
         BUILTIN.DF(t.subsidiary) AS subsidiaria,
         BUILTIN.DF(t.entity) AS proveedor,
         t.foreigntotal       AS total,
+        t.subtotal           AS subtotalns,
         t.taxtotal           AS taxtotal,
         t.entity             AS proveedor_netsuite_id,
         v.vatregnumber       AS rfc
@@ -230,7 +231,9 @@ export async function POST(request: Request) {
 
                 const valTotal = Math.abs(parseFloat(po.total) || 0);
                 const valTax = Math.abs(parseFloat(po.taxtotal) || 0);
-                const valSubtotal = valTotal - valTax;
+                const valSubtotal = po.subtotalns != null && po.subtotalns !== ''
+                  ? Math.abs(parseFloat(po.subtotalns) || 0)
+                  : valTotal - valTax;
 
                 const purchaseOrderData = {
                     folio: po.folio,

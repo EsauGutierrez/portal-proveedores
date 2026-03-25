@@ -291,12 +291,23 @@ export const DataTable = ({ title, data }) => {
                       <td className="px-4 py-3 text-sm text-gray-800 font-bold text-right">${formatCurrency(item.total)}</td>
                       {isExpandable && (
                         <td className="px-4 py-2 text-center">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleOpenUploadModalForOrder(item); }}
-                            className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200 shadow-sm whitespace-nowrap"
-                          >
-                            {selectedReceptionsId[item.folio]?.length > 0 ? `Subir factura (${selectedReceptionsId[item.folio].length} rec.)` : 'Subir factura'}
-                          </button>
+                          {item.invoice?.syncStatus === 'SYNCED' ? (
+                            <div className="flex gap-1 justify-center">
+                              <button onClick={(e) => { e.stopPropagation(); window.open(item.invoice.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded-md transition-colors duration-200">Ver PDF</button>
+                              <button onClick={(e) => { e.stopPropagation(); window.open(item.invoice.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-2 rounded-md transition-colors duration-200">Ver XML</button>
+                            </div>
+                          ) : item.invoice?.syncStatus === 'PENDING_SYNC' ? (
+                            <span className="text-yellow-700 italic text-xs font-semibold px-2 py-1 bg-yellow-100 rounded-md whitespace-nowrap">En validación...</span>
+                          ) : item.invoice?.syncStatus === 'FAILED' ? (
+                            <span className="text-red-700 italic text-xs font-semibold px-2 py-1 bg-red-100 rounded-md whitespace-nowrap">Factura con error</span>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleOpenUploadModalForOrder(item); }}
+                              className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200 shadow-sm whitespace-nowrap"
+                            >
+                              {selectedReceptionsId[item.folio]?.length > 0 ? `Subir factura (${selectedReceptionsId[item.folio].length} rec.)` : 'Subir factura'}
+                            </button>
+                          )}
                         </td>
                       )}
                       {isInvoiceTable && <><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
