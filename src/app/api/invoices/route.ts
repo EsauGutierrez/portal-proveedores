@@ -143,6 +143,100 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'No se encontró el UUID (TimbreFiscalDigital) en el XML.' }, { status: 400 });
     }
 
+    // --- VALIDACIÓN 1: RFC DEL EMISOR VS. PROVEEDOR REGISTRADO ---
+    const xmlEmisorRfc: string = comprobante['cfdi:Emisor']?.$.Rfc || '';
+    if (!xmlEmisorRfc) {
+      return NextResponse.json({ message: 'El XML no contiene el RFC del emisor (cfdi:Emisor).' }, { status: 422 });
+    }
+    const supplierProfile = await prisma.supplierProfile.findFirst({
+      where: { userId },
+      select: { rfc: true },
+    });
+    if (supplierProfile && supplierProfile.rfc.toUpperCase() !== xmlEmisorRfc.toUpperCase()) {
+      return NextResponse.json({
+        message: `El RFC del emisor en el XML (${xmlEmisorRfc}) no coincide con el RFC registrado del proveedor (${supplierProfile.rfc}).`,
+      }, { status: 422 });
+    }
+
+    // --- VALIDACIÓN 2: VIGENCIA DEL CERTIFICADO SAT ---
+    let fechaTimbrado: Date | null = null;
+    let noCertificadoSAT = '';
+    try {
+      const timbre = comprobante['cfdi:Complemento']['tfd:TimbreFiscalDigital'].$;
+      fechaTimbrado = timbre.FechaTimbrado ? new Date(timbre.FechaTimbrado) : null;
+      noCertificadoSAT = timbre.NoCertificadoSAT || '';
+    } catch (_) { /* complemento ya fue validado arriba */ }
+
+    if (!noCertificadoSAT) {
+      return NextResponse.json({ message: 'El CFDI no contiene número de certificado SAT (NoCertificadoSAT).' }, { status: 422 });
+    }
+    if (!fechaTimbrado || isNaN(fechaTimbrado.getTime())) {
+      return NextResponse.json({ message: 'El CFDI no contiene una FechaTimbrado válida.' }, { status: 422 });
+    }
+    const fechaComprobante = new Date(comprobante.$.Fecha);
+    const diffHours = (fechaTimbrado.getTime() - fechaComprobante.getTime()) / 3_600_000;
+    if (diffHours < 0) {
+      return NextResponse.json({
+        message: `La FechaTimbrado (${fechaTimbrado.toISOString()}) es anterior a la Fecha del comprobante. El CFDI no es válido.`,
+      }, { status: 422 });
+    }
+    if (diffHours > 72) {
+      return NextResponse.json({
+        message: `El CFDI fue timbrado ${Math.round(diffHours)} horas después de su emisión. El SAT permite máximo 72 horas.`,
+      }, { status: 422 });
+    }
+    if (fechaTimbrado > new Date()) {
+      return NextResponse.json({ message: 'La FechaTimbrado del CFDI está en el futuro.' }, { status: 422 });
+    }
+    const certAgeYears = (Date.now() - fechaTimbrado.getTime()) / (365 * 24 * 3_600_000);
+    if (certAgeYears > 4) {
+      return NextResponse.json({
+        message: `El certificado SAT (${noCertificadoSAT}) tiene más de 4 años de antigüedad y ya no es vigente.`,
+      }, { status: 422 });
+    }
+
+    // --- VALIDACIÓN 3: DESGLOSE DE IVA POR CONCEPTO ---
+    try {
+      const impuestosGlobal = comprobante['cfdi:Impuestos'];
+      if (impuestosGlobal) {
+        const totalImpuestosTrasladados = parseFloat(impuestosGlobal.$.TotalImpuestosTrasladados || '0') || 0;
+
+        // 3a. SubTotal + IVA total debe igualar el Total declarado
+        const calculatedTotal = xmlSubtotal + totalImpuestosTrasladados;
+        if (Math.abs(calculatedTotal - xmlTotal) > 0.5) {
+          return NextResponse.json({
+            message: `El desglose de impuestos no cuadra: SubTotal ($${xmlSubtotal.toFixed(2)}) + IVA ($${totalImpuestosTrasladados.toFixed(2)}) = $${calculatedTotal.toFixed(2)}, pero el Total declarado es $${xmlTotal.toFixed(2)}.`,
+          }, { status: 422 });
+        }
+
+        // 3b. Suma del IVA por concepto debe coincidir con TotalImpuestosTrasladados
+        const conceptos = comprobante['cfdi:Conceptos']?.['cfdi:Concepto'];
+        if (conceptos) {
+          const conceptosArray = Array.isArray(conceptos) ? conceptos : [conceptos];
+          let ivaConceptosSum = 0;
+          for (const concepto of conceptosArray) {
+            const traslados = concepto['cfdi:Impuestos']?.['cfdi:Traslados']?.['cfdi:Traslado'];
+            if (traslados) {
+              const trasladosArray = Array.isArray(traslados) ? traslados : [traslados];
+              for (const t of trasladosArray) {
+                if (t.$.Impuesto === '002') { // 002 = IVA en catálogo SAT
+                  ivaConceptosSum += parseFloat(t.$.Importe || '0') || 0;
+                }
+              }
+            }
+          }
+          if (Math.abs(ivaConceptosSum - totalImpuestosTrasladados) > 0.5) {
+            return NextResponse.json({
+              message: `La suma del IVA por concepto ($${ivaConceptosSum.toFixed(2)}) no coincide con el TotalImpuestosTrasladados ($${totalImpuestosTrasladados.toFixed(2)}).`,
+            }, { status: 422 });
+          }
+        }
+      }
+    } catch (ivaError) {
+      // Facturas exentas (tasa 0 o sin impuestos) son válidas; solo omitimos la validación de IVA
+      console.log('[Invoices] CFDI sin sección de impuestos trasladados, se omite validación de IVA.');
+    }
+
     // --- SUBIDA A AWS S3 ---
     let pdfUrl = '';
     let xmlUrl = '';
