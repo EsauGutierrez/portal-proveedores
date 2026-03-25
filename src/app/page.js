@@ -7,6 +7,7 @@ import LoginPage from './components/LoginPage';
 import DashboardPage from './components/DashboardPage';
 import RegistrationPage from './components/RegistrationPage';
 import CompleteProfilePage from './components/CompleteProfilePage';
+import ChangePasswordPage from './components/ChangePasswordPage';
 
 export default function HomePage() {
     const [currentUser, setCurrentUser] = useState(null);
@@ -22,9 +23,28 @@ export default function HomePage() {
     }, []);
 
     const handleLogin = (data) => {
-        localStorage.setItem('user', JSON.stringify(data.user));
+        // Guardar el token siempre
         localStorage.setItem('token', data.token);
+
+        // Si es el primer login del proveedor, debe cambiar su contraseña
+        if (data.user.role === 'SUPPLIER' && data.user.firstLogin) {
+            setCurrentUser(data.user);
+            setAuthView('changePassword');
+            return;
+        }
+
+        // Si no es el primer login, guardamos el usuario y mostramos el dashboard
+        localStorage.setItem('user', JSON.stringify(data.user));
         setCurrentUser(data.user);
+    };
+
+    const handlePasswordChanged = () => {
+        // Una vez cambiada la contraseña, actualizamos el estado del usuario localmente 
+        // para que ya no tenga el flag de firstLogin
+        const updatedUser = { ...currentUser, firstLogin: false };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setCurrentUser(updatedUser);
+        setAuthView('login'); // Redirige al dashboard por el efecto de currentUser
     };
 
     const handleLogout = () => {
@@ -49,6 +69,8 @@ export default function HomePage() {
             return <RegistrationPage onSwitchToLogin={() => setAuthView('login')} />;
         case 'completeProfile':
             return <CompleteProfilePage supplierProfileId={pendingSupplierId} onBackToLogin={() => setAuthView('login')} />;
+        case 'changePassword':
+            return <ChangePasswordPage user={currentUser} onPasswordChanged={handlePasswordChanged} />;
         case 'login':
         default:
             return <LoginPage 

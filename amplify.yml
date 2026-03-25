@@ -4,7 +4,7 @@ frontend:
     preBuild:
       commands:
         - npm ci
-        - env | grep -e DATABASE_URL -e JWT_SECRET >> .env.production
+        - env | grep -e DATABASE_URL -e JWT_SECRET -e S3_BUCKET_NAME -e SQS_INVOICES_URL -e WORKER_SECRET_KEY -e SYNC_API_KEY -e APP_AWS_REGION >> .env.production
         - npx prisma generate
     build:
       commands:

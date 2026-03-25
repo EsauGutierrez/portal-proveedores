@@ -88,6 +88,7 @@ export async function POST(request: Request) {
         role: user.role, // Puede ser SUPERADMIN, TENANT_ADMIN o SUPPLIER
         tenantId: user.tenantId, // ! IMPORTANTE: Añadimos el tenantId al token
         supplierProfileId: user.supplierProfile?.id || null, // Opcional pero útil para el Frontend
+        firstLogin: user.firstLogin,
       },
       process.env.JWT_SECRET!,
       {

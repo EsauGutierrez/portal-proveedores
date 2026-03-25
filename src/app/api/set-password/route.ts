@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       },
       data: {
         password: hashedPassword,
+        firstLogin: false,
       },
     });
 

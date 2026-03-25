@@ -24,8 +24,20 @@ model Tenant {
   receptions          Reception[]
   subsidiaries        Subsidiary[]
   supplierProfiles    SupplierProfile[]
-  SyncLog             SyncLog[]
+  syncLogs            SyncLog[]
   users               User[]
+  documentRequirements DocumentRequirement[]
+}
+
+model DocumentRequirement {
+  id           String  @id @default(cuid())
+  documentType String
+  isRequired   Boolean @default(true)
+  isOcrEnabled Boolean @default(true)
+  tenantId     String
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, documentType])
 }
 
 model User {
@@ -39,6 +51,7 @@ model User {
   password           String?
   role               Role                @default(SUPPLIER)
   tenantId           String?
+  firstLogin         Boolean             @default(true)
   invoices           Invoice[]
   paymentComplements PaymentComplement[]
   purchaseOrders     PurchaseOrder[]

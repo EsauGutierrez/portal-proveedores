@@ -195,16 +195,12 @@ export async function POST(request: Request) {
 
     // --- ENVIAR MENSAJE A SQS PARA VALIDACIÓN ASÍNCRONA ---
     const sqsClient = new SQSClient({
-      region: process.env.AWS_REGION || 'us-east-2',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-      }
+      region: process.env.APP_AWS_REGION || 'us-east-2',
     });
 
     try {
       await sqsClient.send(new SendMessageCommand({
-        QueueUrl: process.env.AWS_SQS_INVOICES_URL,
+        QueueUrl: process.env.SQS_INVOICES_URL,
         MessageBody: JSON.stringify({
           invoiceId: newInvoice.id,
           userId: userId,

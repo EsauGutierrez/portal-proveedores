@@ -127,6 +127,50 @@ const ConfirmToggleModal = ({ supplier, isOpen, onClose, onConfirm }) => {
   );
 };
 
+// --- Componente Modal para Invitar Proveedor ---
+const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
+  const [formData, setFormData] = useState({ name: '', email: '' });
+  const [isSaving, setIsSaving] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    await onInvite(formData);
+    setIsSaving(false);
+    setFormData({ name: '', email: '' });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-800">Invitar Nuevo Proveedor</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Nombre del Proveedor / Contacto</label>
+            <input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" placeholder="Ej. Juan Pérez o Empresa SA" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+            <input required type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" placeholder="proveedor@ejemplo.com" />
+          </div>
+          <p className="text-xs text-gray-500 italic">Se enviará un correo con un enlace para que el proveedor establezca su contraseña y complete su perfil.</p>
+          <div className="flex justify-end pt-4 space-x-3 border-t border-gray-100">
+            <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 font-medium">Cancelar</button>
+            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center font-medium">
+              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Enviar Invitación
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // --- Componente Modal para la Validación de Documentos ---
 const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onReject, onValidateDocument, onApprovePending }) => {
   if (!isOpen) return null;
@@ -218,6 +262,7 @@ const SupplierApprovalPage = () => {
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [supplierToToggle, setSupplierToToggle] = useState(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   // Estados para búsqueda, ordenamiento y paginación
   const [searchTerm, setSearchTerm] = useState('');
@@ -421,6 +466,26 @@ const SupplierApprovalPage = () => {
     }
   };
 
+  const handleInvite = async (inviteData: any) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(inviteData)
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || 'Error al invitar.');
+      
+      alert(`¡Invitación enviada con éxito!\n\nEn un entorno real, el proveedor recibiría un email.\nToken generado: ${result.inviteToken.substring(0, 15)}...`);
+      
+      await fetchSuppliers();
+      setIsInviteModalOpen(false);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   if (isLoading) return <div className="flex justify-center items-center h-96"><Loader2 className="w-16 h-16 text-blue-600 animate-spin" /></div>;
   if (error) return <div className="text-red-600 text-center">{error}</div>;
 
@@ -429,7 +494,15 @@ const SupplierApprovalPage = () => {
     <div className="bg-white rounded-lg shadow-md p-6">
 
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-          <h2 className="text-2xl font-bold text-gray-800">Gestión de Proveedores</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold text-gray-800">Gestión de Proveedores</h2>
+            <button 
+              onClick={() => setIsInviteModalOpen(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center"
+            >
+              Envía Invitación
+            </button>
+          </div>
 
           {/* Barra de Búsqueda */}
           <div className="relative max-w-md w-full">
@@ -595,6 +668,12 @@ const SupplierApprovalPage = () => {
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={confirmToggleStatus}
+      />
+
+      <InviteSupplierModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        onInvite={handleInvite}
       />
     </>
   );

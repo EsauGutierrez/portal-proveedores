@@ -3,11 +3,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Configuración del cliente S3 con las variables de entorno
 const s3Client = new S3Client({
-    region: process.env.AWS_REGION!,
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    region: process.env.APP_AWS_REGION || 'us-east-2',
 });
 
 /**
@@ -24,7 +20,7 @@ export async function uploadFileToS3(file: File, targetFolder: string): Promise<
     const fileKey = `${targetFolder}/${Date.now()}-${safeFileName}`;
 
     const params = {
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Bucket: process.env.S3_BUCKET_NAME!,
         Key: fileKey,
         Body: fileBuffer,
         ContentType: file.type || "application/octet-stream",
@@ -62,7 +58,7 @@ export async function getPresignedUrl(fileKey: string): Promise<string> {
     }
 
     const command = new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Bucket: process.env.S3_BUCKET_NAME!,
         Key: cleanKey,
     });
 

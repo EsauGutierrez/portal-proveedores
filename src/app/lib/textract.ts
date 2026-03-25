@@ -1,11 +1,7 @@
 import { TextractClient, DetectDocumentTextCommand, AnalyzeDocumentCommand, FeatureType } from "@aws-sdk/client-textract";
 
 const textractClient = new TextractClient({
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
+    region: process.env.APP_AWS_REGION || 'us-east-2',
 });
 
 export const extractTextFromDocument = async (fileBuffer: Buffer) => {

@@ -79,3 +79,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Error al procesar la carga del documento.' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
+    }
+    const token = authHeader.split(' ')[1];
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    const { userId } = decodedToken;
+
+    const url = new URL(request.url);
+    const documentType = url.searchParams.get('documentType');
+
+    if (!documentType) {
+      return NextResponse.json({ message: 'Falta el tipo de documento.' }, { status: 400 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { supplierProfile: true },
+    });
+
+    if (!user?.supplierProfile) {
+      return NextResponse.json({ message: 'Perfil no encontrado.' }, { status: 404 });
+    }
+
+    const document = await prisma.supplierDocument.findUnique({
+      where: {
+        supplierProfileId_documentType: {
+          supplierProfileId: user.supplierProfile.id,
+          documentType,
+        },
+      },
+    });
+
+    if (document) {
+      await prisma.supplierDocument.delete({
+        where: { id: document.id },
+      });
+    }
+
+    return NextResponse.json({ message: 'Documento eliminado exitosamente.' }, { status: 200 });
+  } catch (error) {
+    console.error('Error al eliminar el documento:', error);
+    return NextResponse.json({ message: 'Error al eliminar el documento.' }, { status: 500 });
+  }
+}

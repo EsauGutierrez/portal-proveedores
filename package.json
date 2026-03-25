@@ -11,7 +11,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.994.0",
     "@aws-sdk/client-sqs": "^3.999.0",
-    "@aws-sdk/client-textract": "^3.1005.0",
+    "@aws-sdk/client-textract": "^3.1013.0",
     "@aws-sdk/s3-request-presigner": "^3.994.0",
     "@prisma/client": "^6.15.0",
     "@types/adm-zip": "^0.5.7",
