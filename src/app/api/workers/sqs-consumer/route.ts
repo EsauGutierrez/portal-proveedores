@@ -44,6 +44,7 @@ export async function POST(request: Request) {
             const invoice = await prisma.invoice.findUnique({
                 where: { id: invoiceId },
                 include: {
+                    tenant: true,
                     user: {
                         include: {
                             supplierProfile: {
@@ -118,9 +119,17 @@ export async function POST(request: Request) {
                     facturaXMLUrl: xmlPresignedUrl
                 };
 
+                const nsCreds = {
+                    accountId: invoice.tenant.netsuiteAccountId!,
+                    consumerKey: invoice.tenant.netsuiteConsumerKey!,
+                    consumerSecret: invoice.tenant.netsuiteConsumerSec!,
+                    tokenId: invoice.tenant.netsuiteTokenId!,
+                    tokenSecret: invoice.tenant.netsuiteTokenSecret!,
+                };
+
                 console.log(`[Worker] Enviando datos a NetSuite RESTlet:`, netsuitePayload);
 
-                const netsuiteResponse = await invokeRestlet(SCRIPT_ID, DEPLOY_ID, 'POST', netsuitePayload);
+                const netsuiteResponse = await invokeRestlet(SCRIPT_ID, DEPLOY_ID, nsCreds, 'POST', netsuitePayload);
 
                 if (netsuiteResponse && netsuiteResponse.success) {
                     console.log(`[Worker] Factura ${invoiceId} sincronizada con NetSuite! Internal ID: ${netsuiteResponse.vendorBillId}`);
