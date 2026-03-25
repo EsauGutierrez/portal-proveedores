@@ -196,6 +196,10 @@ export async function POST(request: Request) {
     // --- ENVIAR MENSAJE A SQS PARA VALIDACIÓN ASÍNCRONA ---
     const sqsClient = new SQSClient({
       region: process.env.APP_AWS_REGION || 'us-east-2',
+      credentials: {
+        accessKeyId: process.env.APP_AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.APP_AWS_SECRET_ACCESS_KEY!,
+      },
     });
 
     try {

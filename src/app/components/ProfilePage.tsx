@@ -247,6 +247,34 @@ const OcrResultModal = ({ isOpen, onClose, config, currentProfile, isEditing, on
 };
 
 
+// --- Componente Modal de Error ---
+const ErrorModal = ({ isOpen, message, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+        <div className="p-6 bg-red-50 border-b flex flex-col items-center text-center">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-3">
+            <AlertCircle className="w-7 h-7 text-red-600" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900">Ocurrió un error</h3>
+        </div>
+        <div className="p-6">
+          <p className="text-gray-700 text-sm text-center">{message}</p>
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium text-sm"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Componente Principal de la Página de Perfil ---
 const ProfilePage = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -254,6 +282,7 @@ const ProfilePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingDocs, setUploadingDocs] = useState<Record<string, boolean>>({});
+  const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
   const [ocrModalConfig, setOcrModalConfig] = useState({ isOpen: false, data: null, isMatch: false, wasRejected: false, documentType: '' });
   const [docRequirements, setDocRequirements] = useState<any[]>([]);
   const [editFormData, setEditFormData] = useState({
@@ -343,7 +372,7 @@ const ProfilePage = () => {
       await fetchProfile();
       setIsEditing(false);
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setErrorModal({ isOpen: true, message: err.message });
       setIsLoading(false);
     }
   };
@@ -448,7 +477,7 @@ const ProfilePage = () => {
       await fetchProfile();
 
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setErrorModal({ isOpen: true, message: err.message });
     } finally {
       setUploadingDocs(prev => ({ ...prev, [documentType]: false }));
       // Reseteamos el input de file para permitir volver a subir el mismo archivo
@@ -604,7 +633,13 @@ const ProfilePage = () => {
       {/* Se llama a la nueva función para renderizar la sección de documentos */}
       {renderDocumentsSection()}
 
-      <OcrResultModal 
+      <ErrorModal
+        isOpen={errorModal.isOpen}
+        message={errorModal.message}
+        onClose={() => setErrorModal({ isOpen: false, message: '' })}
+      />
+
+      <OcrResultModal
         isOpen={ocrModalConfig.isOpen}
         onClose={() => setOcrModalConfig({ isOpen: false, data: null, isMatch: false, wasRejected: false, documentType: '' })}
         config={ocrModalConfig}
