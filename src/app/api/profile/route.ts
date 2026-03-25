@@ -78,6 +78,32 @@ export async function PUT(request: Request) {
       return NextResponse.json({ message: 'Faltan datos requeridos (Razón Social, RFC, Dirección Fiscal).' }, { status: 400 });
     }
 
+    // Obtener el perfil actual para conocer el tenantId
+    const currentProfile = await prisma.supplierProfile.findUnique({
+      where: { userId },
+      select: { id: true, tenantId: true },
+    });
+
+    if (!currentProfile) {
+      return NextResponse.json({ message: 'Perfil no encontrado.' }, { status: 404 });
+    }
+
+    // Verificar que el RFC no lo use otro proveedor del mismo tenant
+    const rfcConflict = await prisma.supplierProfile.findFirst({
+      where: {
+        tenantId: currentProfile.tenantId,
+        rfc,
+        NOT: { id: currentProfile.id },
+      },
+    });
+
+    if (rfcConflict) {
+      return NextResponse.json(
+        { message: `El RFC ${rfc} ya está registrado por otro proveedor en esta empresa.` },
+        { status: 409 }
+      );
+    }
+
     const updatedProfile = await prisma.supplierProfile.update({
       where: { userId },
       data: {
