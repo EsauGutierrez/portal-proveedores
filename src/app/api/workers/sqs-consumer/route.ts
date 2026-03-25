@@ -51,13 +51,14 @@ export async function POST(request: Request) {
                             }
                         }
                     },
-                    reception: {
+                    receptions: {
                         include: { articles: true }
                     }
                 }
             });
 
-            if (!invoice || !invoice.user?.supplierProfile || !invoice.reception) {
+            const primaryReception = invoice.receptions?.[0];
+            if (!invoice || !invoice.user?.supplierProfile || !primaryReception) {
                 console.error(`[Worker] Datos incompletos para la factura ${invoiceId}. Marcaremos como fallida.`);
                 await updateSyncStatus(invoiceId, 'FAILED', 'Datos de usuario o recepción incompletos en base de datos.');
                 continue;
@@ -67,8 +68,8 @@ export async function POST(request: Request) {
             const subsidiary = supplier.subsidiary;
 
             // 4. Validar las Matemáticas y Totales Cruzados
-            const receptionSubtotal = invoice.reception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
-            const receptionTotal = invoice.reception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
+            const receptionSubtotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
+            const receptionTotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
 
             const errors: string[] = [];
 
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
 
                 const netsuitePayload = {
                     proveedorId: supplier.rfc, // O usar el internal ID de NetSuite si lo tienes mapeado
-                    recepcionFolio: invoice.reception.folio, // Usamos el num. de documento como referencia
+                    recepcionFolio: primaryReception.folio, // Usamos el num. de documento como referencia
                     uuidFactura: invoice.folio,
                     totalFactura: invoice.total,
                     facturaPDFUrl: pdfPresignedUrl,
