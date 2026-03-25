@@ -128,7 +128,7 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
               Estás cargando 1 factura para <span className="font-bold">{receptionIds.length} recepciones</span> seleccionadas.
             </p>
           </div>
-        ) : reception ? (<><div><label className="block text-sm font-medium text-gray-500">Folio Recepción</label><p className="text-lg font-semibold text-gray-800">{reception.folio}</p></div><div><label className="block text-sm font-medium text-gray-500">Subtotal Recepción</label><p className="text-lg font-semibold text-gray-800">${reception.subtotal}</p></div><div><label className="block text-sm font-medium text-gray-500">Total Recepción</label><p className="text-lg font-semibold text-gray-800">${reception.total}</p></div></>) : (
+        ) : reception ? (<><div><label className="block text-sm font-medium text-gray-500">Folio Recepción</label><p className="text-lg font-semibold text-gray-800">{reception.folio}</p></div><div><label className="block text-sm font-medium text-gray-500">Subtotal Recepción</label><p className="text-lg font-semibold text-gray-800">${formatCurrency(reception.subtotal)}</p></div><div><label className="block text-sm font-medium text-gray-500">Total Recepción</label><p className="text-lg font-semibold text-gray-800">${formatCurrency(reception.total)}</p></div></>) : (
           <div className="col-span-2 mt-2">
             <p className="text-sm text-center text-blue-800 bg-blue-100 p-3 rounded-md border border-blue-200 font-medium">
               Estás cargando 1 sola factura integral para la Orden de Compra <span className="font-bold">{order?.folio}</span>.
@@ -286,9 +286,9 @@ export const DataTable = ({ title, data }) => {
                       {/* CORRECCIÓN: Se añade una validación para la fecha antes de formatearla */}
                       <td className="px-4 py-3 text-sm text-gray-500">{item.fecha ? new Date(item.fecha).toLocaleDateString('es-MX') : 'N/A'}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{item.subsidiaria}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${formatCurrency(Math.abs(Number(item.subtotal)))}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${formatCurrency(Math.abs(Number(item.tax || 0)))}</td>
-                      <td className="px-4 py-3 text-sm text-gray-800 font-bold text-right">${formatCurrency(Math.abs(Number(item.total)))}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${formatCurrency(item.subtotal)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 text-right">${formatCurrency(item.tax || 0)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800 font-bold text-right">${formatCurrency(item.total)}</td>
                       {isExpandable && (
                         <td className="px-4 py-2 text-center">
                           <button
