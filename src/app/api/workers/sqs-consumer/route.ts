@@ -53,42 +53,53 @@ export async function POST(request: Request) {
                         }
                     },
                     receptions: {
-                        include: { articles: true }
+                        include: { articles: true },
+                    },
+                    purchaseOrder: {
+                        select: { folio: true, subtotal: true, total: true, netsuiteId: true }
                     }
                 }
             });
 
-            const primaryReception = invoice.receptions?.[0];
-            if (!invoice || !invoice.user?.supplierProfile || !primaryReception) {
+            if (!invoice || !invoice.user?.supplierProfile) {
                 console.error(`[Worker] Datos incompletos para la factura ${invoiceId}. Marcaremos como fallida.`);
-                await updateSyncStatus(invoiceId, 'FAILED', 'Datos de usuario o recepción incompletos en base de datos.');
+                await updateSyncStatus(invoiceId, 'FAILED', 'Datos de usuario o perfil de proveedor incompletos.');
                 continue;
             }
 
             const supplier = invoice.user.supplierProfile;
-            const subsidiary = supplier.subsidiary;
+            const primaryReception = invoice.receptions?.[0];
+            // Factura puede estar ligada a recepciones o directamente a una OC
+            const isPoLevelInvoice = !primaryReception && !!invoice.purchaseOrder;
+            const referenceFolio = primaryReception?.folio ?? invoice.purchaseOrder?.folio ?? 'N/A';
 
-            // 4. Validar las Matemáticas y Totales Cruzados
-            const receptionSubtotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
-            const receptionTotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
-
+            // 4. Validar Totales Cruzados (solo aplica para facturas ligadas a recepciones)
             const errors: string[] = [];
+            if (primaryReception) {
+                const receptionSubtotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
+                const receptionTotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
 
-            // Note: We already validated RFCs on the frontend, but as a Worker it's a good practice to double check
-            // However, to keep it fast, we rely on the math of the database records vs the XML variables we saved
-
-            if (Math.abs(Number(invoice.subtotal) - receptionSubtotal) > 0.5) {
-                errors.push(`El subtotal de la factura ($${invoice.subtotal}) difiere de la recepción ($${receptionSubtotal.toFixed(2)}).`);
-            }
-            if (Math.abs(Number(invoice.total) - receptionTotal) > 0.5) {
-                errors.push(`El total de la factura ($${invoice.total}) difiere de la recepción ($${receptionTotal.toFixed(2)}).`);
+                if (Math.abs(Number(invoice.subtotal) - receptionSubtotal) > 0.5) {
+                    errors.push(`El subtotal de la factura ($${invoice.subtotal}) difiere de la recepción ($${receptionSubtotal.toFixed(2)}).`);
+                }
+                if (Math.abs(Number(invoice.total) - receptionTotal) > 0.5) {
+                    errors.push(`El total de la factura ($${invoice.total}) difiere de la recepción ($${receptionTotal.toFixed(2)}).`);
+                }
+            } else if (isPoLevelInvoice) {
+                // Para facturas integrales de OC validamos contra el total de la OC
+                const poTotal = Number(invoice.purchaseOrder!.total);
+                if (poTotal > 0 && Math.abs(Number(invoice.total) - poTotal) > 0.5) {
+                    errors.push(`El total de la factura ($${invoice.total}) difiere del total de la OC ($${poTotal.toFixed(2)}).`);
+                }
+            } else {
+                await updateSyncStatus(invoiceId, 'FAILED', 'La factura no tiene recepción ni orden de compra asociada.');
+                continue;
             }
 
             // 5. Rechazar si las matemáticas no cuadran
             if (errors.length > 0) {
                 console.error(`[Worker] Validación fallida para ${invoiceId}:`, errors);
                 await updateSyncStatus(invoiceId, 'FAILED', `Validación fallida: ${errors.join(' | ')}`);
-                // Continuamos procesando los siguientes si hay más de 1 en el lote SQS, no tiramos todo el POST
                 continue;
             }
 
@@ -106,13 +117,22 @@ export async function POST(request: Request) {
 
             // 7. Sincronización a NETSUITE mediante RESTlet
             try {
-                // TODO: CAMBIAR ESTOS IDs POR LOS REALES EN NETSUITE
-                const SCRIPT_ID = 'customscript_imr_portal_fact';
-                const DEPLOY_ID = 'customdeploy_imr_pp_facturas_rest';
+                const SCRIPT_ID = '3878';
+                const DEPLOY_ID = '1';
+
+                // fromId: si es factura por OC completa → ID interno de la OC en NetSuite
+                //         si es factura por recepción → ID interno de la recepción en NetSuite
+                const fromIdRaw = isPoLevelInvoice
+                    ? invoice.purchaseOrder!.netsuiteId
+                    : primaryReception?.netsuiteId ?? null;
+                const fromId = fromIdRaw ? parseInt(fromIdRaw, 10) : null;
+                const fromType = isPoLevelInvoice ? 'purchaseorder' : 'itemreceipt';
 
                 const netsuitePayload = {
-                    proveedorId: supplier.rfc, // O usar el internal ID de NetSuite si lo tienes mapeado
-                    recepcionFolio: primaryReception.folio, // Usamos el num. de documento como referencia
+                    fromId,
+                    fromType,
+                    proveedorId: supplier.rfc,
+                    recepcionFolio: referenceFolio,
                     uuidFactura: invoice.folio,
                     totalFactura: invoice.total,
                     facturaPDFUrl: pdfPresignedUrl,

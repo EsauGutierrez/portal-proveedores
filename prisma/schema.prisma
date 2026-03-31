@@ -140,6 +140,7 @@ model Reception {
   folio           String
   tenantId        String
   invoiceId       String?
+  netsuiteId      String?
   purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
   tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoice         Invoice?           @relation(fields: [invoiceId], references: [id])
