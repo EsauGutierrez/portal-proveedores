@@ -268,7 +268,7 @@ export const DataTable = ({ title, data }) => {
                 <SortableHeader columnKey="tax" className="text-right">Monto Impuestos</SortableHeader>
                 <SortableHeader columnKey="total" className="text-right">Monto Total</SortableHeader>
                 {isExpandable && <th className="px-4 py-3 w-32 text-center text-xs font-semibold text-gray-500">Facturación</th>}
-                {isInvoiceTable && <><th className="px-4 py-3 w-28 text-center"></th><th className="px-4 py-3 w-28 text-center"></th></>}
+                {isInvoiceTable && <><th className="px-4 py-3 w-36 text-center text-xs font-semibold text-gray-500">Estado</th><th className="px-4 py-3 w-28 text-center"></th><th className="px-4 py-3 w-28 text-center"></th></>}
                 {isPaymentTable && <th className="px-4 py-3 w-28 text-center"></th>}
               </tr>
             </thead>
@@ -310,7 +310,7 @@ export const DataTable = ({ title, data }) => {
                           )}
                         </td>
                       )}
-                      {isInvoiceTable && <><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
+                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Validada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En validación</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
                       {isPaymentTable && (<td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); handleOpenPaymentModal(item); }} className="bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Subir Comprobante</button></td>)}
                     </tr>
                     {canExpand && isExpanded && (
@@ -342,7 +342,7 @@ export const DataTable = ({ title, data }) => {
                                   return (
                                     <tr key={recepcion.id} className="border-b border-gray-200 last:border-b-0">
                                       <td className="px-4 py-2 text-center">
-                                        {!recepcion.invoice && (
+                                        {!recepcion.invoice && !item.invoice && (
                                           <input
                                             type="checkbox"
                                             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
@@ -371,7 +371,9 @@ export const DataTable = ({ title, data }) => {
                                         <button onClick={(e) => { e.stopPropagation(); handleOpenDetailsModal(recepcion); }} className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver detalles</button>
                                       </td>
                                       <td className="px-4 py-2 text-center">
-                                        {!recepcion.invoice ? (
+                                        {item.invoice ? (
+                                          <span className="text-gray-500 italic text-xs font-semibold px-2 py-1 bg-gray-200 rounded-md">Factura en OC</span>
+                                        ) : !recepcion.invoice ? (
                                           <button onClick={(e) => { e.stopPropagation(); handleOpenUploadModal(recepcionConTotales, item); }} className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Subir factura</button>
                                         ) : (
                                           <span className="text-gray-500 italic text-xs font-semibold px-2 py-1 bg-gray-200 rounded-md">Factura Recibida</span>

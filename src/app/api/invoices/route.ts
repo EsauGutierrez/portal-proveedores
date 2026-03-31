@@ -96,6 +96,7 @@ export async function GET(request: Request) {
         total: formatCurrency(invoice.total.toString()),
         ordenDeCompra: poFolio,
         recepcion: receptionFolio,
+        syncStatus: invoice.syncStatus,
         pdfUrl: pdfPresignedUrl || invoice.pdfUrl,
         xmlUrl: xmlPresignedUrl || invoice.xmlUrl,
       };
