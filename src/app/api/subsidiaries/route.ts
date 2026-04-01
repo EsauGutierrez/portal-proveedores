@@ -156,6 +156,17 @@ export async function PUT(request: Request) {
       return NextResponse.json({ message: `El RFC ${cleanRfc} ya está siendo utilizado por otra subsidiaria.` }, { status: 400 });
     }
 
+    // Subida de logo a S3 si se incluye un nuevo archivo
+    const logo = formData.get('logo') as File | null;
+    let newLogoUrl: string | undefined;
+    if (logo && logo.size > 0) {
+      try {
+        newLogoUrl = await uploadFileToS3(logo, `subsidiaries/logos`);
+      } catch (uploadErr) {
+        console.error('Error subiendo logo a S3:', uploadErr);
+      }
+    }
+
     const updatedSubsidiary = await prisma.subsidiary.update({
       where: { id },
       data: {
@@ -164,6 +175,7 @@ export async function PUT(request: Request) {
         businessName,
         taxRegime,
         taxAddress,
+        ...(newLogoUrl && { logoUrl: newLogoUrl }),
       },
     });
 
