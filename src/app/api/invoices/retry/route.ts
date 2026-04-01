@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     });
 
     await sqsClient.send(new SendMessageCommand({
-      QueueUrl: process.env.AWS_SQS_INVOICES_URL?.trim(),
+      QueueUrl: (process.env.AWS_SQS_INVOICES_URL || process.env.SQS_INVOICES_URL)?.trim(),
       MessageBody: JSON.stringify({ invoiceId })
     }));
 

@@ -24,7 +24,7 @@ export async function uploadFileToS3(file: File, targetFolder: string): Promise<
     const fileKey = `${targetFolder}/${Date.now()}-${safeFileName}`;
 
     const params = {
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Bucket: (process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME)!,
         Key: fileKey,
         Body: fileBuffer,
         ContentType: file.type || "application/octet-stream",
@@ -62,7 +62,7 @@ export async function getPresignedUrl(fileKey: string): Promise<string> {
     }
 
     const command = new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Bucket: (process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME)!,
         Key: cleanKey,
     });
 
