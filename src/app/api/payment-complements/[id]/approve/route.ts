@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
+import { invokeRestlet } from '../../../../lib/netsuite';
 
 const prisma = new PrismaClient();
 
@@ -11,6 +12,9 @@ let resend: Resend | null = null;
 if (process.env.RESEND_API_KEY) {
   resend = new Resend(process.env.RESEND_API_KEY);
 }
+
+const SCRIPT_ID  = process.env.NETSUITE_SCRIPT_ID  || '1234';
+const DEPLOY_ID  = process.env.NETSUITE_DEPLOY_ID  || '1';
 
 export async function PATCH(
   request: Request,
@@ -31,15 +35,33 @@ export async function PATCH(
 
     const { id } = await params;
 
+    // Cargar complemento con factura y datos del proveedor
     const complement = await prisma.paymentComplement.findUnique({
       where: { id },
-      include: { user: true, invoice: true },
+      include: {
+        user: {
+          include: {
+            supplierProfile: { select: { netsuiteId: true } },
+          },
+        },
+        invoice: { select: { folio: true, netsuiteId: true, tenantId: true } },
+        tenant: {
+          select: {
+            netsuiteAccountId: true,
+            netsuiteConsumerKey: true,
+            netsuiteConsumerSec: true,
+            netsuiteTokenId: true,
+            netsuiteTokenSecret: true,
+          },
+        },
+      },
     });
 
     if (!complement) {
       return NextResponse.json({ message: 'Complemento no encontrado.' }, { status: 404 });
     }
 
+    // 1. Aprobar en BD
     const updated = await prisma.paymentComplement.update({
       where: { id },
       data: {
@@ -50,8 +72,72 @@ export async function PATCH(
       },
     });
 
+    // 2. Sincronizar a NetSuite si tenemos los IDs necesarios
+    const vendorNsId     = complement.user?.supplierProfile?.netsuiteId;
+    const vendorBillNsId = complement.invoice?.netsuiteId;
+    const tenant         = complement.tenant;
+
+    if (vendorNsId && vendorBillNsId && tenant?.netsuiteAccountId) {
+      const nsCreds = {
+        accountId:      tenant.netsuiteAccountId,
+        consumerKey:    tenant.netsuiteConsumerKey!,
+        consumerSecret: tenant.netsuiteConsumerSec!,
+        tokenId:        tenant.netsuiteTokenId!,
+        tokenSecret:    tenant.netsuiteTokenSecret!,
+      };
+
+      const nsPayload = {
+        action:          'createVendorPayment',
+        vendorNetsuiteId: vendorNsId,
+        vendorBillId:     vendorBillNsId,
+        amount:           complement.total.toString(),
+        trandate:         complement.fecha.toISOString(),
+        uuidComplemento:  complement.folio,
+      };
+
+      try {
+        console.log(`[Approve] Enviando VendorPayment a NetSuite para complemento ${id}`, nsPayload);
+        const nsResponse = await invokeRestlet(SCRIPT_ID, DEPLOY_ID, nsCreds, 'POST', nsPayload);
+
+        if (nsResponse?.success) {
+          console.log(`[Approve] VendorPayment creado en NS. ID: ${nsResponse.vendorPaymentId}`);
+          await prisma.paymentComplement.update({
+            where: { id },
+            data: {
+              netsuiteSyncStatus: 'SYNCED',
+              netsuitePaymentId:  String(nsResponse.vendorPaymentId),
+              netsuiteSyncError:  null,
+            },
+          });
+        } else {
+          const errMsg = nsResponse?.error || 'Respuesta inesperada de NetSuite';
+          console.error(`[Approve] NetSuite rechazó el VendorPayment:`, errMsg);
+          await prisma.paymentComplement.update({
+            where: { id },
+            data: {
+              netsuiteSyncStatus: 'FAILED',
+              netsuiteSyncError:  errMsg.substring(0, 255),
+            },
+          });
+        }
+      } catch (nsError: any) {
+        console.error(`[Approve] Error al llamar a NetSuite:`, nsError.message);
+        await prisma.paymentComplement.update({
+          where: { id },
+          data: {
+            netsuiteSyncStatus: 'FAILED',
+            netsuiteSyncError:  nsError.message?.substring(0, 255),
+          },
+        });
+      }
+    } else {
+      // Faltan datos de NS — dejar en PENDING_SYNC para retry manual
+      console.warn(`[Approve] No se puede sincronizar a NS todavía. vendorNsId=${vendorNsId}, vendorBillNsId=${vendorBillNsId}`);
+    }
+
+    // 3. Notificar al proveedor por email
     const providerEmail = complement.user?.email;
-    const providerName = complement.user?.name || 'Proveedor';
+    const providerName  = complement.user?.name || 'Proveedor';
 
     if (resend && providerEmail) {
       await resend.emails.send({
@@ -65,7 +151,7 @@ export async function PATCH(
             </div>
             <div style="background: white; padding: 32px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
               <p style="color: #374151;">Hola, <strong>${providerName}</strong></p>
-              <p style="color: #6b7280;">Tu complemento de pago <strong>folio ${complement.folio}</strong> ha sido <span style="color:#16a34a; font-weight:bold;">aprobado</span>.</p>
+              <p style="color: #6b7280;">Tu complemento de pago <strong>folio ${complement.folio}</strong> ha sido <span style="color:#16a34a; font-weight:bold;">aprobado</span> y registrado en el sistema.</p>
             </div>
           </div>
         `,

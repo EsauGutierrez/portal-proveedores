@@ -153,8 +153,8 @@ export async function POST(request: Request) {
 
                 if (netsuiteResponse && netsuiteResponse.success) {
                     console.log(`[Worker] Factura ${invoiceId} sincronizada con NetSuite! Internal ID: ${netsuiteResponse.vendorBillId}`);
-                    // 8. ÉXITO: Actualizar el estado a SYNCED
-                    await updateSyncStatus(invoiceId, 'SYNCED', null);
+                    // 8. ÉXITO: Actualizar el estado a SYNCED y guardar el ID interno del VendorBill
+                    await updateSyncStatus(invoiceId, 'SYNCED', null, String(netsuiteResponse.vendorBillId));
                 } else {
                     console.error(`[Worker] NetSuite rechazó la transacción:`, netsuiteResponse);
                     await updateSyncStatus(invoiceId, 'FAILED', `Error ERP: ${netsuiteResponse.error || JSON.stringify(netsuiteResponse)}`);
@@ -179,13 +179,14 @@ export async function POST(request: Request) {
 }
 
 // Helper para no escribir tanto prisma repetido, actualiza tanto éxito como error
-async function updateSyncStatus(invoiceId: string, status: 'SYNCED' | 'FAILED' | 'PENDING_SYNC', errorMsg: string | null) {
+async function updateSyncStatus(invoiceId: string, status: 'SYNCED' | 'FAILED' | 'PENDING_SYNC', errorMsg: string | null, netsuiteId?: string) {
     try {
         await prisma.invoice.update({
             where: { id: invoiceId },
             data: {
                 syncStatus: status,
-                syncError: errorMsg ? errorMsg.substring(0, 255) : null // Truncar para evitar errores de BD si el msj de NetSuite es inmenso
+                syncError: errorMsg ? errorMsg.substring(0, 255) : null,
+                ...(netsuiteId ? { netsuiteId } : {}), // Guardar ID interno del VendorBill en NS
             }
         });
     } catch (e) {

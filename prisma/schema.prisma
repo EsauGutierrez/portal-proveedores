@@ -183,6 +183,7 @@ model Invoice {
   purchaseOrderId    String?             @unique
   syncError          String?
   syncStatus         InvoiceSyncStatus   @default(PENDING_SYNC)
+  netsuiteId         String?             // Internal ID del VendorBill en NetSuite
   tenantId           String
   purchaseOrder      PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
   receptions         Reception[]
@@ -194,24 +195,27 @@ model Invoice {
 }
 
 model PaymentComplement {
-  id              String                   @id @default(cuid())
-  folio           String
-  fecha           DateTime
-  total           Decimal                  @db.Decimal(10, 2)
-  pdfUrl          String?
-  xmlUrl          String?
-  status          PaymentComplementStatus  @default(PENDING)
-  rejectionReason String?
-  approvedAt      DateTime?
-  rejectedAt      DateTime?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  userId          String
-  invoiceId       String
-  tenantId        String
-  invoice         Invoice                  @relation(fields: [invoiceId], references: [id])
-  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user            User                     @relation(fields: [userId], references: [id])
+  id                  String                   @id @default(cuid())
+  folio               String
+  fecha               DateTime
+  total               Decimal                  @db.Decimal(10, 2)
+  pdfUrl              String?
+  xmlUrl              String?
+  status              PaymentComplementStatus  @default(PENDING)
+  rejectionReason     String?
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  netsuiteSyncStatus  InvoiceSyncStatus        @default(PENDING_SYNC) // Sync a NetSuite: PENDING_SYNC | SYNCED | FAILED
+  netsuitePaymentId   String?                  // Internal ID del VendorPayment en NetSuite
+  netsuiteSyncError   String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  userId              String
+  invoiceId           String
+  tenantId            String
+  invoice             Invoice                  @relation(fields: [invoiceId], references: [id])
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                User                     @relation(fields: [userId], references: [id])
 
   @@unique([tenantId, folio])
 }
