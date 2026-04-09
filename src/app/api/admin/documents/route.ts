@@ -56,6 +56,9 @@ export async function GET(request: Request) {
         // Determinar modo de búsqueda
         const isPurchaseOrderMode = docType === 'PURCHASE_ORDER';
 
+        const adminPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+        const adminLimit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || '200', 10)));
+
         let results: any[] = [];
 
         if (isPurchaseOrderMode) {
@@ -76,7 +79,9 @@ export async function GET(request: Request) {
                     },
                     subsidiary: { select: { name: true } }
                 },
-                orderBy: { fecha: 'desc' }
+                orderBy: { fecha: 'desc' },
+                take: adminLimit,
+                skip: (adminPage - 1) * adminLimit,
             });
 
             purchaseOrders.forEach(po => {
@@ -105,7 +110,9 @@ export async function GET(request: Request) {
                         receptions: { include: { purchaseOrder: { include: { subsidiary: { select: { name: true } } } } } },
                         purchaseOrder: { include: { subsidiary: { select: { name: true } } } }
                     },
-                    orderBy: { fecha: 'desc' }
+                    orderBy: { fecha: 'desc' },
+                    take: adminLimit,
+                    skip: (adminPage - 1) * adminLimit,
                 });
 
                 invoices.forEach((inv: any) => {
@@ -139,7 +146,9 @@ export async function GET(request: Request) {
                     include: {
                         user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
                     },
-                    orderBy: { fecha: 'desc' }
+                    orderBy: { fecha: 'desc' },
+                    take: adminLimit,
+                    skip: (adminPage - 1) * adminLimit,
                 });
                 payments.forEach(pay => {
                     results.push({

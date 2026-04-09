@@ -2,10 +2,16 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
+  // Rate limit: 5 registros por IP cada hora
+  const ip = getClientIP(request);
+  const rl = rateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
+  if (!rl.success) return rateLimitResponse(rl.retryAfterSec);
+
   try {
     const formData = await request.formData();
 
@@ -23,8 +29,10 @@ export async function POST(request: Request) {
       ACTA_CONSTITUTIVA: formData.get('actaConstitutiva') as File,
     };
 
-    if (!email || !name || !companyName || !rfc || !taxAddress) {
-      return NextResponse.json({ message: 'Todos los campos de texto son requeridos.' }, { status: 400 });
+    const subsidiaryId = formData.get('subsidiaryId') as string;
+
+    if (!email || !name || !companyName || !rfc || !taxAddress || !subsidiaryId) {
+      return NextResponse.json({ message: 'Todos los campos de texto son requeridos, incluyendo la subsidiaria.' }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -37,18 +45,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'El RFC ya está registrado.' }, { status: 409 });
     }
 
-    // ========================================================================
-    // ¡ACCIÓN REQUERIDA!
-    // El error ocurre aquí. Debes reemplazar el texto de ejemplo
-    // con un ID real de una subsidiaria que exista en tu base de datos.
-    // Puedes obtener un ID válido usando `npx prisma studio` y viendo la tabla `Subsidiary`.
-    // ========================================================================
-    const defaultSubsidiaryId = 'cmd3jy2l60003sc0ma034cha4'; // <-- ¡IMPORTANTE: Reemplaza esto!
-
     const newUserAndProfile = await prisma.$transaction(async (tx) => {
 
       const subsidiary = await tx.subsidiary.findUnique({
-        where: { id: defaultSubsidiaryId },
+        where: { id: subsidiaryId },
         select: { tenantId: true, id: true }
       });
 

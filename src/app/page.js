@@ -8,6 +8,8 @@ import DashboardPage from './components/DashboardPage';
 import RegistrationPage from './components/RegistrationPage';
 import CompleteProfilePage from './components/CompleteProfilePage';
 import ChangePasswordPage from './components/ChangePasswordPage';
+import SupplierDocUploadPage from './components/SupplierDocUploadPage';
+import ForgotPasswordPage from './components/ForgotPasswordPage';
 
 export default function HomePage() {
     const [currentUser, setCurrentUser] = useState(null);
@@ -23,28 +25,39 @@ export default function HomePage() {
     }, []);
 
     const handleLogin = (data) => {
-        // Guardar el token siempre
         localStorage.setItem('token', data.token);
 
-        // Si es el primer login del proveedor, debe cambiar su contraseña
+        // Primer login de proveedor: onboarding (NO guardar en localStorage ni setCurrentUser todavía)
         if (data.user.role === 'SUPPLIER' && data.user.firstLogin) {
-            setCurrentUser(data.user);
-            setAuthView('changePassword');
+            // Si requiere documentación, mostrar pantalla de carga de docs primero
+            if (data.user.supplierProfile?.requireDocuments) {
+                setAuthView('uploadDocuments');
+            } else {
+                setAuthView('changePassword');
+            }
             return;
         }
 
-        // Si no es el primer login, guardamos el usuario y mostramos el dashboard
-        localStorage.setItem('user', JSON.stringify(data.user));
-        setCurrentUser(data.user);
+        // Login normal → aplanar supplierStatus para que DashboardPage lo pueda leer directo
+        const userToStore = {
+            ...data.user,
+            supplierStatus: data.user.supplierProfile?.status ?? null,
+        };
+        localStorage.setItem('user', JSON.stringify(userToStore));
+        setCurrentUser(userToStore);
+    };
+
+    const handleDocumentsUploaded = () => {
+        // Después de subir docs, ir a cambiar contraseña
+        setAuthView('changePassword');
     };
 
     const handlePasswordChanged = () => {
-        // Una vez cambiada la contraseña, actualizamos el estado del usuario localmente 
-        // para que ya no tenga el flag de firstLogin
-        const updatedUser = { ...currentUser, firstLogin: false };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setCurrentUser(updatedUser);
-        setAuthView('login'); // Redirige al dashboard por el efecto de currentUser
+        // Forzar re-login: limpiar estado y volver al login
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        setCurrentUser(null);
+        setAuthView('login');
     };
 
     const handleLogout = () => {
@@ -69,14 +82,19 @@ export default function HomePage() {
             return <RegistrationPage onSwitchToLogin={() => setAuthView('login')} />;
         case 'completeProfile':
             return <CompleteProfilePage supplierProfileId={pendingSupplierId} onBackToLogin={() => setAuthView('login')} />;
+        case 'uploadDocuments':
+            return <SupplierDocUploadPage user={currentUser} onDocumentsUploaded={handleDocumentsUploaded} />;
         case 'changePassword':
             return <ChangePasswordPage user={currentUser} onPasswordChanged={handlePasswordChanged} />;
+        case 'forgotPassword':
+            return <ForgotPasswordPage onBack={() => setAuthView('login')} />;
         case 'login':
         default:
-            return <LoginPage 
-                        onLogin={handleLogin} 
+            return <LoginPage
+                        onLogin={handleLogin}
                         onSwitchToRegister={() => setAuthView('register')}
                         onPendingApproval={handlePendingApproval}
+                        onForgotPassword={() => setAuthView('forgotPassword')}
                     />;
     }
 }

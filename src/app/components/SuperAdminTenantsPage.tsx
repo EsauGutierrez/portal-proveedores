@@ -140,6 +140,8 @@ const SuperAdminTenantsPage = () => {
     const [editingSubsidiary, setEditingSubsidiary] = useState<any>(null);
     const [deletingSubsidiary, setDeletingSubsidiary] = useState<any>(null);
     const [creatingAdminFor, setCreatingAdminFor] = useState<any>(null);
+    const [showQueryWarning, setShowQueryWarning] = useState(false);
+    const [pendingSubsidiarySave, setPendingSubsidiarySave] = useState(false);
 
     // --- Paginación ---
     const [currentPage, setCurrentPage] = useState(1);
@@ -216,8 +218,25 @@ const SuperAdminTenantsPage = () => {
         }
     };
 
-    const handleSaveSubsidiary = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const DEFAULT_SUITEQL_QUERY = `SELECT
+  t.id                 AS po_netsuite_id,
+  t.tranid             AS folio,
+  t.trandate           AS fecha,
+  BUILTIN.DF(t.subsidiary) AS subsidiaria,
+  BUILTIN.DF(t.entity) AS proveedor,
+  t.foreigntotal       AS total,
+  t.subtotal           AS subtotalns,
+  t.taxtotal           AS taxtotal,
+  t.entity             AS proveedorId,
+  v.vatregnumber       AS rfc
+FROM
+  transaction t
+  JOIN Vendor v ON t.entity = v.id
+WHERE
+  t.type = 'PurchOrd'
+  AND v.vatregnumber IN ({rfcClause})`;
+
+    const doSaveSubsidiary = async () => {
         try {
             const token = localStorage.getItem('token');
             const isNew = !editingSubsidiary.id;
@@ -230,6 +249,7 @@ const SuperAdminTenantsPage = () => {
             formData.append('taxRegime', editingSubsidiary.taxRegime || '');
             formData.append('taxAddress', editingSubsidiary.taxAddress || '');
             formData.append('tenantId', editingSubsidiary.tenantId);
+            formData.append('poSuiteqlQuery', editingSubsidiary.poSuiteqlQuery || '');
 
             const res = await fetch('/api/subsidiaries', {
                 method: isNew ? 'POST' : 'PUT',
@@ -245,10 +265,26 @@ const SuperAdminTenantsPage = () => {
             }
 
             setEditingSubsidiary(null);
-            fetchTenants(); // Recarga la info de la empresa global para ver el cambio
+            setShowQueryWarning(false);
+            setPendingSubsidiarySave(false);
+            fetchTenants();
         } catch (err: any) {
             setErrorMessage(err.message);
         }
+    };
+
+    const handleSaveSubsidiary = async (e: React.FormEvent) => {
+        e.preventDefault();
+        // If it's an existing subsidiary and the query was changed from default (or changed at all), show warning
+        const originalQuery = (editingSubsidiary._originalPoSuiteqlQuery ?? null);
+        const newQuery = (editingSubsidiary.poSuiteqlQuery || '').trim();
+        const queryChanged = newQuery !== (originalQuery || '').trim();
+
+        if (queryChanged && newQuery !== '') {
+            setShowQueryWarning(true);
+            return;
+        }
+        await doSaveSubsidiary();
     };
 
     const confirmDeleteSubsidiary = async () => {
@@ -349,7 +385,7 @@ const SuperAdminTenantsPage = () => {
                                 tenant={tenant}
                                 onToggleStatus={setSuspendingTenant}
                                 onEdit={setEditingTenant}
-                                onEditSubsidiary={setEditingSubsidiary}
+                                onEditSubsidiary={(sub: any) => setEditingSubsidiary({ ...sub, _originalPoSuiteqlQuery: sub.poSuiteqlQuery ?? null })}
                                 onDeleteSubsidiary={setDeletingSubsidiary}
                                 onAddAdmin={setCreatingAdminFor}
                             />
@@ -524,6 +560,27 @@ const SuperAdminTenantsPage = () => {
                                     <label className="block text-sm font-medium text-gray-700">Dirección Fiscal</label>
                                     <textarea required rows={2} value={editingSubsidiary.taxAddress || ''} onChange={(e) => setEditingSubsidiary({ ...editingSubsidiary, taxAddress: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="Ej: Calle 1, Col. Centro, C.P. 12345" />
                                 </div>
+                                <div className="col-span-1 md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Consulta SuiteQL personalizada
+                                        <span className="ml-2 text-xs font-normal text-gray-400">(opcional — deja vacío para usar la consulta predeterminada)</span>
+                                    </label>
+                                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 mb-2 flex items-start gap-2">
+                                        <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                                        <p className="text-xs text-amber-700">Modificar esta consulta cambiará las órdenes de compra visibles para los proveedores de esta subsidiaria. Usa <code className="bg-amber-100 px-1 rounded">&#123;rfcClause&#125;</code> para insertar el filtro de RFC.</p>
+                                    </div>
+                                    <textarea
+                                        rows={8}
+                                        value={editingSubsidiary.poSuiteqlQuery ?? ''}
+                                        onChange={(e) => setEditingSubsidiary({ ...editingSubsidiary, poSuiteqlQuery: e.target.value })}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs p-2 border text-gray-800 bg-white font-mono"
+                                        placeholder={DEFAULT_SUITEQL_QUERY}
+                                        spellCheck={false}
+                                    />
+                                    {!editingSubsidiary.poSuiteqlQuery?.trim() && (
+                                        <p className="mt-1 text-xs text-gray-400 italic">Se usará la consulta predeterminada del sistema.</p>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
                                 <button type="button" onClick={() => setEditingSubsidiary(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded">Cancelar</button>
@@ -532,6 +589,35 @@ const SuperAdminTenantsPage = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Advertencia: Cambio de Consulta SuiteQL */}
+            {showQueryWarning && (
+                <div className="fixed inset-0 overflow-y-auto h-full w-full flex items-center justify-center z-[60] pointer-events-none">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl border border-amber-200 w-full max-w-md text-center pointer-events-auto relative">
+                        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">Modificación de consulta SuiteQL</h3>
+                        <p className="text-gray-600 text-sm mb-6">
+                            Estás a punto de modificar la consulta de búsqueda de órdenes de compra para la subsidiaria <strong>{editingSubsidiary?.name}</strong>. Esto cambiará qué OC son visibles para sus proveedores.
+                            <br /><br />
+                            ¿Deseas continuar?
+                        </p>
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={() => setShowQueryWarning(false)}
+                                className="px-5 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 rounded font-medium"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={doSaveSubsidiary}
+                                className="px-5 py-2 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded font-medium shadow-sm"
+                            >
+                                Sí, guardar cambios
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

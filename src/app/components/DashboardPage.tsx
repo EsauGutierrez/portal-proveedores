@@ -14,6 +14,7 @@ import SuperAdminTenantsPage from './SuperAdminTenantsPage';
 import AdminInvoicesPage from './AdminInvoicesPage';
 import OverviewPage from './OverviewPage';
 import DocumentSettingsPage from './DocumentSettingsPage';
+import PaymentComplementsPage from './PaymentComplementsPage';
 import { LayoutDashboard, Settings } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
@@ -26,7 +27,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -34,6 +35,13 @@ const DashboardPage = ({ user, onLogout }) => {
         const fetchData = async () => {
             setIsLoading(true);
             setError(null);
+
+            // Proveedor PENDING: no cargar datos de transacciones, mostrar tablas vacías
+            if (user?.role === 'SUPPLIER' && user?.supplierStatus !== 'ACTIVE') {
+                setData([]);
+                setIsLoading(false);
+                return;
+            }
 
             const token = localStorage.getItem('token');
             if (!token) {
@@ -61,9 +69,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
             try {
                 const response = await fetch(endpoint, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (!response.ok) {
@@ -71,7 +77,8 @@ const DashboardPage = ({ user, onLogout }) => {
                     throw new Error(errorData.message || 'Error al obtener los datos');
                 }
                 const result = await response.json();
-                setData(result);
+                // APIs return { data: [...], total, page, limit, totalPages }
+                setData(Array.isArray(result) ? result : (result.data ?? []));
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -119,7 +126,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'resumen': return <OverviewPage user={user} />;
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
-            case 'pagos': return <DataTable title="Complementos de Pago" data={[]} />;
+            case 'pagos': return <PaymentComplementsPage user={user} />;
             case 'perfil': return <ProfilePage />;
             case 'documentacion': return <DocumentationPage />;
             case 'proveedores': return <SupplierApprovalPage />;
@@ -188,7 +195,18 @@ const DashboardPage = ({ user, onLogout }) => {
                 </nav>
                 <div className="mt-auto"><button onClick={onLogout} className="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors duration-200"><LogOut className="w-5 h-5 mr-3" />Cerrar Sesión</button></div>
             </aside>
-            <main className="flex-1 p-8 overflow-y-auto">{renderContent()}</main>
+            <main className="flex-1 overflow-y-auto">
+                {/* Banner de cuenta pendiente para proveedores */}
+                {user?.role === 'SUPPLIER' && user?.supplierStatus === 'PENDING' && (
+                    <div className="bg-amber-50 border-b border-amber-200 px-8 py-3 flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                        <p className="text-sm text-amber-800 font-medium">
+                            Tu cuenta está <strong>pendiente de aprobación</strong>. Podrás visualizar órdenes de compra y subir facturas una vez que un administrador apruebe tu registro.
+                        </p>
+                    </div>
+                )}
+                <div className="p-8">{renderContent()}</div>
+            </main>
             <ChatWidget />
         </div>
     );

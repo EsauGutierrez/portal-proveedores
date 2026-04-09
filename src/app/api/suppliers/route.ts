@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 
 const prisma = new PrismaClient();
 
@@ -13,27 +14,30 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // Permite filtrar por ej: /api/suppliers?status=PENDING
 
-    const suppliers = await prisma.supplierProfile.findMany({
-      where: {
-        // Si se proporciona un estado, filtra por él. Si no, devuelve todos.
-        status: status ? { equals: status as any } : undefined,
-      },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
-        // CAMBIO: Se incluyen los documentos de cada proveedor
-        documents: true,
-      },
-      orderBy: {
-        createdAt: 'asc', // Muestra los más antiguos primero
-      },
-    });
+    const { searchParams: sp } = new URL(request.url);
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(sp.get('limit') || '100', 10)));
 
-    return NextResponse.json(suppliers, { status: 200 });
+    const where = { status: status ? { equals: status as any } : undefined };
+
+    const [suppliers, total] = await Promise.all([
+      prisma.supplierProfile.findMany({
+        where,
+        include: {
+          user: { select: { name: true, email: true } },
+          documents: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        skip: (page - 1) * limit,
+      }),
+      prisma.supplierProfile.count({ where }),
+    ]);
+
+    return NextResponse.json(
+      { data: suppliers, total, page, limit, totalPages: Math.ceil(total / limit) },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error('Error fetching suppliers:', error);
@@ -46,6 +50,11 @@ export async function GET(request: Request) {
 
 // POST: Invitación de nuevo proveedor (solo Email y Nombre)
 export async function POST(request: Request) {
+  // Rate limit: 20 invitaciones por IP cada hora
+  const ip = getClientIP(request);
+  const rl = rateLimit(`invite-supplier:${ip}`, 20, 60 * 60 * 1000);
+  if (!rl.success) return rateLimitResponse(rl.retryAfterSec);
+
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -59,7 +68,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, name } = body;
+    const { email, name, subsidiaryId, requireDocuments = false } = body;
 
     if (!email || !name) {
       return NextResponse.json({ message: 'Email y Nombre son requeridos' }, { status: 400 });
@@ -70,13 +79,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Este correo ya está registrado en el sistema.' }, { status: 409 });
     }
 
-    // Buscamos una subsidiaria para asociar al proveedor por defecto (la primera del tenant)
-    const subsidiary = await prisma.subsidiary.findFirst({
-      where: { tenantId: decodedToken.tenantId }
-    });
+    // Usar la subsidiaria indicada; si no se envió, tomar la primera del tenant como fallback
+    let subsidiary = subsidiaryId
+      ? await prisma.subsidiary.findFirst({ where: { id: subsidiaryId, tenantId: decodedToken.tenantId } })
+      : await prisma.subsidiary.findFirst({ where: { tenantId: decodedToken.tenantId } });
 
     if (!subsidiary) {
-      return NextResponse.json({ message: 'No hay subsidiarias configuradas para esta empresa. Crea una primero.' }, { status: 400 });
+      return NextResponse.json({ message: 'Subsidiaria no encontrada. Verifica la configuración.' }, { status: 400 });
     }
 
     // Crear usuario con password temporal aleatoria
@@ -97,10 +106,11 @@ export async function POST(request: Request) {
 
       await tx.supplierProfile.create({
         data: {
-          companyName: name, // Placeholder hasta que lo complete
-          rfc: `INVITE-${Date.now()}`, // Placeholder temporal
+          companyName: name,
+          rfc: `INVITE-${Date.now()}`,
           taxAddress: 'Pendiente de completar',
           status: 'PENDING',
+          requireDocuments: Boolean(requireDocuments),
           user: { connect: { id: user.id } },
           subsidiary: { connect: { id: subsidiary.id } },
           tenant: { connect: { id: decodedToken.tenantId } }

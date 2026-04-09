@@ -29,7 +29,21 @@ const RegistrationPage = ({ onSwitchToLogin }: { onSwitchToLogin: () => void }) 
     companyName: '',
     rfc: '',
     taxAddress: '',
+    subsidiaryId: '',
   });
+  const [subsidiaries, setSubsidiaries] = useState<{ id: string; name: string; businessName: string }[]>([]);
+
+  React.useEffect(() => {
+    fetch('/api/subsidiaries?public=true')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        setSubsidiaries(data);
+        if (data.length === 1) {
+          setFormData(prev => ({ ...prev, subsidiaryId: data[0].id }));
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [files, setFiles] = useState({
     constanciaFiscal: null,
     opinionSat: null,
@@ -103,6 +117,20 @@ const RegistrationPage = ({ onSwitchToLogin }: { onSwitchToLogin: () => void }) 
             <input name="taxAddress" type="text" placeholder="Dirección Fiscal" required onChange={handleChange} className="col-span-1 md:col-span-2 w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
             <input name="name" type="text" placeholder="Nombre del Contacto Principal" required onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
             <input name="email" type="email" placeholder="Correo Electrónico del Contacto" required onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
+            <div className="col-span-1 md:col-span-2">
+              <select
+                name="subsidiaryId"
+                required
+                value={formData.subsidiaryId}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white"
+              >
+                <option value="">Selecciona la empresa a la que perteneces</option>
+                {subsidiaries.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
           <div className="border-t pt-6">

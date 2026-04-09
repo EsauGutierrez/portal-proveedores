@@ -39,22 +39,31 @@ export async function GET(request: Request) {
     const { userId } = decodedToken;
 
     // 2. Búsqueda en la base de datos
-    const invoices = await prisma.invoice.findMany({
-      where: { userId: userId },
-      include: {
-        receptions: {
-          include: {
-            purchaseOrder: {
-              include: { subsidiary: true },
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where: { userId: userId },
+        include: {
+          receptions: {
+            include: {
+              purchaseOrder: {
+                include: { subsidiary: true },
+              },
             },
           },
+          purchaseOrder: {
+            include: { subsidiary: true },
+          },
         },
-        purchaseOrder: {
-          include: { subsidiary: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit,
+      }),
+      prisma.invoice.count({ where: { userId: userId } }),
+    ]);
 
     // 3. Formateo de datos para el frontend
     const formattedInvoices = await Promise.all(invoices.map(async (invoice) => {
@@ -102,7 +111,10 @@ export async function GET(request: Request) {
       };
     }));
 
-    return NextResponse.json(formattedInvoices, { status: 200 });
+    return NextResponse.json(
+      { data: formattedInvoices, total, page, limit, totalPages: Math.ceil(total / limit) },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error('Error fetching invoices:', error);

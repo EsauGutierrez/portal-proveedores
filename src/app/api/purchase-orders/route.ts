@@ -17,33 +17,42 @@ export async function GET(request: Request) {
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
     const { userId } = decodedToken;
 
-    const purchaseOrders = await prisma.purchaseOrder.findMany({
-      where: { userId },
-      include: {
-        subsidiary: true,
-        invoice: {
-          select: { id: true, syncStatus: true, pdfUrl: true, xmlUrl: true },
-        },
-        recepciones: {
-          include: {
-            articles: true,
-            invoice: true,
-          },
-        },
-        user: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
 
-    // Transformamos los datos para que el frontend no se rompa
+    const [purchaseOrders, total] = await Promise.all([
+      prisma.purchaseOrder.findMany({
+        where: { userId },
+        include: {
+          subsidiary: true,
+          invoice: {
+            select: { id: true, syncStatus: true, pdfUrl: true, xmlUrl: true },
+          },
+          recepciones: {
+            include: {
+              articles: true,
+              invoice: true,
+            },
+          },
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit,
+      }),
+      prisma.purchaseOrder.count({ where: { userId } }),
+    ]);
+
     const formattedData = purchaseOrders.map(po => ({
       ...po,
-      subsidiaria: po.subsidiary.name, // Aseguramos que el campo 'subsidiaria' siga existiendo para la UI
+      subsidiaria: po.subsidiary.name,
     }));
 
-    return NextResponse.json(formattedData, { status: 200 });
+    return NextResponse.json(
+      { data: formattedData, total, page, limit, totalPages: Math.ceil(total / limit) },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error('Error fetching purchase orders:', error);

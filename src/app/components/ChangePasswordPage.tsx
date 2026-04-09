@@ -67,7 +67,13 @@ const ChangePasswordPage = ({ user, onPasswordChanged }) => {
                 <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
                     <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
                     <h2 className="mt-4 text-2xl font-bold text-gray-800">¡Contraseña Actualizada!</h2>
-                    <p className="text-gray-600 mt-2">Tu contraseña ha sido cambiada correctamente. Redirigiendo...</p>
+                    <p className="text-gray-600 mt-2 mb-6">Tu contraseña ha sido establecida correctamente. Por favor inicia sesión nuevamente para continuar.</p>
+                    <button
+                        onClick={onPasswordChanged}
+                        className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Ir al inicio de sesión
+                    </button>
                 </div>
             </div>
         );

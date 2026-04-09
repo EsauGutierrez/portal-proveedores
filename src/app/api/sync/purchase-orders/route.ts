@@ -88,7 +88,7 @@ export async function GET(request: Request) {
 
     console.log(`[SYNC PROGRAMADO] Iniciando para tenant ${tenantId} — ${activeSuppliers.length} proveedores activos`);
 
-    const suiteqlQuery = `
+    const defaultSuiteqlQuery = `
       SELECT
         t.id                 AS po_netsuite_id,
         t.tranid             AS folio,
@@ -108,7 +108,32 @@ export async function GET(request: Request) {
         AND v.vatregnumber IN (${rfcClause})
     `;
 
-    const results = await querySuiteQL(suiteqlQuery, creds);
+    // Construir queries: usar query personalizada por subsidiaria si existe
+    const subsidiariesWithCustomQuery = (tenant.subsidiaries || []).filter(s => s.poSuiteqlQuery?.trim());
+    let results: any[] = [];
+
+    if (subsidiariesWithCustomQuery.length > 0) {
+      // Ejecutar query personalizada por cada subsidiaria que la tenga
+      for (const sub of subsidiariesWithCustomQuery) {
+        const customQuery = sub.poSuiteqlQuery!.replace(/\{rfcClause\}/g, rfcClause);
+        console.log(`[SYNC PROGRAMADO] Usando query personalizada para subsidiaria: ${sub.name}`);
+        const subResults = await querySuiteQL(customQuery, creds);
+        results.push(...subResults);
+      }
+      // Subsidiarias sin query personalizada usan la default
+      const subsWithoutCustom = (tenant.subsidiaries || []).filter(s => !s.poSuiteqlQuery?.trim());
+      if (subsWithoutCustom.length > 0) {
+        const defaultResults = await querySuiteQL(defaultSuiteqlQuery, creds);
+        // Filtrar resultados default solo para subsidiarias sin query personalizada
+        const customSubNames = new Set(subsidiariesWithCustomQuery.map(s => s.name));
+        results.push(...defaultResults.filter((po: any) => !customSubNames.has(po.subsidiaria)));
+      }
+    } else {
+      // Sin queries personalizadas: usar la query default para todo el tenant
+      results = await querySuiteQL(defaultSuiteqlQuery, creds);
+    }
+
+    const suiteqlQuery = defaultSuiteqlQuery; // kept for reference in logs
     console.log(`[SYNC PROGRAMADO] ${results.length} OC encontradas en NetSuite`);
 
     if (results.length === 0) {

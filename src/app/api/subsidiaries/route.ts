@@ -14,11 +14,20 @@ import jwt from 'jsonwebtoken';
 // GET: Obtener las subsidiarias por Tenant
 export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+
+    // Endpoint público para el formulario de registro (solo id y nombre)
+    if (searchParams.get('public') === 'true') {
+      const subs = await prisma.subsidiary.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, businessName: true },
+        orderBy: { name: 'asc' },
+      });
+      return NextResponse.json(subs);
+    }
+
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      // Logica fallback para que el login/registro siga funcionando si consultan sin auth (opcional, pero mejor ser estricto)
-      // De hecho, en portal-proveedores el front-end a veces no mandaba token al registrar, 
-      // pero para protegerlo, si no hay token retornaremos vacío.
       return NextResponse.json([]);
     }
 
@@ -167,6 +176,8 @@ export async function PUT(request: Request) {
       }
     }
 
+    const poSuiteqlQuery = formData.get('poSuiteqlQuery') as string | null;
+
     const updatedSubsidiary = await prisma.subsidiary.update({
       where: { id },
       data: {
@@ -176,6 +187,7 @@ export async function PUT(request: Request) {
         taxRegime,
         taxAddress,
         ...(newLogoUrl && { logoUrl: newLogoUrl }),
+        ...(poSuiteqlQuery !== null && { poSuiteqlQuery: poSuiteqlQuery.trim() || null }),
       },
     });
 

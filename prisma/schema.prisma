@@ -41,22 +41,24 @@ model DocumentRequirement {
 }
 
 model User {
-  id                 String              @id @default(cuid())
-  name               String?
-  email              String?             @unique
-  emailVerified      DateTime?
-  image              String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  password           String?
-  role               Role                @default(SUPPLIER)
-  tenantId           String?
-  firstLogin         Boolean             @default(true)
-  invoices           Invoice[]
-  paymentComplements PaymentComplement[]
-  purchaseOrders     PurchaseOrder[]
-  supplierProfile    SupplierProfile?
-  tenant             Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                   String              @id @default(cuid())
+  name                 String?
+  email                String?             @unique
+  emailVerified        DateTime?
+  image                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  password             String?
+  role                 Role                @default(SUPPLIER)
+  tenantId             String?
+  firstLogin           Boolean             @default(true)
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  invoices             Invoice[]
+  paymentComplements   PaymentComplement[]
+  purchaseOrders       PurchaseOrder[]
+  supplierProfile      SupplierProfile?
+  tenant               Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model SupplierProfile {
@@ -70,8 +72,9 @@ model SupplierProfile {
   userId       String             @unique
   subsidiaryId String
   tenantId     String
-  netsuiteId   String?
-  documents    SupplierDocument[]
+  netsuiteId        String?
+  requireDocuments  Boolean            @default(false)
+  documents         SupplierDocument[]
   subsidiary   Subsidiary         @relation(fields: [subsidiaryId], references: [id])
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user         User               @relation(fields: [userId], references: [id])
@@ -85,6 +88,9 @@ model SupplierDocument {
   fileName          String
   fileUrl           String
   status            DocumentStatus  @default(PENDING)
+  rejectionReason   String?
+  rejectedAt        DateTime?
+  approvedAt        DateTime?
   uploadedAt        DateTime        @default(now())
   supplierProfileId String
   supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id])
@@ -100,6 +106,7 @@ model Subsidiary {
   taxRegime        String
   taxAddress       String
   logoUrl          String?
+  poSuiteqlQuery   String?
   isActive         Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -187,20 +194,24 @@ model Invoice {
 }
 
 model PaymentComplement {
-  id        String   @id @default(cuid())
-  folio     String
-  fecha     DateTime
-  total     Decimal  @db.Decimal(10, 2)
-  pdfUrl    String?
-  xmlUrl    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  userId    String
-  invoiceId String
-  tenantId  String
-  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
+  id              String                   @id @default(cuid())
+  folio           String
+  fecha           DateTime
+  total           Decimal                  @db.Decimal(10, 2)
+  pdfUrl          String?
+  xmlUrl          String?
+  status          PaymentComplementStatus  @default(PENDING)
+  rejectionReason String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  userId          String
+  invoiceId       String
+  tenantId        String
+  invoice         Invoice                  @relation(fields: [invoiceId], references: [id])
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User                     @relation(fields: [userId], references: [id])
 
   @@unique([tenantId, folio])
 }
@@ -255,4 +266,10 @@ enum SyncStatus {
 enum SyncType {
   SCHEDULED
   MANUAL
+}
+
+enum PaymentComplementStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

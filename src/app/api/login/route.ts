@@ -4,10 +4,16 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
+  // Rate limit: 10 intentos por IP cada 15 minutos
+  const ip = getClientIP(request);
+  const rl = rateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+  if (!rl.success) return rateLimitResponse(rl.retryAfterSec);
+
   try {
     const body = await request.json();
     const { email, password } = body;
@@ -39,14 +45,10 @@ export async function POST(request: Request) {
 
     // 4. Lógica de autorización basada en el rol
     if (user.role === 'SUPPLIER') {
-      // Si es un proveedor, verificar que su perfil esté ACTIVO
-      if (user.supplierProfile?.status !== 'ACTIVE') {
+      // Bloquear solo proveedores RECHAZADOS
+      if (user.supplierProfile?.status === 'REJECTED') {
         return NextResponse.json(
-          {
-            errorCode: 'PENDING_APPROVAL',
-            message: 'Tu cuenta está pendiente de aprobación.',
-            supplierProfileId: user.supplierProfile?.id
-          },
+          { message: 'Tu cuenta ha sido rechazada. Contacta a tu administrador.' },
           { status: 403 }
         );
       }
@@ -85,9 +87,11 @@ export async function POST(request: Request) {
         userId: user.id,
         email: user.email,
         name: user.name,
-        role: user.role, // Puede ser SUPERADMIN, TENANT_ADMIN o SUPPLIER
-        tenantId: user.tenantId, // ! IMPORTANTE: Añadimos el tenantId al token
-        supplierProfileId: user.supplierProfile?.id || null, // Opcional pero útil para el Frontend
+        role: user.role,
+        tenantId: user.tenantId,
+        supplierProfileId: user.supplierProfile?.id || null,
+        supplierStatus: user.supplierProfile?.status || null,
+        requireDocuments: user.supplierProfile?.requireDocuments || false,
         firstLogin: user.firstLogin,
       },
       process.env.JWT_SECRET!,

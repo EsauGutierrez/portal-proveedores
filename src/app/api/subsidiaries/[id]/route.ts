@@ -55,6 +55,7 @@ export async function PUT(
     const taxRegime = formData.get('taxRegime') as string;
     const taxAddress = formData.get('taxAddress') as string;
     const logo = formData.get('logo') as File | null;
+    const poSuiteqlQuery = formData.get('poSuiteqlQuery') as string | null;
 
     if (!name || !rfc || !businessName || !taxRegime || !taxAddress) {
       return NextResponse.json({ message: 'Todos los campos son requeridos' }, { status: 400 });
@@ -66,6 +67,7 @@ export async function PUT(
       businessName,
       taxRegime,
       taxAddress,
+      ...(poSuiteqlQuery !== null && { poSuiteqlQuery: poSuiteqlQuery.trim() || null }),
     };
 
     if (logo && logo.size > 0) {

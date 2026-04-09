@@ -3,10 +3,8 @@
 "use client";
 
 import React, { useState } from 'react';
-// CAMBIO: Se importa el ícono de usuario en lugar del de dólar
-import { User } from 'lucide-react';
 
-const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval }) => {
+const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval, onForgotPassword }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -47,11 +45,16 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval }) => {
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
             <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 m-4">
                 <div className="text-center mb-8">
-                    {/* CAMBIO: Se usa el nuevo ícono */}
-                    <User className="w-12 h-12 text-blue-600 mx-auto" />
-                    {/* CAMBIO: Se actualizan los textos */}
-                    <h2 className="mt-4 text-3xl font-bold text-gray-800">Portal de Proveedores</h2>
-                    <p className="text-gray-500">Bienvenido a tu portal de proveedor</p>
+                    <div className="flex justify-center mb-4">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src="/logo-imr.png"
+                            alt="IMR Software"
+                            className="h-14 w-auto object-contain"
+                        />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800">Portal de Proveedores</h2>
+                    <p className="text-gray-500 text-sm mt-1">Bienvenido a tu portal de proveedor</p>
                 </div>
                 {error && <p className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">{error}</p>}
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -69,7 +72,12 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval }) => {
                         {isLoading ? 'Iniciando...' : 'Iniciar Sesión'}
                     </button>
                 </form>
-                <div className="text-center mt-6">
+                <div className="text-center mt-4">
+                    <button onClick={onForgotPassword} className="text-sm text-gray-500 hover:text-blue-600 hover:underline">
+                        ¿Olvidaste tu contraseña?
+                    </button>
+                </div>
+                <div className="text-center mt-3">
                     <p className="text-sm text-gray-600">
                         ¿No tienes una cuenta?{' '}
                         <button onClick={onSwitchToRegister} className="font-medium text-blue-600 hover:underline">
