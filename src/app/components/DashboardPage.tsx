@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Home, DollarSign, LogOut, User, Book, Loader2, AlertCircle, Users, Building2 } from 'lucide-react';
+import { FileText, Home, DollarSign, LogOut, User, Book, Loader2, AlertCircle, Users, Building2, Menu, X } from 'lucide-react';
 import DataTable from './DataTable';
 import ProfilePage from './ProfilePage';
 import DocumentationPage from './DocumentationPage';
@@ -20,6 +20,7 @@ import { LayoutDashboard, Settings } from 'lucide-react';
 const DashboardPage = ({ user, onLogout }) => {
     // La vista inicial ahora depende del rol del usuario.
     const [activeView, setActiveView] = useState('resumen');
+    const [sidebarOpen, setSidebarOpen] = useState(true);
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -150,52 +151,75 @@ const DashboardPage = ({ user, onLogout }) => {
 
     return (
         <div className="min-h-screen bg-gray-100 flex">
-            <aside className="w-64 bg-white shadow-lg flex flex-col p-4">
-                {/* Logo de subsidiaria o título */}
-                <div className="flex items-center justify-center mb-8 min-h-[56px]">
-                    {subsidiaryLogo ? (
-                        <img
-                            src={subsidiaryLogo}
-                            alt="Logo subsidiaria"
-                            className="max-h-14 max-w-[180px] object-contain"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                    ) : (
-                        <h1 className="text-xl font-bold text-gray-800">Portal de proveedores</h1>
+            {/* Sidebar */}
+            <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-white shadow-lg flex flex-col overflow-hidden transition-all duration-300`}>
+                <div className="w-64 flex flex-col h-full p-4">
+                    {/* Header: logo + botón cerrar */}
+                    <div className="flex items-center justify-between mb-8 min-h-[56px]">
+                        <div className="flex-1 flex justify-center">
+                            {subsidiaryLogo ? (
+                                <img
+                                    src={subsidiaryLogo}
+                                    alt="Logo subsidiaria"
+                                    className="max-h-14 max-w-[160px] object-contain"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            ) : (
+                                <h1 className="text-lg font-bold text-gray-800">Portal de proveedores</h1>
+                            )}
+                        </div>
+                        <button onClick={() => setSidebarOpen(false)} className="ml-2 p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <nav className="flex-grow space-y-2">
+                        <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
+
+                        {user && user.role === 'SUPPLIER' && (
+                            <>
+                                <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
+                                <NavLink view="facturas" icon={FileText} label="Facturas" />
+                                <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
+                            </>
+                        )}
+
+                        {user && (user.role === 'ADMIN' || user.role === 'TENANT_ADMIN') && (
+                            <>
+                                <NavLink view="facturas_admin" icon={FileText} label="Facturas y Documentos" />
+                                <NavLink view="proveedores" icon={Users} label="Proveedores" />
+                                <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
+                                <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
+                            </>
+                        )}
+
+                        {user && user.role === 'SUPERADMIN' && (
+                            <>
+                                <NavLink view="empresas" icon={Building2} label="Gestión de Clientes (Tenants)" />
+                            </>
+                        )}
+
+                        <NavLink view="perfil" icon={User} label="Perfil" />
+                        <NavLink view="documentacion" icon={Book} label="Documentación" />
+                    </nav>
+                    <div className="mt-auto">
+                        <button onClick={onLogout} className="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors duration-200">
+                            <LogOut className="w-5 h-5 mr-3" />Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <main className="flex-1 overflow-y-auto min-w-0">
+                {/* Barra superior con botón hamburguesa */}
+                <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
+                    <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
+                        <Menu className="w-5 h-5" />
+                    </button>
+                    {!sidebarOpen && (
+                        <span className="text-sm font-semibold text-gray-700">Portal de Proveedores</span>
                     )}
                 </div>
-                <nav className="flex-grow space-y-2">
-                    <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
 
-                    {user && user.role === 'SUPPLIER' && (
-                        <>
-                            <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
-                            <NavLink view="facturas" icon={FileText} label="Facturas" />
-                            <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
-                        </>
-                    )}
-
-                    {user && (user.role === 'ADMIN' || user.role === 'TENANT_ADMIN') && (
-                        <>
-                            <NavLink view="facturas_admin" icon={FileText} label="Facturas y Documentos" />
-                            <NavLink view="proveedores" icon={Users} label="Proveedores" />
-                            <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
-                            <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
-                        </>
-                    )}
-
-                    {user && user.role === 'SUPERADMIN' && (
-                        <>
-                            <NavLink view="empresas" icon={Building2} label="Gestión de Clientes (Tenants)" />
-                        </>
-                    )}
-
-                    <NavLink view="perfil" icon={User} label="Perfil" />
-                    <NavLink view="documentacion" icon={Book} label="Documentación" />
-                </nav>
-                <div className="mt-auto"><button onClick={onLogout} className="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors duration-200"><LogOut className="w-5 h-5 mr-3" />Cerrar Sesión</button></div>
-            </aside>
-            <main className="flex-1 overflow-y-auto">
                 {/* Banner de cuenta pendiente para proveedores */}
                 {user?.role === 'SUPPLIER' && user?.supplierStatus === 'PENDING' && (
                     <div className="bg-amber-50 border-b border-amber-200 px-8 py-3 flex items-center gap-3">
