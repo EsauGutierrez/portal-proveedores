@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
+import { getPresignedUrl } from '../../lib/s3';
 
 const prisma = new PrismaClient();
 
@@ -44,10 +45,19 @@ export async function GET(request: Request) {
       prisma.purchaseOrder.count({ where: { userId } }),
     ]);
 
-    const formattedData = purchaseOrders.map(po => ({
-      ...po,
-      subsidiaria: po.subsidiary.name,
-    }));
+    const formattedData = await Promise.all(
+      purchaseOrders.map(async (po) => {
+        let invoice = po.invoice;
+        if (invoice) {
+          const [pdfUrl, xmlUrl] = await Promise.all([
+            invoice.pdfUrl ? getPresignedUrl(invoice.pdfUrl) : null,
+            invoice.xmlUrl ? getPresignedUrl(invoice.xmlUrl) : null,
+          ]);
+          invoice = { ...invoice, pdfUrl, xmlUrl };
+        }
+        return { ...po, invoice, subsidiaria: po.subsidiary.name };
+      })
+    );
 
     return NextResponse.json(
       { data: formattedData, total, page, limit, totalPages: Math.ceil(total / limit) },

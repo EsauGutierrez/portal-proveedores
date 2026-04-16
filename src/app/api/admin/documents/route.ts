@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
+import { getPresignedUrl } from '../../../lib/s3';
 
 const prisma = new PrismaClient();
 
@@ -115,13 +116,18 @@ export async function GET(request: Request) {
                     skip: (adminPage - 1) * adminLimit,
                 });
 
-                invoices.forEach((inv: any) => {
+                await Promise.all(invoices.map(async (inv: any) => {
                     let subName = 'N/A';
                     if (inv.receptions && inv.receptions.length > 0) {
                         subName = inv.receptions[0].purchaseOrder?.subsidiary?.name || 'N/A';
                     } else if (inv.purchaseOrder) {
                         subName = inv.purchaseOrder.subsidiary?.name || 'N/A';
                     }
+
+                    const [pdfUrl, xmlUrl] = await Promise.all([
+                        inv.pdfUrl ? getPresignedUrl(inv.pdfUrl) : null,
+                        inv.xmlUrl ? getPresignedUrl(inv.xmlUrl) : null,
+                    ]);
 
                     results.push({
                         id: inv.id,
@@ -132,11 +138,11 @@ export async function GET(request: Request) {
                         rfc: inv.user?.supplierProfile?.rfc || 'N/A',
                         subsidiaria: subName,
                         total: Number(inv.total),
-                        pdfUrl: inv.pdfUrl,
-                        xmlUrl: inv.xmlUrl,
+                        pdfUrl,
+                        xmlUrl,
                         estadoCentral: inv.syncStatus
                     });
-                });
+                }));
             }
 
             // ===== COMPLEMENTOS DE PAGO =====
@@ -150,7 +156,12 @@ export async function GET(request: Request) {
                     take: adminLimit,
                     skip: (adminPage - 1) * adminLimit,
                 });
-                payments.forEach(pay => {
+                await Promise.all(payments.map(async (pay) => {
+                    const [pdfUrl, xmlUrl] = await Promise.all([
+                        pay.pdfUrl ? getPresignedUrl(pay.pdfUrl) : null,
+                        pay.xmlUrl ? getPresignedUrl(pay.xmlUrl) : null,
+                    ]);
+
                     results.push({
                         id: pay.id,
                         tipo: 'Complemento de Pago',
@@ -160,11 +171,11 @@ export async function GET(request: Request) {
                         rfc: pay.user?.supplierProfile?.rfc || 'N/A',
                         subsidiaria: 'N/A',
                         total: Number(pay.total),
-                        pdfUrl: pay.pdfUrl,
-                        xmlUrl: pay.xmlUrl,
+                        pdfUrl,
+                        xmlUrl,
                         estadoCentral: 'SYNCED'
                     });
-                });
+                }));
             }
         }
 
