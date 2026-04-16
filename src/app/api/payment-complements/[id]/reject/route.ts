@@ -2,15 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
+import { sendEmail } from '../../../../lib/mailer';
 
 const prisma = new PrismaClient();
-
-let resend: Resend | null = null;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-}
 
 export async function PATCH(
   request: Request,
@@ -58,9 +53,8 @@ export async function PATCH(
     const providerEmail = complement.user?.email;
     const providerName = complement.user?.name || 'Proveedor';
 
-    if (resend && providerEmail) {
-      await resend.emails.send({
-        from: 'Portal de Proveedores <noreply@imr.com.mx>',
+    if (providerEmail) {
+      await sendEmail({
         to: providerEmail,
         subject: 'Complemento de pago rechazado',
         html: `
@@ -78,12 +72,6 @@ export async function PATCH(
             </div>
           </div>
         `,
-      });
-    } else {
-      console.log('📧 [SIMULADO] Email de rechazo de complemento:', {
-        to: providerEmail,
-        folio: complement.folio,
-        motivo: rejectionReason,
       });
     }
 

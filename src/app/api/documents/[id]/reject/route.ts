@@ -2,15 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
+import { sendEmail } from '../../../../lib/mailer';
 
 const prisma = new PrismaClient();
-
-let resend: Resend | null = null;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-}
 
 export async function PATCH(
   request: Request,
@@ -61,9 +56,8 @@ export async function PATCH(
     const providerName = supplierDoc.supplierProfile?.user?.name || 'Proveedor';
     const companyName = supplierDoc.supplierProfile?.companyName || 'Tu empresa';
 
-    if (resend && providerEmail) {
-      await resend.emails.send({
-        from: 'Portal Proveedores <onboarding@resend.dev>',
+    if (providerEmail) {
+      await sendEmail({
         to: providerEmail,
         subject: `⚠️ Documento Rechazado: ${supplierDoc.documentType}`,
         html: `
@@ -74,34 +68,22 @@ export async function PATCH(
             <div style="padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 0 0 8px 8px;">
               <p>Hola <strong>${providerName}</strong>,</p>
               <p>El documento <strong>${supplierDoc.documentType}</strong> de <strong>${companyName}</strong> ha sido rechazado y requiere correcciones.</p>
-
               <div style="background: white; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
                 <p style="margin: 0 0 8px 0; color: #666; font-size: 13px;"><strong>Motivo del rechazo:</strong></p>
                 <p style="margin: 0; color: #333; font-size: 14px;">${rejectionReason}</p>
               </div>
-
               <p>Por favor, sube un nuevo documento que cumpla con los requisitos solicitados.</p>
-
               <div style="text-align: center; margin: 24px 0;">
                 <a href="${process.env.NEXT_PUBLIC_APP_URL}" style="background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                   Ir al Portal
                 </a>
               </div>
-
               <p style="color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
                 Si tienes preguntas, contacta al equipo de administración.
               </p>
             </div>
           </div>
-        `
-      });
-      console.log('✉️ Email de rechazo enviado a:', providerEmail);
-    } else {
-      console.log('📧 [SIMULADO] Email de rechazo de documento:', {
-        to: providerEmail,
-        documentType: supplierDoc.documentType,
-        motivo: rejectionReason,
-        timestamp: new Date().toISOString()
+        `,
       });
     }
 

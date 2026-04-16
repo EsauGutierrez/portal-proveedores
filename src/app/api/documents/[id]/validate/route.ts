@@ -2,15 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient, DocumentStatus } from '@prisma/client';
-import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
+import { sendEmail } from '../../../../lib/mailer';
 
 const prisma = new PrismaClient();
-
-let resend: Resend | null = null;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-}
 
 export async function PATCH(
   request: Request,
@@ -61,9 +56,8 @@ export async function PATCH(
       const providerName = supplierDoc.supplierProfile?.user?.name || 'Proveedor';
       const companyName = supplierDoc.supplierProfile?.companyName || 'Tu empresa';
 
-      if (resend && providerEmail) {
-        await resend.emails.send({
-          from: 'Portal Proveedores <onboarding@resend.dev>',
+      if (providerEmail) {
+        await sendEmail({
           to: providerEmail,
           subject: `✓ Documento Aprobado: ${supplierDoc.documentType}`,
           html: `
@@ -74,35 +68,24 @@ export async function PATCH(
               <div style="padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 0 0 8px 8px;">
                 <p>Hola <strong>${providerName}</strong>,</p>
                 <p>¡Felicidades! El documento <strong>${supplierDoc.documentType}</strong> de <strong>${companyName}</strong> ha sido aprobado exitosamente.</p>
-
                 <div style="background: white; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
                   <p style="margin: 0; color: #059669; font-weight: bold;">✓ Estado: Aprobado</p>
                   <p style="margin: 6px 0 0 0; color: #666; font-size: 13px;">
                     Aprobado el: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
-
                 <p>Tu documentación está al día. Revisa si hay algún otro documento pendiente en el portal.</p>
-
                 <div style="text-align: center; margin: 24px 0;">
                   <a href="${process.env.NEXT_PUBLIC_APP_URL}" style="background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                     Ir al Portal
                   </a>
                 </div>
-
                 <p style="color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
                   Gracias por mantener tu documentación actualizada.
                 </p>
               </div>
             </div>
-          `
-        });
-        console.log('✉️ Email de aprobación enviado a:', providerEmail);
-      } else {
-        console.log('📧 [SIMULADO] Email de aprobación de documento:', {
-          to: providerEmail,
-          documentType: supplierDoc.documentType,
-          timestamp: new Date().toISOString()
+          `,
         });
       }
     }

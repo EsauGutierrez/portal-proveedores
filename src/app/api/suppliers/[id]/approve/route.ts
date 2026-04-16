@@ -2,16 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
+import { sendEmail } from '../../../../lib/mailer';
 
 const prisma = new PrismaClient();
-
-// Evitamos que falle inmediatamente si no hay API Key de Resend en el entorno
-let resend: Resend | null = null;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-}
 
 export async function PATCH(
   request: Request,
@@ -56,25 +50,30 @@ export async function PATCH(
     // 4. Construir el enlace para establecer la contraseña
     const setPasswordUrl = `${process.env.NEXT_PUBLIC_APP_URL}/crear-contrasena?token=${token}`;
 
-    // 5. Enviar el correo de bienvenida usando Resend (solo si está configurado)
-    if (resend) {
-      await resend.emails.send({
-        from: 'Portal Proveedores <onboarding@resend.dev>', // Email autorizado de prueba en Resend
-        to: [supplierProfile.user.email!],
-        subject: '¡Bienvenido! Tu cuenta ha sido aprobada',
-        html: `
-          <h1>¡Bienvenido a nuestro portal, ${supplierProfile.user.name}!</h1>
-          <p>Tu solicitud de registro ha sido aprobada. Para completar la activación de tu cuenta, por favor, establece tu contraseña haciendo clic en el siguiente enlace:</p>
-          <a href="${setPasswordUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Establecer Contraseña</a>
-          <p>Este enlace es válido por 24 horas.</p>
-          <p>Si no solicitaste este registro, puedes ignorar este correo.</p>
-        `,
-      });
-      console.log('Correo de aprobación enviado a:', supplierProfile.user.email);
-    } else {
-      console.warn('ADVERTENCIA: API Key de Resend no configurada. Simulación de envío de correo.');
-      console.log('URL para establecer contraseña (copiar y pegar):', setPasswordUrl);
-    }
+    // 5. Enviar el correo de bienvenida
+    await sendEmail({
+      to: supplierProfile.user.email!,
+      subject: '¡Bienvenido! Tu cuenta ha sido aprobada',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">¡Bienvenido al Portal!</h1>
+          </div>
+          <div style="background: white; padding: 32px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+            <p style="color: #374151; font-size: 16px;">Hola, <strong>${supplierProfile.user.name}</strong></p>
+            <p style="color: #6b7280;">Tu solicitud de registro ha sido aprobada. Para completar la activación de tu cuenta, establece tu contraseña haciendo clic en el siguiente enlace:</p>
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${setPasswordUrl}" style="background-color: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+                Establecer Contraseña
+              </a>
+            </div>
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px;">
+              <p style="color: #92400e; margin: 0; font-size: 14px;">⚠️ Este enlace es válido por <strong>24 horas</strong>.</p>
+            </div>
+          </div>
+        </div>
+      `,
+    });
 
     return NextResponse.json(
       { message: 'Proveedor aprobado y correo de bienvenida enviado.' },

@@ -2,16 +2,11 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
 import { invokeRestlet } from '../../../../lib/netsuite';
+import { sendEmail } from '../../../../lib/mailer';
 
 const prisma = new PrismaClient();
-
-let resend: Resend | null = null;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-}
 
 const SCRIPT_ID  = process.env.NETSUITE_SCRIPT_ID  || '1234';
 const DEPLOY_ID  = process.env.NETSUITE_DEPLOY_ID  || '1';
@@ -139,9 +134,8 @@ export async function PATCH(
     const providerEmail = complement.user?.email;
     const providerName  = complement.user?.name || 'Proveedor';
 
-    if (resend && providerEmail) {
-      await resend.emails.send({
-        from: 'Portal de Proveedores <noreply@imr.com.mx>',
+    if (providerEmail) {
+      await sendEmail({
         to: providerEmail,
         subject: 'Complemento de pago aprobado',
         html: `
@@ -155,11 +149,6 @@ export async function PATCH(
             </div>
           </div>
         `,
-      });
-    } else {
-      console.log('📧 [SIMULADO] Email de aprobación de complemento:', {
-        to: providerEmail,
-        folio: complement.folio,
       });
     }
 
