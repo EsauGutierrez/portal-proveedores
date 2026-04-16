@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../../lib/mailer';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -20,27 +20,14 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'MAIL_HOST no está configurado', config }, { status: 500 });
     }
 
-    const transporter = nodemailer.createTransport({
-        host: process.env.MAIL_HOST,
-        port: parseInt(process.env.MAIL_PORT || '587'),
-        secure: false,
-        auth: {
-            user: process.env.MAIL_USERNAME,
-            pass: process.env.MAIL_PASSWORD,
-        },
-    });
-
     try {
-        await transporter.verify();
-
-        await transporter.sendMail({
-            from: `"${process.env.MAIL_FROM_NAME || 'Portal de Proveedores'}" <${process.env.MAIL_FROM_ADDRESS}>`,
+        await sendEmail({
             to,
             subject: 'Prueba de correo — Portal de Proveedores',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                    <h2 style="color: #1e40af;">✅ Correo de prueba</h2>
-                    <p>Si recibes este mensaje, el servidor SMTP está configurado correctamente.</p>
+                    <h2 style="color: #1e40af;">✅ Correo de prueba (vía mailer)</h2>
+                    <p>Si recibes este mensaje, el módulo de correo está funcionando correctamente.</p>
                     <p style="color: #6b7280; font-size: 13px;">Enviado desde: <strong>${process.env.MAIL_FROM_ADDRESS}</strong></p>
                 </div>
             `,
