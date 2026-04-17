@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Home, DollarSign, LogOut, User, Book, Loader2, AlertCircle, Users, Building2, Menu, X } from 'lucide-react';
+import { FileText, Home, DollarSign, LogOut, User, Book, Loader2, AlertCircle, Users, Building2, Menu } from 'lucide-react';
 import DataTable from './DataTable';
 import ProfilePage from './ProfilePage';
 import DocumentationPage from './DocumentationPage';
@@ -154,23 +154,18 @@ const DashboardPage = ({ user, onLogout }) => {
             {/* Sidebar */}
             <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-white shadow-lg flex flex-col overflow-hidden transition-all duration-300`}>
                 <div className="w-64 flex flex-col h-full p-4">
-                    {/* Header: logo + botón cerrar */}
-                    <div className="flex items-center justify-between mb-8 min-h-[56px]">
-                        <div className="flex-1 flex justify-center">
-                            {subsidiaryLogo ? (
-                                <img
-                                    src={subsidiaryLogo}
-                                    alt="Logo subsidiaria"
-                                    className="max-h-14 max-w-[160px] object-contain"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                />
-                            ) : (
-                                <h1 className="text-lg font-bold text-gray-800">Portal de proveedores</h1>
-                            )}
-                        </div>
-                        <button onClick={() => setSidebarOpen(false)} className="ml-2 p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0">
-                            <X className="w-5 h-5" />
-                        </button>
+                    {/* Header: logo */}
+                    <div className="flex items-center justify-center mb-8 min-h-[56px]">
+                        {subsidiaryLogo ? (
+                            <img
+                                src={subsidiaryLogo}
+                                alt="Logo subsidiaria"
+                                className="max-h-14 max-w-[160px] object-contain"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                        ) : (
+                            <h1 className="text-lg font-bold text-gray-800">Portal de proveedores</h1>
+                        )}
                     </div>
                     <nav className="flex-grow space-y-2">
                         <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
