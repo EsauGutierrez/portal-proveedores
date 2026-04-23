@@ -124,16 +124,17 @@ export async function POST(request: Request) {
 
         const suiteqlQuery = `
       SELECT
-        t.id                 AS po_netsuite_id,
-        t.tranid             AS folio,
-        t.trandate           AS fecha,
-        BUILTIN.DF(t.subsidiary) AS subsidiaria,
-        BUILTIN.DF(t.entity) AS proveedor,
-        t.foreigntotal       AS total,
-        t.subtotal           AS subtotalns,
-        t.taxtotal           AS taxtotal,
-        t.entity             AS proveedor_netsuite_id,
-        v.vatregnumber       AS rfc
+        t.id                        AS po_netsuite_id,
+        t.tranid                    AS folio,
+        t.trandate                  AS fecha,
+        BUILTIN.DF(t.subsidiary)    AS subsidiaria,
+        BUILTIN.DF(t.entity)        AS proveedor,
+        t.foreigntotal              AS total,
+        t.subtotal                  AS subtotalns,
+        t.taxtotal                  AS taxtotal,
+        t.entity                    AS proveedor_netsuite_id,
+        v.vatregnumber              AS rfc,
+        t.custbody_es_consignacion  AS es_consignacion
       FROM
         transaction t
         JOIN Vendor v ON t.entity = v.id
@@ -245,6 +246,7 @@ export async function POST(request: Request) {
                     tax: valTax,
                     userId: supplierProfile.userId,
                     tenantId,
+                    isConsignment: po.es_consignacion === 'T' || po.es_consignacion === true,
                 };
 
                 const existing = await prisma.purchaseOrder.findUnique({

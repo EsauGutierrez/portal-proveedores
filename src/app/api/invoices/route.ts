@@ -90,7 +90,7 @@ export async function GET(request: Request) {
         poFolio = invoice.receptions[0].purchaseOrder?.folio || 'N/A';
         subsidiaryName = invoice.receptions[0].purchaseOrder?.subsidiary?.name || 'Desconocida';
       } else if (invoice.purchaseOrder) {
-        receptionFolio = 'Varias / Integra';
+        receptionFolio = (invoice.purchaseOrder as any).isConsignment ? 'Consignación' : 'Varias / Integra';
         poFolio = invoice.purchaseOrder.folio;
         subsidiaryName = invoice.purchaseOrder.subsidiary?.name || 'Desconocida';
       }
@@ -284,6 +284,32 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: 'La orden de compra asociada no existe.' }, { status: 404 });
       }
       tenantIdStr = poContext.tenantId;
+    }
+
+    // --- VALIDACIÓN DE SALDO PARA OC DE CONSIGNACIÓN ---
+    if (purchaseOrderId) {
+      const poForValidation = await (prisma.purchaseOrder as any).findUnique({
+        where: { id: purchaseOrderId },
+        select: {
+          isConsignment: true,
+          total: true,
+          invoices: {
+            where: { syncStatus: { not: 'FAILED' } },
+            select: { total: true },
+          },
+        },
+      });
+      if (poForValidation?.isConsignment) {
+        const alreadyInvoiced: number = (poForValidation.invoices as any[]).reduce(
+          (sum: number, inv: any) => sum + Number(inv.total), 0
+        );
+        const saldoDisponible = Number(poForValidation.total) - alreadyInvoiced;
+        if (xmlTotal > saldoDisponible + 0.01) {
+          return NextResponse.json({
+            message: `El total de la factura ($${xmlTotal.toFixed(2)}) excede el saldo disponible de la OC ($${saldoDisponible.toFixed(2)}).`,
+          }, { status: 422 });
+        }
+      }
     }
 
     // --- GUARDADO INICIAL EN BASE DE DATOS COMO PENDING ---

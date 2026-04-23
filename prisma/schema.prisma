@@ -128,12 +128,13 @@ model PurchaseOrder {
   userId       String
   subsidiaryId String
   tenantId     String
-  netsuiteId   String?
+  netsuiteId    String?
+  isConsignment Boolean     @default(false)
   subsidiary   Subsidiary  @relation(fields: [subsidiaryId], references: [id])
   tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user         User        @relation(fields: [userId], references: [id])
   recepciones  Reception[]
-  invoice      Invoice?
+  invoices     Invoice[]
 
   @@unique([tenantId, folio])
 }
@@ -180,7 +181,7 @@ model Invoice {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   userId             String
-  purchaseOrderId    String?             @unique
+  purchaseOrderId    String?
   syncError          String?
   syncStatus         InvoiceSyncStatus   @default(PENDING_SYNC)
   netsuiteId         String?             // Internal ID del VendorBill en NetSuite

@@ -27,8 +27,8 @@ export async function GET(request: Request) {
         where: { userId },
         include: {
           subsidiary: true,
-          invoice: {
-            select: { id: true, syncStatus: true, pdfUrl: true, xmlUrl: true },
+          invoices: {
+            select: { id: true, syncStatus: true, pdfUrl: true, xmlUrl: true, total: true },
           },
           recepciones: {
             include: {
@@ -47,15 +47,29 @@ export async function GET(request: Request) {
 
     const formattedData = await Promise.all(
       purchaseOrders.map(async (po) => {
-        let invoice = po.invoice;
-        if (invoice) {
-          const [pdfUrl, xmlUrl] = await Promise.all([
-            invoice.pdfUrl ? getPresignedUrl(invoice.pdfUrl) : null,
-            invoice.xmlUrl ? getPresignedUrl(invoice.xmlUrl) : null,
-          ]);
-          invoice = { ...invoice, pdfUrl, xmlUrl };
-        }
-        return { ...po, invoice, subsidiaria: po.subsidiary.name };
+        const invoicesWithUrls = await Promise.all(
+          (po.invoices as any[]).map(async (inv) => {
+            const [pdfUrl, xmlUrl] = await Promise.all([
+              inv.pdfUrl ? getPresignedUrl(inv.pdfUrl) : Promise.resolve(null),
+              inv.xmlUrl ? getPresignedUrl(inv.xmlUrl) : Promise.resolve(null),
+            ]);
+            return { ...inv, pdfUrl, xmlUrl };
+          })
+        );
+
+        const totalFacturado = invoicesWithUrls
+          .filter(inv => inv.syncStatus !== 'FAILED')
+          .reduce((sum, inv) => sum + Number(inv.total), 0);
+        const saldoDisponible = Number(po.total) - totalFacturado;
+
+        return {
+          ...po,
+          invoice: invoicesWithUrls[0] ?? null,
+          invoices: invoicesWithUrls,
+          totalFacturado,
+          saldoDisponible,
+          subsidiaria: po.subsidiary.name,
+        };
       })
     );
 
