@@ -128,7 +128,9 @@ export async function POST(request: Request) {
       { expiresIn: '72h' }
     );
 
-    const setPasswordUrl = `${process.env.NEXT_PUBLIC_APP_URL}/crear-contrasena?token=${inviteToken}`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ||
+      `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`;
+    const setPasswordUrl = `${appUrl}/crear-contrasena?token=${inviteToken}`;
 
     try {
       await sendEmail({

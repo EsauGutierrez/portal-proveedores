@@ -48,7 +48,9 @@ export async function PATCH(
     );
 
     // 4. Construir el enlace para establecer la contraseña
-    const setPasswordUrl = `${process.env.NEXT_PUBLIC_APP_URL}/crear-contrasena?token=${token}`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ||
+      `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`;
+    const setPasswordUrl = `${appUrl}/crear-contrasena?token=${token}`;
 
     // 5. Enviar el correo de bienvenida (sin bloquear la respuesta si falla)
     try {
