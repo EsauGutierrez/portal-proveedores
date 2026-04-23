@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
+import { sendEmail } from '../../lib/mailer';
 
 const prisma = new PrismaClient();
 
@@ -127,12 +128,38 @@ export async function POST(request: Request) {
       { expiresIn: '72h' }
     );
 
-    // En una app real, aquí enviaríamos el correo con el inviteToken.
-    // Por ahora devolvemos el token y la tempPassword para que el admin los vea.
+    const setPasswordUrl = `${process.env.NEXT_PUBLIC_APP_URL}/crear-contrasena?token=${inviteToken}`;
+
+    try {
+      await sendEmail({
+        to: email,
+        subject: 'Invitación al Portal de Proveedores',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 24px;">¡Has sido invitado!</h1>
+            </div>
+            <div style="background: white; padding: 32px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+              <p style="color: #374151; font-size: 16px;">Hola, <strong>${name}</strong></p>
+              <p style="color: #6b7280;">Has sido invitado a unirte al Portal de Proveedores. Para activar tu cuenta y establecer tu contraseña, haz clic en el siguiente enlace:</p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${setPasswordUrl}" style="background-color: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+                  Activar mi cuenta
+                </a>
+              </div>
+              <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px;">
+                <p style="color: #92400e; margin: 0; font-size: 14px;">⚠️ Este enlace es válido por <strong>72 horas</strong>.</p>
+              </div>
+            </div>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error('Error enviando correo de invitación:', emailError);
+    }
+
     return NextResponse.json({
       message: 'Proveedor invitado exitosamente.',
-      inviteToken,
-      tempPassword, // En producción no se enviaría esto así
       userId: newUser.id
     }, { status: 201 });
 
