@@ -48,6 +48,8 @@ export async function PATCH(
             netsuiteConsumerSec: true,
             netsuiteTokenId: true,
             netsuiteTokenSecret: true,
+            netsuiteScriptId: true,
+            netsuiteDeployId: true,
           },
         },
       },
