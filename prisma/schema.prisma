@@ -16,6 +16,8 @@ model Tenant {
   netsuiteConsumerSec String?
   netsuiteTokenId     String?
   netsuiteTokenSecret String?
+  netsuiteScriptId    String?
+  netsuiteDeployId    String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   invoices            Invoice[]

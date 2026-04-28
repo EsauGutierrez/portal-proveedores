@@ -173,7 +173,12 @@ export async function GET(request: Request) {
                         total: Number(pay.total),
                         pdfUrl,
                         xmlUrl,
-                        estadoCentral: 'SYNCED'
+                        approvalStatus: pay.status,
+                        estadoCentral: pay.status === 'REJECTED'
+                            ? 'REJECTED'
+                            : pay.netsuiteSyncStatus,
+                        netsuitePaymentId: pay.netsuitePaymentId,
+                        netsuiteSyncError: pay.netsuiteSyncError,
                     });
                 }));
             }

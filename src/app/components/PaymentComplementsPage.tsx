@@ -3,16 +3,16 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-const STATUS_MAP = {
-  PENDING:  { label: 'Pendiente',  color: 'text-amber-600',  bg: 'bg-amber-50',  Icon: Clock },
-  APPROVED: { label: 'Aprobado',   color: 'text-green-600',  bg: 'bg-green-50',  Icon: CheckCircle },
-  REJECTED: { label: 'Rechazado',  color: 'text-red-600',    bg: 'bg-red-50',    Icon: XCircle },
+const SYNC_STATUS_MAP: Record<string, { label: string; color: string; bg: string; Icon: any }> = {
+  SYNCED:       { label: 'Registrado en NetSuite', color: 'text-green-700',  bg: 'bg-green-50',  Icon: CheckCircle },
+  PENDING_SYNC: { label: 'Procesando…',            color: 'text-amber-700',  bg: 'bg-amber-50',  Icon: Clock },
+  FAILED:       { label: 'Error al sincronizar',   color: 'text-red-700',    bg: 'bg-red-50',    Icon: XCircle },
 };
 
-const StatusBadge = ({ status }: { status: string }) => {
-  const s = STATUS_MAP[status] || STATUS_MAP.PENDING;
+const SyncStatusBadge = ({ status }: { status: string }) => {
+  const s = SYNC_STATUS_MAP[status] || SYNC_STATUS_MAP.PENDING_SYNC;
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${s.color} ${s.bg}`}>
       <s.Icon className="w-3.5 h-3.5" />
@@ -111,7 +111,12 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
 
       if (!res.ok) throw new Error(data.message || 'Error al subir el complemento.');
 
-      setNotification({ type: 'success', message: 'Complemento de pago enviado correctamente. Está pendiente de revisión.' });
+      const syncMsg = data.netsuiteSyncStatus === 'SYNCED'
+        ? 'Complemento registrado y sincronizado correctamente con NetSuite.'
+        : data.netsuiteSyncStatus === 'FAILED'
+        ? `Complemento registrado, pero falló la sincronización con NetSuite. ${data.message || ''}`
+        : 'Complemento registrado correctamente.';
+      setNotification({ type: data.netsuiteSyncStatus === 'FAILED' ? 'error' : 'success', message: syncMsg });
       setShowForm(false);
       setFormData({ invoiceId: '' });
       setXmlFile(null);
@@ -231,7 +236,7 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Factura</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">NetSuite</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Archivos</th>
               </tr>
             </thead>
@@ -248,7 +253,12 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                       ${Number(c.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <StatusBadge status={c.status} />
+                      <SyncStatusBadge status={c.netsuiteSyncStatus} />
+                      {c.netsuiteSyncStatus === 'FAILED' && c.netsuiteSyncError && (
+                        <p className="text-xs text-red-600 mt-1 max-w-[200px] truncate" title={c.netsuiteSyncError}>
+                          {c.netsuiteSyncError}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -269,11 +279,11 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                       </div>
                     </td>
                   </tr>
-                  {c.status === 'REJECTED' && c.rejectionReason && (
-                    <tr className="bg-red-50">
-                      <td colSpan={6} className="px-4 py-2">
-                        <p className="text-xs text-red-700">
-                          <span className="font-semibold">Motivo del rechazo: </span>{c.rejectionReason}
+                  {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
+                    <tr className="bg-green-50/50">
+                      <td colSpan={6} className="px-4 py-1.5">
+                        <p className="text-xs text-green-700">
+                          <span className="font-semibold">ID NetSuite: </span>{c.netsuitePaymentId}
                         </p>
                       </td>
                     </tr>

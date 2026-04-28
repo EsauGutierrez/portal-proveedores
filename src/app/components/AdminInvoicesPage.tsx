@@ -22,6 +22,9 @@ const AdminInvoicesPage = () => {
     const [syncError, setSyncError] = useState<string | null>(null);
     const [syncHistoryExpanded, setSyncHistoryExpanded] = useState(false);
 
+    // --- Estado de retry de complementos de pago ---
+    const [retryLoadingId, setRetryLoadingId] = useState<string | null>(null);
+
     const syncStatusConfig: Record<string, { color: string; bg: string; icon: React.ReactNode; label: string }> = {
         SUCCESS: { color: 'text-green-700', bg: 'bg-green-50 border-green-200', icon: <CheckCircle className="w-4 h-4" />, label: 'Exitosa' },
         PARTIAL: { color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-200', icon: <AlertCircleIcon className="w-4 h-4" />, label: 'Parcial' },
@@ -112,8 +115,29 @@ const AdminInvoicesPage = () => {
         setEndDate('');
         setSupplierId('');
         setDocType('ALL');
-        // Usar setTimeout para permitir que el estado se actualice antes de re-hacer fetchDocuments. 
+        // Usar setTimeout para permitir que el estado se actualice antes de re-hacer fetchDocuments.
         setTimeout(() => fetchDocuments(), 0);
+    };
+
+    const handleRetryComplement = async (id: string) => {
+        setRetryLoadingId(id);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/payment-complements/${id}/retry`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            const d = await res.json();
+            if (!res.ok) {
+                setError(d.message || 'Error al reintentar la sincronización.');
+            } else {
+                fetchDocuments();
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setRetryLoadingId(null);
+        }
     };
 
     const handleDownloadZip = async () => {
@@ -420,17 +444,31 @@ const AdminInvoicesPage = () => {
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-200">Falló ERP</span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-3 whitespace-nowrap text-right text-sm space-x-2 flex justify-end">
-                                                    {doc.pdfUrl && (
-                                                        <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-500 hover:bg-gray-100 rounded hover:text-red-500 transition-colors" title="Ver PDF">
-                                                            <FileText className="w-5 h-5" />
-                                                        </a>
-                                                    )}
-                                                    {doc.xmlUrl && (
-                                                        <a href={doc.xmlUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-500 hover:bg-gray-100 rounded hover:text-green-600 transition-colors" title="Descargar XML">
-                                                            <Download className="w-5 h-5" />
-                                                        </a>
-                                                    )}
+                                                <td className="px-6 py-3 whitespace-nowrap text-right text-sm">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        {/* Retry para complementos con sync fallido */}
+                                                        {doc.tipo === 'Complemento de Pago' && doc.estadoCentral === 'FAILED' && (
+                                                            <button
+                                                                onClick={() => handleRetryComplement(doc.id)}
+                                                                disabled={retryLoadingId === doc.id}
+                                                                className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 text-xs font-semibold rounded disabled:opacity-50 transition-colors"
+                                                                title="Reintentar sincronización con NetSuite"
+                                                            >
+                                                                {retryLoadingId === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                                                Reintentar
+                                                            </button>
+                                                        )}
+                                                        {doc.pdfUrl && (
+                                                            <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-500 hover:bg-gray-100 rounded hover:text-red-500 transition-colors" title="Ver PDF">
+                                                                <FileText className="w-5 h-5" />
+                                                            </a>
+                                                        )}
+                                                        {doc.xmlUrl && (
+                                                            <a href={doc.xmlUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-500 hover:bg-gray-100 rounded hover:text-green-600 transition-colors" title="Descargar XML">
+                                                                <Download className="w-5 h-5" />
+                                                            </a>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </>
                                         )}
@@ -486,6 +524,7 @@ const AdminInvoicesPage = () => {
                     </div>
                 )}
             </div>
+
         </div>
     );
 };

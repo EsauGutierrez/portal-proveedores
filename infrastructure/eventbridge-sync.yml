@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EventBridge Rule para sincronización automática de OC y Recepciones
+  desde NetSuite hacia el Portal de Proveedores.
+
+Parameters:
+  AppUrl:
+    Type: String
+    Description: "URL base de la aplicación SIN barra final (ej: https://main.d1234.amplifyapp.com)"
+
+  SyncApiKey:
+    Type: String
+    NoEcho: true
+    Description: "Valor de la variable SYNC_API_KEY configurada en la aplicación"
+
+  ScheduleExpression:
+    Type: String
+    Default: "rate(4 hours)"
+    Description: >
+      Frecuencia de sincronización. Ejemplos:
+        rate(4 hours)           — cada 4 horas
+        cron(0 12,20 * * ? *)   — a las 6am y 2pm (UTC = CST+6)
+
+Resources:
+
+  # Conexión con autenticación: agrega x-sync-key en cada request
+  SyncConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: portal-proveedores-sync-conn
+      Description: "Autenticación para el endpoint de sync del Portal de Proveedores"
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: x-sync-key
+          ApiKeyValue: !Ref SyncApiKey
+
+  # Destino HTTP: endpoint que sincroniza TODOS los tenants en una sola llamada
+  SyncApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: portal-proveedores-sync-all-tenants
+      Description: "GET /api/sync/all-tenants — sincroniza todos los tenants con NetSuite configurado"
+      ConnectionArn: !GetAtt SyncConnection.Arn
+      HttpMethod: GET
+      InvocationEndpoint: !Sub "${AppUrl}/api/sync/all-tenants"
+      InvocationRateLimitPerSecond: 1
+
+  # Rol IAM que permite a EventBridge invocar el API Destination
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: portal-proveedores-eventbridge-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeApiDestination
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !GetAtt SyncApiDestination.Arn
+
+  # EventBridge Rule: dispara el sync según el intervalo configurado
+  OCSyncRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: portal-proveedores-oc-sync-all
+      Description: "Sincronización automática de OC y Recepciones para todos los tenants"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: SyncAllTenantsTarget
+          Arn: !GetAtt SyncApiDestination.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
+Outputs:
+  RuleName:
+    Description: "Nombre de la regla creada"
+    Value: !Ref OCSyncRule
+
+  SyncEndpoint:
+    Description: "Endpoint que será llamado automáticamente"
+    Value: !Sub "${AppUrl}/api/sync/all-tenants"
+
+  NextSteps:
+    Description: "Para un tenant con schedule propio, despliega eventbridge-sync-per-tenant.yml con su TenantId"
+    Value: "Este stack cubre todos los tenants. Nuevos tenants se sincronizan automaticamente al tener NetSuite configurado."

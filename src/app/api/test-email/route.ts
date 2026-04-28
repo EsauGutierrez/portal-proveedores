@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
 import { sendEmail } from '../../lib/mailer';
 
 export async function GET(request: Request) {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+    }
+    try {
+        const decoded: any = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!);
+        if (decoded.role !== 'ADMIN' && decoded.role !== 'SUPERADMIN') {
+            return NextResponse.json({ error: 'Acceso denegado.' }, { status: 403 });
+        }
+    } catch {
+        return NextResponse.json({ error: 'Token inválido.' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const to = searchParams.get('to');
 

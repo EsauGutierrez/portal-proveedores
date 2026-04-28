@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret } = body;
+        const { name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId } = body;
 
         if (!name) {
             return NextResponse.json({ message: 'El nombre de la empresa es obligatorio.' }, { status: 400 });
@@ -56,12 +56,14 @@ export async function POST(request: Request) {
         const newTenant = await prisma.tenant.create({
             data: {
                 name,
-                isActive: true, // Por defecto al crearlo es activo
+                isActive: true,
                 netsuiteAccountId,
                 netsuiteConsumerKey,
                 netsuiteConsumerSec: netsuiteConsumerSecret,
                 netsuiteTokenId,
                 netsuiteTokenSecret,
+                netsuiteScriptId: netsuiteScriptId || null,
+                netsuiteDeployId: netsuiteDeployId || null,
             }
         });
 
@@ -104,7 +106,7 @@ export async function PUT(request: Request) {
 
     try {
         const body = await request.json();
-        const { id, name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret } = body;
+        const { id, name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId } = body;
 
         if (!id || !name) {
             return NextResponse.json({ message: 'El ID y nombre de la empresa son obligatorios.' }, { status: 400 });
@@ -119,6 +121,8 @@ export async function PUT(request: Request) {
                 netsuiteConsumerSec: netsuiteConsumerSecret,
                 netsuiteTokenId,
                 netsuiteTokenSecret,
+                netsuiteScriptId: netsuiteScriptId || null,
+                netsuiteDeployId: netsuiteDeployId || null,
             }
         });
 

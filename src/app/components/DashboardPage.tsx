@@ -7,7 +7,6 @@ import { FileText, Home, DollarSign, LogOut, User, Book, Loader2, AlertCircle, U
 import DataTable from './DataTable';
 import ProfilePage from './ProfilePage';
 import DocumentationPage from './DocumentationPage';
-import ChatWidget from './ChatWidget';
 import SupplierApprovalPage from './SupplierApprovalPage';
 import SubsidiariesPage from './SubsidiariesPage';
 import SuperAdminTenantsPage from './SuperAdminTenantsPage';
@@ -226,7 +225,6 @@ const DashboardPage = ({ user, onLogout }) => {
                 )}
                 <div className="p-8">{renderContent()}</div>
             </main>
-            <ChatWidget />
         </div>
     );
 };

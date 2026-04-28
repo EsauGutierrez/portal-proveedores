@@ -357,7 +357,8 @@ WHERE
                 <button
                     onClick={() => setEditingTenant({
                         name: '', netsuiteAccountId: '', netsuiteConsumerKey: '',
-                        netsuiteConsumerSecret: '', netsuiteTokenId: '', netsuiteTokenSecret: ''
+                        netsuiteConsumerSecret: '', netsuiteTokenId: '', netsuiteTokenSecret: '',
+                        netsuiteScriptId: '', netsuiteDeployId: ''
                     })}
                     className="flex justify-center items-center py-2 px-4 shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -484,6 +485,14 @@ WHERE
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Token Secret</label>
                                     <input type="password" value={editingTenant.netsuiteTokenSecret || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteTokenSecret: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Script ID (RESTlet)</label>
+                                    <input type="text" value={editingTenant.netsuiteScriptId || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteScriptId: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="Ej: 3878" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Deploy ID</label>
+                                    <input type="text" value={editingTenant.netsuiteDeployId || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteDeployId: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="Ej: 1" />
                                 </div>
                             </div>
                             <div className="flex justify-end space-x-3 pt-4 border-t mt-4">

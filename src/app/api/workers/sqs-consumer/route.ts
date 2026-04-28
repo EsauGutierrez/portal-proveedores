@@ -120,8 +120,8 @@ export async function POST(request: Request) {
 
             // 7. Sincronización a NETSUITE mediante RESTlet
             try {
-                const SCRIPT_ID = '3878';
-                const DEPLOY_ID = '1';
+                const SCRIPT_ID = invoice.tenant.netsuiteScriptId || process.env.NETSUITE_SCRIPT_ID || '3878';
+                const DEPLOY_ID = invoice.tenant.netsuiteDeployId || process.env.NETSUITE_DEPLOY_ID || '1';
 
                 // fromId: si es factura por OC completa → ID interno de la OC en NetSuite
                 //         si es factura por recepción → ID interno de la recepción en NetSuite

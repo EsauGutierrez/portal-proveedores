@@ -4,12 +4,13 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { invokeRestlet } from '../../../../lib/netsuite';
+import { getPresignedUrl } from '../../../../lib/s3';
 import { sendEmail } from '../../../../lib/mailer';
 
 const prisma = new PrismaClient();
 
-const SCRIPT_ID  = process.env.NETSUITE_SCRIPT_ID  || '1234';
-const DEPLOY_ID  = process.env.NETSUITE_DEPLOY_ID  || '1';
+const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
+const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
 
 export async function PATCH(
   request: Request,
@@ -81,18 +82,31 @@ export async function PATCH(
         tokenSecret:    tenant.netsuiteTokenSecret!,
       };
 
+      let complementXmlUrl = '';
+      let complementPdfUrl = '';
+      try {
+        if (complement.xmlUrl) complementXmlUrl = await getPresignedUrl(complement.xmlUrl);
+        if (complement.pdfUrl) complementPdfUrl = await getPresignedUrl(complement.pdfUrl);
+      } catch (urlErr) {
+        console.warn('[Approve] No se pudieron generar presigned URLs para el complemento:', urlErr);
+      }
+
       const nsPayload = {
-        action:          'createVendorPayment',
-        vendorNetsuiteId: vendorNsId,
-        vendorBillId:     vendorBillNsId,
-        amount:           complement.total.toString(),
-        trandate:         complement.fecha.toISOString(),
-        uuidComplemento:  complement.folio,
+        action:            'createVendorPayment',
+        vendorNetsuiteId:  vendorNsId,
+        vendorBillId:      vendorBillNsId,
+        amount:            complement.total.toString(),
+        trandate:          complement.fecha.toISOString(),
+        uuidComplemento:   complement.folio,
+        complementoXMLUrl: complementXmlUrl,
+        complementoPDFUrl: complementPdfUrl,
       };
 
       try {
+        const scriptId = tenant?.netsuiteScriptId || FALLBACK_SCRIPT_ID;
+        const deployId = tenant?.netsuiteDeployId || FALLBACK_DEPLOY_ID;
         console.log(`[Approve] Enviando VendorPayment a NetSuite para complemento ${id}`, nsPayload);
-        const nsResponse = await invokeRestlet(SCRIPT_ID, DEPLOY_ID, nsCreds, 'POST', nsPayload);
+        const nsResponse = await invokeRestlet(scriptId, deployId, nsCreds, 'POST', nsPayload);
 
         if (nsResponse?.success) {
           console.log(`[Approve] VendorPayment creado en NS. ID: ${nsResponse.vendorPaymentId}`);
