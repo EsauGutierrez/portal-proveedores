@@ -4,8 +4,8 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
-import { invokeRestlet } from '../../../../../lib/netsuite';
-import { getPresignedUrl } from '../../../../../lib/s3';
+import { invokeRestlet } from '../../../../lib/netsuite';
+import { getPresignedUrl } from '../../../../lib/s3';
 
 const prisma = new PrismaClient();
 
