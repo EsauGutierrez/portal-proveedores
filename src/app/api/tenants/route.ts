@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId } = body;
+        const { name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId, supportEmail } = body;
 
         if (!name) {
             return NextResponse.json({ message: 'El nombre de la empresa es obligatorio.' }, { status: 400 });
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
                 netsuiteTokenSecret,
                 netsuiteScriptId: netsuiteScriptId || null,
                 netsuiteDeployId: netsuiteDeployId || null,
+                supportEmail: supportEmail || null,
             }
         });
 
@@ -106,7 +107,7 @@ export async function PUT(request: Request) {
 
     try {
         const body = await request.json();
-        const { id, name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId } = body;
+        const { id, name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId, supportEmail } = body;
 
         if (!id || !name) {
             return NextResponse.json({ message: 'El ID y nombre de la empresa son obligatorios.' }, { status: 400 });
@@ -123,6 +124,7 @@ export async function PUT(request: Request) {
                 netsuiteTokenSecret,
                 netsuiteScriptId: netsuiteScriptId || null,
                 netsuiteDeployId: netsuiteDeployId || null,
+                supportEmail: supportEmail || null,
             }
         });
 
