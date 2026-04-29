@@ -460,7 +460,7 @@ export async function POST(request: Request) {
     }
 }
 
-// GET: Obtener el historial de sincronizaciones y el estado del último sync
+// GET: Obtener el historial de sincronizaciones con paginación y filtros
 export async function GET(request: Request) {
     try {
         const authHeader = request.headers.get('Authorization');
@@ -481,14 +481,44 @@ export async function GET(request: Request) {
         }
 
         const tenantId: string = decodedToken.tenantId;
+        const { searchParams } = new URL(request.url);
 
-        const logs = await prisma.syncLog.findMany({
-            where: { tenantId },
-            orderBy: { createdAt: 'desc' },
-            take: 10 // Últimos 10 logs
-        });
+        const page    = Math.max(1, parseInt(searchParams.get('page')  ?? '1'));
+        const limit   = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
+        const type    = searchParams.get('type');    // SCHEDULED | MANUAL
+        const status  = searchParams.get('status');  // SUCCESS | PARTIAL | FAILED
 
-        return NextResponse.json(logs, { status: 200 });
+        const where: any = { tenantId };
+        if (type   && ['SCHEDULED', 'MANUAL'].includes(type))               where.type   = type;
+        if (status && ['SUCCESS', 'PARTIAL', 'FAILED'].includes(status))    where.status = status;
+
+        const [logs, total] = await Promise.all([
+            prisma.syncLog.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            prisma.syncLog.count({ where }),
+        ]);
+
+        // Estadísticas resumidas (sin filtro de tipo/estado para que sean globales)
+        const [totalSyncs, successSyncs, lastSync] = await Promise.all([
+            prisma.syncLog.count({ where: { tenantId } }),
+            prisma.syncLog.count({ where: { tenantId, status: 'SUCCESS' } }),
+            prisma.syncLog.findFirst({ where: { tenantId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true, status: true } }),
+        ]);
+
+        return NextResponse.json({
+            logs,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+            stats: {
+                totalSyncs,
+                successRate: totalSyncs > 0 ? Math.round((successSyncs / totalSyncs) * 100) : 0,
+                lastSync: lastSync?.createdAt ?? null,
+                lastSyncStatus: lastSync?.status ?? null,
+            },
+        }, { status: 200 });
 
     } catch (error: any) {
         return NextResponse.json({ message: 'Error al obtener el historial.', error: error.message }, { status: 500 });

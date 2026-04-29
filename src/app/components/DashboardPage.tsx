@@ -15,7 +15,8 @@ import OverviewPage from './OverviewPage';
 import DocumentSettingsPage from './DocumentSettingsPage';
 import PaymentComplementsPage from './PaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
-import { LayoutDashboard, Settings } from 'lucide-react';
+import SyncLogsPage from './SyncLogsPage';
+import { LayoutDashboard, Settings, DatabaseZap } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
     // La vista inicial ahora depende del rol del usuario.
@@ -28,7 +29,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte', 'sync_logs'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -136,6 +137,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'facturas_admin': return <AdminInvoicesPage />;
             case 'ajustes_documentos': return <DocumentSettingsPage />;
             case 'soporte': return <SupportRequestPage />;
+            case 'sync_logs': return <SyncLogsPage />;
             default: return <OverviewPage user={user} />;
         }
     };
@@ -186,6 +188,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                 <NavLink view="proveedores" icon={Users} label="Proveedores" />
                                 <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
                                 <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
+                                <NavLink view="sync_logs" icon={DatabaseZap} label="Log de Sincronización" />
                             </>
                         )}
 
