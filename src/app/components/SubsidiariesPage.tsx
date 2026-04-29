@@ -177,6 +177,7 @@ const SubsidiariesPage = () => {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [subsidiaryToToggle, setSubsidiaryToToggle] = useState(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -244,11 +245,13 @@ const SubsidiariesPage = () => {
         }
       });
       if (!response.ok) {
-        throw new Error('No se pudo guardar la subsidiaria.');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'No se pudo guardar la subsidiaria.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al guardar la subsidiaria:", error);
-      alert("No se pudo guardar la subsidiaria.");
+      setErrorModal(error.message || 'No se pudo guardar la subsidiaria.');
+      return;
     }
 
     setIsModalOpen(false);
@@ -271,15 +274,17 @@ const SubsidiariesPage = () => {
         body: JSON.stringify({ isActive: !subsidiary.isActive }),
       });
       if (!response.ok) {
-        throw new Error('No se pudo actualizar el estado.');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'No se pudo actualizar el estado de la subsidiaria.');
       }
-      // Recargar la lista para mostrar el cambio
       fetchSubsidiaries();
       setIsConfirmModalOpen(false);
       setSubsidiaryToToggle(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al cambiar el estado de la subsidiaria:", error);
-      alert("No se pudo actualizar el estado de la subsidiaria.");
+      setIsConfirmModalOpen(false);
+      setSubsidiaryToToggle(null);
+      setErrorModal(error.message || 'No se pudo actualizar el estado de la subsidiaria.');
     }
   };
 
@@ -408,6 +413,25 @@ const SubsidiariesPage = () => {
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={confirmToggleStatus}
       />
+
+      {/* Modal de error */}
+      {errorModal && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm text-center">
+            <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-7 h-7 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Acción no permitida</h3>
+            <p className="text-sm text-gray-600 mb-6">{errorModal}</p>
+            <button
+              onClick={() => setErrorModal(null)}
+              className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
