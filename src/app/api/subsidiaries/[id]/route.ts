@@ -24,6 +24,31 @@ export async function PATCH(
       );
     }
 
+    // Verificar límite al reactivar
+    if (isActive) {
+      const subsidiary = await prisma.subsidiary.findUnique({
+        where: { id },
+        select: { tenantId: true },
+      });
+      if (subsidiary?.tenantId) {
+        const tenant = await prisma.tenant.findUnique({
+          where: { id: subsidiary.tenantId },
+          select: { maxSubsidiaries: true },
+        });
+        if (tenant?.maxSubsidiaries !== null && tenant?.maxSubsidiaries !== undefined) {
+          const activeCount = await prisma.subsidiary.count({
+            where: { tenantId: subsidiary.tenantId, isActive: true },
+          });
+          if (activeCount >= tenant.maxSubsidiaries) {
+            return NextResponse.json(
+              { message: `No se puede activar la subsidiaria. Has alcanzado el límite de ${tenant.maxSubsidiaries} subsidiarias activas para tu suscripción.` },
+              { status: 403 }
+            );
+          }
+        }
+      }
+    }
+
     const updatedSubsidiary = await prisma.subsidiary.update({
       where: { id },
       data: { isActive },
