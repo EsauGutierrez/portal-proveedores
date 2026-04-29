@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
-import { sendEmail } from '../../../lib/mailer';
+import { sendEmail } from '../../lib/mailer';
 
 const prisma = new PrismaClient();
 

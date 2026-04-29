@@ -38,10 +38,11 @@ export default function HomePage() {
             return;
         }
 
-        // Login normal → aplanar supplierStatus para que DashboardPage lo pueda leer directo
+        // Login normal → aplanar supplierStatus y subscriptionWarning para que DashboardPage lo lea directo
         const userToStore = {
             ...data.user,
             supplierStatus: data.user.supplierProfile?.status ?? null,
+            subscriptionWarning: data.user.subscriptionWarning ?? false,
         };
         localStorage.setItem('user', JSON.stringify(userToStore));
         setCurrentUser(userToStore);

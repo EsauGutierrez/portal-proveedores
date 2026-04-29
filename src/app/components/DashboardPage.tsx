@@ -226,6 +226,16 @@ const DashboardPage = ({ user, onLogout }) => {
                         </p>
                     </div>
                 )}
+
+                {/* Banner de suscripción en periodo de gracia para TENANT_ADMIN */}
+                {user?.role === 'TENANT_ADMIN' && user?.subscriptionWarning && (
+                    <div className="bg-red-50 border-b border-red-200 px-8 py-3 flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        <p className="text-sm text-red-800 font-medium">
+                            <strong>La vigencia de tu portal ha expirado.</strong> Tienes acceso durante 7 días adicionales. Contacta a <strong>IMR</strong> de inmediato para renovar y evitar la suspensión del servicio.
+                        </p>
+                    </div>
+                )}
                 <div className="p-8">{renderContent()}</div>
             </main>
         </div>

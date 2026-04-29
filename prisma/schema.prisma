@@ -16,10 +16,13 @@ model Tenant {
   netsuiteConsumerSec String?
   netsuiteTokenId     String?
   netsuiteTokenSecret String?
-  netsuiteScriptId    String?
-  netsuiteDeployId    String?
-  supportEmail        String?
-  createdAt           DateTime            @default(now())
+  netsuiteScriptId      String?
+  netsuiteDeployId      String?
+  supportEmail          String?
+  maxSubsidiaries       Int?
+  maxSuppliers          Int?
+  subscriptionExpiresAt DateTime?
+  createdAt             DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   invoices            Invoice[]
   paymentComplements  PaymentComplement[]

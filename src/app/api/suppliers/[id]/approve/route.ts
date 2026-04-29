@@ -34,6 +34,26 @@ export async function PATCH(
       );
     }
 
+    // Verificar límite de proveedores activos del tenant
+    const tenantId = supplierProfile.user.tenantId;
+    if (tenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { maxSuppliers: true },
+      });
+      if (tenant?.maxSuppliers !== null && tenant?.maxSuppliers !== undefined) {
+        const activeCount = await prisma.supplierProfile.count({
+          where: { tenantId, status: 'ACTIVE' },
+        });
+        if (activeCount >= tenant.maxSuppliers) {
+          return NextResponse.json(
+            { message: `No se puede aprobar el proveedor. Se ha alcanzado el límite de ${tenant.maxSuppliers} proveedores activos para esta suscripción.` },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // 2. Actualizar el estado del proveedor a 'ACTIVE'
     await prisma.supplierProfile.update({
       where: { id: supplierProfileId },

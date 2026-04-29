@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, Plus, Power, Users, Building2, Server, Edit, ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus } from 'lucide-react';
+import { Loader2, Plus, Power, Users, Building2, Server, Edit, ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Calendar, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 
 const REGIMENES_FISCALES = [
     { code: '601', name: 'General de Ley Personas Morales' },
@@ -54,9 +54,46 @@ const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteS
                         {tenant.isActive ? 'Activo' : 'Suspendido'}
                     </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 flex items-center mb-1"><Users className="w-4 h-4 mr-2 text-gray-400" /> {tenant._count?.users || 0} Usuarios</div>
-                    <div className="text-sm text-gray-500 flex items-center"><Building2 className="w-4 h-4 mr-2 text-gray-400" /> {tenant._count?.subsidiaries || 0} Subsidiarias</div>
+                <td className="px-6 py-4">
+                    {(() => {
+                        const now = new Date();
+                        const exp = tenant.subscriptionExpiresAt ? new Date(tenant.subscriptionExpiresAt) : null;
+                        const gracePeriodEnd = exp ? new Date(exp.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
+                        const isExpired = exp && now > exp;
+                        const isInGrace = isExpired && gracePeriodEnd && now <= gracePeriodEnd;
+                        const isPastGrace = isExpired && !isInGrace;
+
+                        const activeSubs = tenant.subsidiaries?.filter((s: any) => s.isActive).length ?? 0;
+                        const activeSuppliers = tenant.supplierProfiles?.length ?? 0;
+                        const maxSubs = tenant.maxSubsidiaries;
+                        const maxSup = tenant.maxSuppliers;
+
+                        const subsColor = maxSubs && activeSubs >= maxSubs ? 'text-red-600 font-semibold' : 'text-gray-700';
+                        const supColor = maxSup && activeSuppliers >= maxSup ? 'text-red-600 font-semibold' : 'text-gray-700';
+
+                        return (
+                            <div className="space-y-1 text-sm">
+                                <div className="flex items-center gap-1.5">
+                                    <Building2 className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                    <span className={subsColor}>{activeSubs}{maxSubs ? `/${maxSubs}` : ''}</span>
+                                    <span className="text-gray-400">subsidiarias</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <Users className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                    <span className={supColor}>{activeSuppliers}{maxSup ? `/${maxSup}` : ''}</span>
+                                    <span className="text-gray-400">proveedores</span>
+                                </div>
+                                {exp && (
+                                    <div className="flex items-center gap-1.5">
+                                        {isPastGrace ? <ShieldX className="w-3.5 h-3.5 text-red-500 flex-shrink-0" /> : isInGrace ? <ShieldAlert className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /> : <ShieldCheck className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />}
+                                        <span className={isPastGrace ? 'text-red-600 font-semibold' : isInGrace ? 'text-amber-600 font-semibold' : 'text-gray-600'}>
+                                            {isPastGrace ? 'Vencida' : isInGrace ? 'En gracia' : 'Vence'}: {exp.toLocaleDateString('es-MX')}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2 flex items-center justify-end">
                     <button onClick={() => onEdit(tenant)} className="text-gray-400 hover:text-indigo-600 p-2" title="Editar Credenciales">
@@ -358,7 +395,9 @@ WHERE
                     onClick={() => setEditingTenant({
                         name: '', netsuiteAccountId: '', netsuiteConsumerKey: '',
                         netsuiteConsumerSecret: '', netsuiteTokenId: '', netsuiteTokenSecret: '',
-                        netsuiteScriptId: '', netsuiteDeployId: ''
+                        netsuiteScriptId: '', netsuiteDeployId: '', supportEmail: '',
+                        maxSubsidiaries: '', maxSuppliers: '', subscriptionExpiresAt: '',
+                        subsidiariesToDeactivate: [],
                     })}
                     className="flex justify-center items-center py-2 px-4 shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -499,13 +538,99 @@ WHERE
                                     <input type="text" value={editingTenant.supportEmail || ''} onChange={(e) => setEditingTenant({ ...editingTenant, supportEmail: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="Ej: soporte@empresa.com, compras@empresa.com" />
                                     <p className="mt-1 text-xs text-gray-500">Separa múltiples correos con coma. Aquí llegarán las solicitudes de ayuda de los proveedores.</p>
                                 </div>
+
+                                {/* ── Sección Suscripción ── */}
+                                <div className="col-span-1 md:col-span-2 border-t pt-4">
+                                    <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 mb-3">
+                                        <Calendar className="w-4 h-4 text-indigo-500" /> Suscripción
+                                    </h4>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Vigencia del Portal</label>
+                                    <input
+                                        type="date"
+                                        value={editingTenant.subscriptionExpiresAt
+                                            ? (editingTenant.subscriptionExpiresAt instanceof Date
+                                                ? editingTenant.subscriptionExpiresAt.toISOString().split('T')[0]
+                                                : String(editingTenant.subscriptionExpiresAt).split('T')[0])
+                                            : ''}
+                                        onChange={(e) => setEditingTenant({ ...editingTenant, subscriptionExpiresAt: e.target.value })}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 col-span-1 md:col-span-1">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Máx. Subsidiarias</label>
+                                        <input
+                                            type="number" min="1"
+                                            value={editingTenant.maxSubsidiaries || ''}
+                                            onChange={(e) => setEditingTenant({ ...editingTenant, maxSubsidiaries: e.target.value, subsidiariesToDeactivate: [] })}
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium"
+                                            placeholder="Sin límite"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Máx. Proveedores</label>
+                                        <input
+                                            type="number" min="1"
+                                            value={editingTenant.maxSuppliers || ''}
+                                            onChange={(e) => setEditingTenant({ ...editingTenant, maxSuppliers: e.target.value })}
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium"
+                                            placeholder="Sin límite"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* ── Selector de subsidiarias a desactivar ── */}
+                                {(() => {
+                                    const activeSubsidiaries = (editingTenant.subsidiaries || []).filter((s: any) => s.isActive);
+                                    const maxSubs = editingTenant.maxSubsidiaries ? parseInt(editingTenant.maxSubsidiaries) : null;
+                                    const deactivateNeeded = maxSubs !== null ? Math.max(0, activeSubsidiaries.length - maxSubs) : 0;
+                                    if (deactivateNeeded <= 0) return null;
+                                    const selected: string[] = editingTenant.subsidiariesToDeactivate || [];
+                                    return (
+                                        <div className="col-span-1 md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                            <p className="text-sm font-semibold text-amber-800 mb-1">
+                                                Límite reducido — debes seleccionar <strong>{deactivateNeeded}</strong> subsidiaria(s) para desactivar
+                                            </p>
+                                            <p className="text-xs text-amber-700 mb-3">Seleccionadas: {selected.length} / {deactivateNeeded} requeridas</p>
+                                            <div className="space-y-2">
+                                                {activeSubsidiaries.map((sub: any) => (
+                                                    <label key={sub.id} className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selected.includes(sub.id)}
+                                                            onChange={(e) => {
+                                                                const updated = e.target.checked
+                                                                    ? [...selected, sub.id]
+                                                                    : selected.filter((id: string) => id !== sub.id);
+                                                                setEditingTenant({ ...editingTenant, subsidiariesToDeactivate: updated });
+                                                            }}
+                                                            className="rounded border-amber-400"
+                                                        />
+                                                        <span className="text-sm text-gray-800">{sub.name} <span className="text-gray-500">— {sub.businessName}</span></span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
-                            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
-                                <button type="button" onClick={() => setEditingTenant(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm">
-                                    {editingTenant.id ? 'Actualizar Empresa' : 'Guardar Empresa'}
-                                </button>
-                            </div>
+                            {(() => {
+                                const activeSubsidiaries = (editingTenant.subsidiaries || []).filter((s: any) => s.isActive);
+                                const maxSubs = editingTenant.maxSubsidiaries ? parseInt(editingTenant.maxSubsidiaries) : null;
+                                const deactivateNeeded = maxSubs !== null ? Math.max(0, activeSubsidiaries.length - maxSubs) : 0;
+                                const selected: string[] = editingTenant.subsidiariesToDeactivate || [];
+                                const isBlocked = deactivateNeeded > 0 && selected.length < deactivateNeeded;
+                                return (
+                                    <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                                        <button type="button" onClick={() => setEditingTenant(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded">Cancelar</button>
+                                        <button type="submit" disabled={isBlocked} className="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded shadow-sm">
+                                            {editingTenant.id ? 'Actualizar Empresa' : 'Guardar Empresa'}
+                                        </button>
+                                    </div>
+                                );
+                            })()}
                         </form>
                     </div>
                 </div>

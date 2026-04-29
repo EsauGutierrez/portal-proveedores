@@ -27,7 +27,11 @@ export async function GET(request: Request) {
         const tenants = await prisma.tenant.findMany({
             orderBy: { createdAt: 'desc' },
             include: {
-                subsidiaries: true, // <-- PARA TRAER EL DESGLOSE DE SUBSIDIARIAS
+                subsidiaries: true,
+                supplierProfiles: {
+                    where: { status: 'ACTIVE' },
+                    select: { id: true },
+                },
                 _count: {
                     select: { users: true, subsidiaries: true }
                 }
@@ -47,7 +51,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId, supportEmail } = body;
+        const { name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId, supportEmail, maxSubsidiaries, maxSuppliers, subscriptionExpiresAt } = body;
 
         if (!name) {
             return NextResponse.json({ message: 'El nombre de la empresa es obligatorio.' }, { status: 400 });
@@ -65,6 +69,9 @@ export async function POST(request: Request) {
                 netsuiteScriptId: netsuiteScriptId || null,
                 netsuiteDeployId: netsuiteDeployId || null,
                 supportEmail: supportEmail || null,
+                maxSubsidiaries: maxSubsidiaries ? parseInt(maxSubsidiaries) : null,
+                maxSuppliers: maxSuppliers ? parseInt(maxSuppliers) : null,
+                subscriptionExpiresAt: subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null,
             }
         });
 
@@ -107,25 +114,37 @@ export async function PUT(request: Request) {
 
     try {
         const body = await request.json();
-        const { id, name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId, supportEmail } = body;
+        const { id, name, netsuiteAccountId, netsuiteConsumerKey, netsuiteConsumerSecret, netsuiteTokenId, netsuiteTokenSecret, netsuiteScriptId, netsuiteDeployId, supportEmail, maxSubsidiaries, maxSuppliers, subscriptionExpiresAt, subsidiariesToDeactivate } = body;
 
         if (!id || !name) {
             return NextResponse.json({ message: 'El ID y nombre de la empresa son obligatorios.' }, { status: 400 });
         }
 
-        const updatedTenant = await prisma.tenant.update({
-            where: { id },
-            data: {
-                name,
-                netsuiteAccountId,
-                netsuiteConsumerKey,
-                netsuiteConsumerSec: netsuiteConsumerSecret,
-                netsuiteTokenId,
-                netsuiteTokenSecret,
-                netsuiteScriptId: netsuiteScriptId || null,
-                netsuiteDeployId: netsuiteDeployId || null,
-                supportEmail: supportEmail || null,
+        const updatedTenant = await prisma.$transaction(async (tx) => {
+            if (subsidiariesToDeactivate?.length) {
+                await tx.subsidiary.updateMany({
+                    where: { id: { in: subsidiariesToDeactivate }, tenantId: id },
+                    data: { isActive: false },
+                });
             }
+
+            return tx.tenant.update({
+                where: { id },
+                data: {
+                    name,
+                    netsuiteAccountId,
+                    netsuiteConsumerKey,
+                    netsuiteConsumerSec: netsuiteConsumerSecret,
+                    netsuiteTokenId,
+                    netsuiteTokenSecret,
+                    netsuiteScriptId: netsuiteScriptId || null,
+                    netsuiteDeployId: netsuiteDeployId || null,
+                    supportEmail: supportEmail || null,
+                    maxSubsidiaries: maxSubsidiaries ? parseInt(maxSubsidiaries) : null,
+                    maxSuppliers: maxSuppliers ? parseInt(maxSuppliers) : null,
+                    subscriptionExpiresAt: subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null,
+                },
+            });
         });
 
         return NextResponse.json(updatedTenant, { status: 200 });

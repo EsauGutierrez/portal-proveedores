@@ -44,8 +44,14 @@ export async function POST(request: Request) {
     }
 
     // 4. Lógica de autorización basada en el rol
+    const now = new Date();
+    const expiresAt = user.tenant?.subscriptionExpiresAt ? new Date(user.tenant.subscriptionExpiresAt) : null;
+    const gracePeriodEnd = expiresAt ? new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
+    const isExpired = expiresAt !== null && now > expiresAt;
+    const isInGrace = isExpired && gracePeriodEnd !== null && now <= gracePeriodEnd;
+    const isPastGrace = isExpired && !isInGrace;
+
     if (user.role === 'SUPPLIER') {
-      // Bloquear solo proveedores RECHAZADOS
       if (user.supplierProfile?.status === 'REJECTED') {
         return NextResponse.json(
           { message: 'Tu cuenta ha sido rechazada. Contacta a tu administrador.' },
@@ -53,18 +59,33 @@ export async function POST(request: Request) {
         );
       }
 
-      // Verificar que el Tenant de este proveedor esté activo
       if (user.tenant && !user.tenant.isActive) {
         return NextResponse.json(
           { message: 'El acceso al portal de esta empresa está suspendido.' },
           { status: 403 }
         );
       }
+
+      if (isExpired) {
+        const contactInfo = user.tenant?.supportEmail
+          ? `Para más información contacta a: ${user.tenant.supportEmail}`
+          : 'Por favor contacta a tu administrador para más información.';
+        return NextResponse.json(
+          { message: `El servicio se encuentra temporalmente en mantenimiento. ${contactInfo}`, errorCode: 'SERVICE_UNAVAILABLE' },
+          { status: 403 }
+        );
+      }
     } else if (user.role === 'TENANT_ADMIN') {
-      // Si es administrador del cliente, verificar que su empresa (Tenant) siga activa
       if (!user.tenant?.isActive) {
         return NextResponse.json(
           { message: 'La cuenta de tu empresa está suspendida. Contacta a soporte.' },
+          { status: 403 }
+        );
+      }
+
+      if (isPastGrace) {
+        return NextResponse.json(
+          { message: 'El acceso ha sido suspendido por vencimiento de suscripción. Por favor contacta a IMR para renovar.', errorCode: 'SUBSCRIPTION_EXPIRED' },
           { status: 403 }
         );
       }
@@ -93,6 +114,7 @@ export async function POST(request: Request) {
         supplierStatus: user.supplierProfile?.status || null,
         requireDocuments: user.supplierProfile?.requireDocuments || false,
         firstLogin: user.firstLogin,
+        subscriptionWarning: isInGrace,
       },
       process.env.JWT_SECRET!,
       {

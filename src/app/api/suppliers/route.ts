@@ -80,6 +80,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Este correo ya está registrado en el sistema.' }, { status: 409 });
     }
 
+    // Verificar límite de proveedores activos y preparar aviso
+    let supplierLimitWarning: string | null = null;
+    const tenantForLimit = await prisma.tenant.findUnique({
+      where: { id: decodedToken.tenantId },
+      select: { maxSuppliers: true },
+    });
+    if (tenantForLimit?.maxSuppliers !== null && tenantForLimit?.maxSuppliers !== undefined) {
+      const activeCount = await prisma.supplierProfile.count({
+        where: { tenantId: decodedToken.tenantId, status: 'ACTIVE' },
+      });
+      if (activeCount >= tenantForLimit.maxSuppliers) {
+        supplierLimitWarning = `Has alcanzado el límite de ${tenantForLimit.maxSuppliers} proveedores activos. La invitación se enviará, pero el proveedor no podrá acceder hasta que se amplíe el límite de tu suscripción.`;
+      }
+    }
+
     // Usar la subsidiaria indicada; si no se envió, tomar la primera del tenant como fallback
     let subsidiary = subsidiaryId
       ? await prisma.subsidiary.findFirst({ where: { id: subsidiaryId, tenantId: decodedToken.tenantId } })
@@ -162,7 +177,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       message: 'Proveedor invitado exitosamente.',
-      userId: newUser.id
+      userId: newUser.id,
+      ...(supplierLimitWarning && { warning: supplierLimitWarning }),
     }, { status: 201 });
 
   } catch (error) {

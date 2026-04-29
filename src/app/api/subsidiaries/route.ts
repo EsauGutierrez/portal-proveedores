@@ -102,6 +102,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // Validar límite de subsidiarias del tenant
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { maxSubsidiaries: true },
+    });
+    if (tenant?.maxSubsidiaries !== null && tenant?.maxSubsidiaries !== undefined) {
+      const activeCount = await prisma.subsidiary.count({ where: { tenantId, isActive: true } });
+      if (activeCount >= tenant.maxSubsidiaries) {
+        return NextResponse.json(
+          { message: `Has alcanzado el límite de ${tenant.maxSubsidiaries} subsidiarias activas para tu suscripción.` },
+          { status: 403 }
+        );
+      }
+    }
+
     // Validación: Verificar que el RFC no exista ya en la base de datos
     const existingSubsidiary = await prisma.subsidiary.findFirst({
       where: { rfc: cleanRfc }
