@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Loader2, TrendingUp, CheckCircle, Clock, AlertTriangle, Users,
     Building2, FileText, FileCheck, XCircle, Bell, ArrowRight,
-    DollarSign, UserPlus
+    DollarSign, UserPlus, ShieldCheck, ShieldAlert, ShieldX, CalendarDays
 } from 'lucide-react';
 import {
     BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -176,12 +176,98 @@ const OverviewPage = ({ user }) => {
     // ── ADMIN / TENANT_ADMIN VIEW ─────────────────────────────────────────────
     if (user.role === 'ADMIN' || user.role === 'TENANT_ADMIN') {
         const alertas = metrics.alertas || {};
+
+        // Datos de suscripción
+        const tenant = user.tenant;
+        const maxSubs = tenant?.maxSubsidiaries ?? null;
+        const maxSup  = tenant?.maxSuppliers ?? null;
+        const expAt   = tenant?.subscriptionExpiresAt ? new Date(tenant.subscriptionExpiresAt) : null;
+        const now     = new Date();
+        const gracePeriodEnd = expAt ? new Date(expAt.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
+        const isExpired  = expAt && now > expAt;
+        const isInGrace  = isExpired && gracePeriodEnd && now <= gracePeriodEnd;
+        const isPastGrace = isExpired && !isInGrace;
+        const subsActivas = metrics.subsidiariasActivas ?? 0;
+        const supActivos  = metrics.proveedoresActivos  ?? 0;
+
+        const hasSuscripcion = maxSubs !== null || maxSup !== null || expAt !== null;
+
         return (
             <div className="space-y-6">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800">Hola, {user?.name} 👋</h2>
                     <p className="text-gray-500 mt-1 text-sm">Aquí tienes un resumen de tu actividad en el portal.</p>
                 </div>
+
+                {/* ── Suscripción ─────────────────────────────────────────── */}
+                {hasSuscripcion && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Suscripción</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                            {/* Vigencia */}
+                            {expAt && (() => {
+                                const Icon  = isPastGrace ? ShieldX : isInGrace ? ShieldAlert : ShieldCheck;
+                                const color = isPastGrace ? 'text-red-600' : isInGrace ? 'text-amber-600' : 'text-green-600';
+                                const bg    = isPastGrace ? 'bg-red-50 border-red-200' : isInGrace ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200';
+                                const label = isPastGrace ? 'Suspendida' : isInGrace ? 'En periodo de gracia' : 'Vigente';
+                                const dias  = Math.ceil((expAt.getTime() - now.getTime()) / 86400000);
+                                return (
+                                    <div className={`flex items-center gap-3 rounded-lg border p-4 ${bg}`}>
+                                        <Icon className={`w-8 h-8 flex-shrink-0 ${color}`} />
+                                        <div>
+                                            <p className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{label}</p>
+                                            <p className="text-sm font-bold text-gray-800 mt-0.5">{expAt.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                            {!isPastGrace && <p className="text-xs text-gray-500 mt-0.5">{dias > 0 ? `Vence en ${dias} día${dias !== 1 ? 's' : ''}` : 'Vence hoy'}</p>}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Subsidiarias */}
+                            {maxSubs !== null && (() => {
+                                const pct  = Math.min(100, Math.round((subsActivas / maxSubs) * 100));
+                                const full = subsActivas >= maxSubs;
+                                return (
+                                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <Building2 className="w-4 h-4 text-gray-500" />
+                                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Subsidiarias</span>
+                                            </div>
+                                            <span className={`text-sm font-bold ${full ? 'text-red-600' : 'text-gray-800'}`}>{subsActivas} / {maxSubs}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div className={`h-2 rounded-full transition-all ${full ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                                        </div>
+                                        {full && <p className="text-xs text-red-600 mt-1.5 font-medium">Límite alcanzado</p>}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Proveedores */}
+                            {maxSup !== null && (() => {
+                                const pct  = Math.min(100, Math.round((supActivos / maxSup) * 100));
+                                const full = supActivos >= maxSup;
+                                return (
+                                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <Users className="w-4 h-4 text-gray-500" />
+                                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Proveedores activos</span>
+                                            </div>
+                                            <span className={`text-sm font-bold ${full ? 'text-red-600' : 'text-gray-800'}`}>{supActivos} / {maxSup}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div className={`h-2 rounded-full transition-all ${full ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                                        </div>
+                                        {full && <p className="text-xs text-red-600 mt-1.5 font-medium">Límite alcanzado</p>}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                )}
 
                 {/* Alertas */}
                 {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0) && (

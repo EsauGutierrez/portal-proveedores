@@ -81,7 +81,7 @@ export async function GET(request: Request) {
 
         // ─── ADMIN / TENANT_ADMIN ─────────────────────────────────────────
         } else if (role === 'ADMIN' || role === 'TENANT_ADMIN') {
-            const [supplierProfiles, invoices] = await Promise.all([
+            const [supplierProfiles, invoices, subsidiariasActivas] = await Promise.all([
                 prisma.supplierProfile.findMany({
                     where: { tenantId: tenantId! },
                     include: { user: { select: { name: true, email: true } } },
@@ -92,6 +92,7 @@ export async function GET(request: Request) {
                     include: { user: { select: { name: true } } },
                     orderBy: { createdAt: 'desc' },
                 }),
+                prisma.subsidiary.count({ where: { tenantId: tenantId!, isActive: true } }),
             ]);
 
             const provActivos = supplierProfiles.filter(p => p.status === 'ACTIVE').length;
@@ -145,6 +146,7 @@ export async function GET(request: Request) {
             resData = {
                 totalProveedores: supplierProfiles.length,
                 proveedoresActivos: provActivos,
+                subsidiariasActivas,
                 proveedoresPendientes: provPendientes,
                 proveedoresRechazados: provRechazados,
                 facturasRecibidas,
