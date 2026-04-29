@@ -27,6 +27,7 @@
     "next": "15.3.4",
     "nodemailer": "^8.0.5",
     "oauth-1.0a": "^2.2.6",
+    "pdfkit": "^0.18.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.8.1",
