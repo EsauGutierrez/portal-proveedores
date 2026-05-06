@@ -107,11 +107,10 @@ export async function syncPurchaseOrdersForTenant(
       BUILTIN.DF(t.subsidiary)    AS subsidiaria,
       BUILTIN.DF(t.entity)        AS proveedor,
       t.foreigntotal              AS total,
-      t.subtotal                  AS subtotalns,
       t.taxtotal                  AS taxtotal,
       t.entity                    AS proveedorId,
       v.vatregnumber              AS rfc,
-      t.custbody_es_consignacion  AS es_consignacion
+      NVL(t.custbody_es_consignacion, 'F') AS es_consignacion
     FROM
       transaction t
       JOIN Vendor v ON t.entity = v.id
