@@ -52,19 +52,31 @@ function body(doc, text) {
 }
 
 function bullet(doc, items) {
+  const bulletX  = 68;
+  const textX    = 84;
+  const textW    = doc.page.width - textX - 60;
   items.forEach(item => {
-    doc.fillColor(BLUE).font('Helvetica-Bold').fontSize(10.5).text('•', 68, doc.y, { continued: true, width: 12 });
-    doc.fillColor(DARK).font('Helvetica').fontSize(10.5).text('  ' + item, { width: doc.page.width - 140 });
-    doc.moveDown(0.2);
+    const y = doc.y;
+    doc.fillColor(BLUE).font('Helvetica-Bold').fontSize(10.5)
+       .text('•', bulletX, y, { width: 14, lineBreak: false });
+    doc.fillColor(DARK).font('Helvetica').fontSize(10.5)
+       .text(item, textX, y, { width: textW });
+    doc.moveDown(0.15);
   });
   doc.moveDown(0.3);
 }
 
 function numberedList(doc, items) {
+  const numX  = 68;
+  const textX = 90;
+  const textW = doc.page.width - textX - 60;
   items.forEach((item, i) => {
-    doc.fillColor(BLUE).font('Helvetica-Bold').fontSize(10.5).text(`${i + 1}.`, 68, doc.y, { continued: true, width: 18 });
-    doc.fillColor(DARK).font('Helvetica').fontSize(10.5).text('  ' + item, { width: doc.page.width - 148 });
-    doc.moveDown(0.25);
+    const y = doc.y;
+    doc.fillColor(BLUE).font('Helvetica-Bold').fontSize(10.5)
+       .text(`${i + 1}.`, numX, y, { width: 20, lineBreak: false });
+    doc.fillColor(DARK).font('Helvetica').fontSize(10.5)
+       .text(item, textX, y, { width: textW });
+    doc.moveDown(0.15);
   });
   doc.moveDown(0.4);
 }
