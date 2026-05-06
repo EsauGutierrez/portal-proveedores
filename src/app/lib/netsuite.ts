@@ -56,9 +56,19 @@ export async function querySuiteQL(q: string, creds: NetSuiteCredentials) {
     });
 
     if (!response.ok) {
-      const errorBody = await response.json();
-      console.error('Error de la API de NetSuite:', errorBody);
-      throw new Error(`Error al conectar con NetSuite: ${response.status} ${response.statusText}`);
+      let errorDetail = '';
+      try {
+        const errorBody = await response.json();
+        console.error('Error de la API de NetSuite:', JSON.stringify(errorBody));
+        const msg = errorBody?.['o:errorDetails']?.[0]?.detail
+          || errorBody?.message
+          || errorBody?.error?.message
+          || JSON.stringify(errorBody);
+        errorDetail = ` — ${msg}`;
+      } catch {
+        errorDetail = ` — ${await response.text().catch(() => '')}`;
+      }
+      throw new Error(`Error al conectar con NetSuite: ${response.status} ${response.statusText}${errorDetail}`);
     }
 
     const data = await response.json();
