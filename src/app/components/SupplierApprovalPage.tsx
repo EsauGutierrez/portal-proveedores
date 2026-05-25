@@ -626,7 +626,10 @@ const SupplierApprovalPage = () => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(formData)
       });
-      if (!res.ok) throw new Error('Error al actualizar.');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.message ?? 'Error al actualizar.');
+      }
       await fetchSuppliers();
       setIsEditModalOpen(false);
     } catch (err: any) {
