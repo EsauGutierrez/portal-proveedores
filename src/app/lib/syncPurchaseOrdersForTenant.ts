@@ -208,9 +208,9 @@ export async function syncPurchaseOrdersForTenant(
   for (const po of results) {
     try {
       // Buscar proveedor: primero por netsuiteId (inequívoco), luego por RFC (bootstrap)
-      let supplierProfile = po.proveedorId
+      let supplierProfile = po.proveedorid
         ? await prisma.supplierProfile.findFirst({
-            where: { tenantId, netsuiteId: String(po.proveedorId) },
+            where: { tenantId, netsuiteId: String(po.proveedorid) },
             select: { userId: true, id: true, netsuiteId: true },
           })
         : null;
@@ -226,10 +226,10 @@ export async function syncPurchaseOrdersForTenant(
       if (!supplierProfile) { skippedCount++; continue; }
 
       // Guardar netsuiteId si aún no lo tiene (bootstrap)
-      if (!supplierProfile.netsuiteId && po.proveedorId) {
+      if (!supplierProfile.netsuiteId && po.proveedorid) {
         await prisma.supplierProfile.update({
           where: { id: supplierProfile.id },
-          data: { netsuiteId: String(po.proveedorId) },
+          data: { netsuiteId: String(po.proveedorid) },
         });
       }
 
@@ -282,7 +282,7 @@ export async function syncPurchaseOrdersForTenant(
 
       objPoNetSuiteIdToPrismaId.set(po.po_netsuite_id, upsertedPo.id);
       if (po.po_netsuite_id) poNetSuiteIds.add(po.po_netsuite_id);
-      if (po.proveedorId) vendorNetSuiteIds.add(po.proveedorId);
+      if (po.proveedorid) vendorNetSuiteIds.add(po.proveedorid);
 
       if (!existing) { createdCount++; } else { updatedCount++; }
 
