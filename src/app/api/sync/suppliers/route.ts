@@ -106,7 +106,8 @@ export async function GET(request: Request) {
         taxAddress: 'Dirección no especificada',
         userId: user.id,
         subsidiaryId: defaultSubsidiary.id,
-        status: 'ACTIVE' as const
+        status: 'ACTIVE' as const,
+        netsuiteId: String(vendor.id),
       };
 
       const profile = await prisma.supplierProfile.upsert({

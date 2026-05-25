@@ -9,6 +9,9 @@ import { querySuiteQL } from './netsuite';
 
 const prisma = new PrismaClient();
 
+// RFC genéricos del SAT — pueden compartirse entre varios proveedores
+const GENERIC_RFCS = new Set(['XAXX010101000', 'XEXX010101000']);
+
 export interface SyncCreds {
   accountId: string;
   consumerKey: string;
@@ -80,7 +83,7 @@ export async function syncPurchaseOrdersForTenant(
   // 1. Proveedores activos del tenant
   const activeSuppliers = await prisma.supplierProfile.findMany({
     where: { tenantId, status: 'ACTIVE' },
-    select: { rfc: true, companyName: true, userId: true },
+    select: { rfc: true, companyName: true, userId: true, netsuiteId: true },
   });
 
   if (activeSuppliers.length === 0) {
@@ -95,10 +98,47 @@ export async function syncPurchaseOrdersForTenant(
     return { ...baseResult, durationMs, status: 'PARTIAL' };
   }
 
-  const rfcList = activeSuppliers.map(s => s.rfc.replace(/'/g, "''"));
-  const rfcClause = rfcList.map(r => `'${r}'`).join(', ');
+  // 2. Separar por estrategia de lookup:
+  //    - Con netsuiteId  → filtrar por t.entity (inequívoco)
+  //    - Sin netsuiteId y RFC único → filtrar por v.vatregnumber (bootstrap)
+  //    - Sin netsuiteId y RFC genérico → no se puede hacer bootstrap, se omiten
+  const withNsId    = activeSuppliers.filter(s => s.netsuiteId);
+  const withRfcOnly = activeSuppliers.filter(
+    s => !s.netsuiteId && !GENERIC_RFCS.has(s.rfc.toUpperCase().replace(/\s|-/g, ''))
+  );
 
-  // 2. Query SuiteQL para OC
+  const entityClause = withNsId.length > 0
+    ? withNsId.map(s => `'${s.netsuiteId!.replace(/'/g, "''")}'`).join(', ')
+    : null;
+
+  const rfcClause = withRfcOnly.length > 0
+    ? withRfcOnly.map(s => `'${s.rfc.replace(/'/g, "''")}'`).join(', ')
+    : null;
+
+  if (!entityClause && !rfcClause) {
+    const durationMs = Date.now() - startTime;
+    await prisma.syncLog.create({
+      data: {
+        type: syncType, status: 'PARTIAL', totalFound: 0,
+        durationMs, triggeredBy, tenantId,
+        errorMessage: 'Ningún proveedor activo tiene netsuiteId ni RFC único para sincronizar.',
+      },
+    });
+    return { ...baseResult, durationMs, status: 'PARTIAL' };
+  }
+
+  // 3. Construir la cláusula WHERE combinada
+  //    Si ambas están presentes: entity IN (...) OR vatregnumber IN (...)
+  //    Si solo una está presente: solo esa condición
+  let whereCondition: string;
+  if (entityClause && rfcClause) {
+    whereCondition = `(t.entity IN (${entityClause}) OR v.vatregnumber IN (${rfcClause}))`;
+  } else if (entityClause) {
+    whereCondition = `t.entity IN (${entityClause})`;
+  } else {
+    whereCondition = `v.vatregnumber IN (${rfcClause})`;
+  }
+
   const defaultQuery = `
     SELECT
       t.id                        AS po_netsuite_id,
@@ -116,15 +156,19 @@ export async function syncPurchaseOrdersForTenant(
       JOIN Vendor v ON t.entity = v.id
     WHERE
       t.type = 'PurchOrd'
-      AND v.vatregnumber IN (${rfcClause})
+      AND ${whereCondition}
   `;
 
+  // 4. Ejecutar queries (con soporte de custom queries por subsidiaria)
   let results: any[] = [];
   const subsidiariesWithCustomQuery = tenant.subsidiaries.filter(s => s.poSuiteqlQuery?.trim());
 
   if (subsidiariesWithCustomQuery.length > 0) {
     for (const sub of subsidiariesWithCustomQuery) {
-      const customQuery = sub.poSuiteqlQuery!.replace(/\{rfcClause\}/g, rfcClause);
+      const customQuery = sub.poSuiteqlQuery!
+        .replace(/\{rfcClause\}/g, rfcClause ?? "'NONE'")
+        .replace(/\{entityClause\}/g, entityClause ?? "'NONE'")
+        .replace(/\{whereCondition\}/g, whereCondition);
       const subResults = await querySuiteQL(customQuery, creds);
       results.push(...subResults);
     }
@@ -135,6 +179,14 @@ export async function syncPurchaseOrdersForTenant(
     results = await querySuiteQL(defaultQuery, creds);
   }
 
+  // Deduplicar por po_netsuite_id (puede haber solapamiento si el vendor estaba en ambas cláusulas)
+  const seen = new Set<string>();
+  results = results.filter(po => {
+    if (!po.po_netsuite_id || seen.has(po.po_netsuite_id)) return false;
+    seen.add(po.po_netsuite_id);
+    return true;
+  });
+
   if (results.length === 0) {
     const durationMs = Date.now() - startTime;
     await prisma.syncLog.create({
@@ -143,7 +195,7 @@ export async function syncPurchaseOrdersForTenant(
     return { ...baseResult, durationMs };
   }
 
-  // 3. Upsert de OC
+  // 5. Upsert de OC
   let createdCount = 0;
   let updatedCount = 0;
   let skippedCount = 0;
@@ -155,18 +207,29 @@ export async function syncPurchaseOrdersForTenant(
 
   for (const po of results) {
     try {
-      const rfcNormalizado = (po.rfc || '').toUpperCase().replace(/\s/g, '').replace(/-/g, '');
-      const supplierProfile = await prisma.supplierProfile.findFirst({
-        where: { tenantId, rfc: rfcNormalizado },
-        select: { userId: true, id: true, netsuiteId: true },
-      });
+      // Buscar proveedor: primero por netsuiteId (inequívoco), luego por RFC (bootstrap)
+      let supplierProfile = po.proveedorId
+        ? await prisma.supplierProfile.findFirst({
+            where: { tenantId, netsuiteId: String(po.proveedorId) },
+            select: { userId: true, id: true, netsuiteId: true },
+          })
+        : null;
+
+      if (!supplierProfile) {
+        const rfcNormalizado = (po.rfc || '').toUpperCase().replace(/\s/g, '').replace(/-/g, '');
+        supplierProfile = await prisma.supplierProfile.findFirst({
+          where: { tenantId, rfc: rfcNormalizado },
+          select: { userId: true, id: true, netsuiteId: true },
+        });
+      }
 
       if (!supplierProfile) { skippedCount++; continue; }
 
+      // Guardar netsuiteId si aún no lo tiene (bootstrap)
       if (!supplierProfile.netsuiteId && po.proveedorId) {
         await prisma.supplierProfile.update({
           where: { id: supplierProfile.id },
-          data: { netsuiteId: po.proveedorId },
+          data: { netsuiteId: String(po.proveedorId) },
         });
       }
 
@@ -229,7 +292,7 @@ export async function syncPurchaseOrdersForTenant(
     }
   }
 
-  // 4. Sync de Recepciones
+  // 6. Sync de Recepciones
   let rcptCreatedCount = 0;
   let rcptUpdatedCount = 0;
 
