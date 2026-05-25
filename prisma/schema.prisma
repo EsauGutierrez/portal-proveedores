@@ -85,7 +85,7 @@ model SupplierProfile {
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user         User               @relation(fields: [userId], references: [id])
 
-  @@unique([tenantId, rfc])
+  // Unicidad parcial: gestionada por índice en DB (excluye RFC genéricos XAXX/XEXX)
 }
 
 model SupplierDocument {

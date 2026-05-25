@@ -110,25 +110,32 @@ export async function GET(request: Request) {
         netsuiteId: String(vendor.id),
       };
 
-      const profile = await prisma.supplierProfile.upsert({
-        where: {
-          tenantId_rfc: {
-            tenantId,
-            rfc: rfcValue
-          }
-        },
-        update: supplierData,
-        create: {
-          ...supplierData,
-          rfc: rfcValue,
-          tenantId
-        }
+      // Buscar perfil existente: por netsuiteId, luego por RFC, luego por userId
+      let existing = await prisma.supplierProfile.findFirst({
+        where: { tenantId, netsuiteId: String(vendor.id) },
       });
+      if (!existing) {
+        existing = await prisma.supplierProfile.findFirst({
+          where: { tenantId, rfc: rfcValue },
+        });
+      }
+      if (!existing) {
+        existing = await prisma.supplierProfile.findUnique({
+          where: { userId: user.id },
+        });
+      }
 
-      if (profile.createdAt.getTime() === profile.updatedAt.getTime()) {
-        createdCount++;
-      } else {
+      if (existing) {
+        await prisma.supplierProfile.update({
+          where: { id: existing.id },
+          data: supplierData,
+        });
         updatedCount++;
+      } else {
+        await prisma.supplierProfile.create({
+          data: { ...supplierData, rfc: rfcValue, tenantId },
+        });
+        createdCount++;
       }
     }
 
