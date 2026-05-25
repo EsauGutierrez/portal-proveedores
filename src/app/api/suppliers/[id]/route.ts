@@ -89,21 +89,25 @@ export async function PATCH(
     if (rfc) {
       const normalizedRfc = rfc.toUpperCase().trim();
 
-      // Validar que el RFC no esté en uso por otro proveedor del mismo tenant
-      const existingRfc = await prisma.supplierProfile.findFirst({
-        where: {
-          tenantId: currentProfile.tenantId,
-          rfc: normalizedRfc,
-          NOT: { id }
-        },
-        select: { id: true, companyName: true }
-      });
+      // XAXX010101000 y XEXX010101000 son RFC genéricos del SAT — pueden repetirse
+      const isGenericRfc = ['XAXX010101000', 'XEXX010101000'].includes(normalizedRfc);
 
-      if (existingRfc) {
-        return NextResponse.json(
-          { message: `El RFC '${normalizedRfc}' ya está registrado para otro proveedor en este tenant.` },
-          { status: 409 }
-        );
+      if (!isGenericRfc) {
+        const existingRfc = await prisma.supplierProfile.findFirst({
+          where: {
+            tenantId: currentProfile.tenantId,
+            rfc: normalizedRfc,
+            NOT: { id }
+          },
+          select: { id: true }
+        });
+
+        if (existingRfc) {
+          return NextResponse.json(
+            { message: `El RFC '${normalizedRfc}' ya está registrado para otro proveedor en este tenant.` },
+            { status: 409 }
+          );
+        }
       }
 
       dataToUpdate.rfc = normalizedRfc;
