@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Check, X, Eye, Download, AlertTriangle, Clock, CheckCircle, XCircle, Edit, Power, PowerOff, Search, ChevronUp, ChevronDown, Mail } from 'lucide-react';
 
 const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
-  const [formData, setFormData] = useState({ companyName: '', rfc: '', contactName: '', email: '', password: '' });
+  const [formData, setFormData] = useState({ companyName: '', rfc: '', contactName: '', email: '', password: '', netsuiteId: '' });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -16,7 +16,8 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
         rfc: supplier.rfc || '',
         contactName: supplier.user?.name || '',
         email: supplier.user?.email || '',
-        password: '', // Siempre vacío por seguridad, solo se envía si se escribe algo nuevo
+        password: '',
+        netsuiteId: supplier.netsuiteId || '',
       });
     }
   }, [supplier]);
@@ -68,6 +69,12 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
               Nueva Contraseña <span className="text-gray-400 font-normal text-xs">(Dejar en blanco para no cambiar)</span>
             </label>
             <input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="••••••••" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              ID Interno NetSuite <span className="text-gray-400 font-normal text-xs">(Opcional — vincula al vendor en NetSuite)</span>
+            </label>
+            <input type="text" value={formData.netsuiteId} onChange={e => setFormData({ ...formData, netsuiteId: e.target.value })} placeholder="Ej. 1234" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 font-mono bg-white" />
           </div>
           <div className="flex justify-end pt-5 space-x-3 border-t mt-4 border-gray-100">
             <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 font-medium">Cancelar</button>

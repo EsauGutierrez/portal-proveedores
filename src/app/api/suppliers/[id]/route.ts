@@ -46,7 +46,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, companyName, rfc, contactName, email, password } = body;
+    const { status, companyName, rfc, contactName, email, password, netsuiteId } = body;
 
     // Primero obtenemos el perfil para conocer el userId y tenantId asociados
     const currentProfile = await prisma.supplierProfile.findUnique({
@@ -85,6 +85,7 @@ export async function PATCH(
     let dataToUpdate: any = {};
     if (status) dataToUpdate.status = status;
     if (companyName) dataToUpdate.companyName = companyName;
+    if (netsuiteId !== undefined) dataToUpdate.netsuiteId = netsuiteId?.trim() || null;
 
     if (rfc) {
       const normalizedRfc = rfc.toUpperCase().trim();
