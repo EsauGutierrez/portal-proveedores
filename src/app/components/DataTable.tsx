@@ -148,6 +148,30 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
   return <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50"><div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">{renderContent()}</div></div>;
 };
 
+// --- Componente: Modal para mostrar el error de sincronización de factura ---
+const SyncErrorModal = ({ isOpen, onClose, errorMessage }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-7 h-7 text-red-500 flex-shrink-0" />
+            <h3 className="text-xl font-bold text-gray-800">Detalle del Error</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-800 whitespace-pre-wrap break-words">{errorMessage || 'No se encontró detalle del error.'}</p>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Se añade la definición del componente que faltaba ---
 const UploadPaymentProofModal = ({ isOpen, onClose, payment }) => {
   if (!isOpen) return null;
@@ -182,6 +206,8 @@ export const DataTable = ({ title, data }) => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isSyncErrorModalOpen, setIsSyncErrorModalOpen] = useState(false);
+  const [syncErrorMessage, setSyncErrorMessage] = useState('');
 
   // Receptions checkbox state
   const [selectedReceptionsId, setSelectedReceptionsId] = useState<Record<string, string[]>>({});
@@ -243,6 +269,8 @@ export const DataTable = ({ title, data }) => {
   const handleCloseDetailsModal = () => setIsDetailsModalOpen(false);
   const handleOpenPaymentModal = (payment) => { setSelectedItem(payment); setIsPaymentModalOpen(true); };
   const handleClosePaymentModal = () => setIsPaymentModalOpen(false);
+  const handleOpenSyncErrorModal = (message: string) => { setSyncErrorMessage(message); setIsSyncErrorModalOpen(true); };
+  const handleCloseSyncErrorModal = () => setIsSyncErrorModalOpen(false);
 
   const SortableHeader = ({ columnKey, children, className = '' }) => {
     const isSorted = sortConfig.key === columnKey;
@@ -340,8 +368,8 @@ export const DataTable = ({ title, data }) => {
                             <span className="text-yellow-700 italic text-xs font-semibold px-2 py-1 bg-yellow-100 rounded-md whitespace-nowrap">En validación...</span>
                           ) : item.invoice?.syncStatus === 'FAILED' ? (
                             <span className="inline-flex flex-col items-center gap-1">
-                              <span title={item.invoice?.syncError || 'Error desconocido'} className="text-red-700 italic text-xs font-semibold px-2 py-1 bg-red-100 rounded-md whitespace-nowrap cursor-help">Factura con error</span>
-                              {item.invoice?.syncError && <button onClick={(e) => { e.stopPropagation(); alert(item.invoice?.syncError); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button>}
+                              <span className="text-red-700 italic text-xs font-semibold px-2 py-1 bg-red-100 rounded-md whitespace-nowrap">Factura con error</span>
+                              <button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.invoice?.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button>
                             </span>
                           ) : (
                             <button
@@ -353,7 +381,7 @@ export const DataTable = ({ title, data }) => {
                           )}
                         </td>
                       )}
-                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Validada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex flex-col items-center gap-1"><span title={item.syncError || 'Error desconocido'} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 cursor-help"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span>{item.syncError && <button onClick={(e) => { e.stopPropagation(); alert(item.syncError); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button>}</span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En validación</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
+                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Validada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex flex-col items-center gap-1"><span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span><button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button></span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En validación</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
                       {isPaymentTable && (<td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); handleOpenPaymentModal(item); }} className="bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Subir Comprobante</button></td>)}
                     </tr>
                     {canExpand && isExpanded && (
@@ -491,6 +519,7 @@ export const DataTable = ({ title, data }) => {
       />
       <ReceptionDetailsModal isOpen={isDetailsModalOpen} onClose={handleCloseDetailsModal} reception={selectedItem} />
       <UploadPaymentProofModal isOpen={isPaymentModalOpen} onClose={handleClosePaymentModal} payment={selectedItem} />
+      <SyncErrorModal isOpen={isSyncErrorModalOpen} onClose={handleCloseSyncErrorModal} errorMessage={syncErrorMessage} />
     </>
   );
 };

@@ -3,7 +3,40 @@
  * @NScriptType Restlet
  * @NModuleScope SameAccount
  */
-define(['N/record', 'N/search', 'N/error'], function (record, search, error) {
+define(['N/record', 'N/file', 'N/https'], function (record, file, https) {
+
+    const FOLDER_ID = 135902; // Carpeta destino en el File Cabinet de NetSuite
+
+    /**
+     * Descarga un archivo desde una URL (presigned S3) y lo guarda en el File Cabinet.
+     * Devuelve el internal ID del archivo creado, o null si falla.
+     */
+    function uploadToFileCabinet(url, fileName, fileType) {
+        try {
+            const response = https.get({ url: url });
+
+            if (response.code < 200 || response.code >= 300) {
+                log.error('uploadToFileCabinet: respuesta HTTP inesperada', { fileName, code: response.code });
+                return null;
+            }
+
+            const nsFile = file.create({
+                name: fileName,
+                fileType: fileType,
+                contents: response.body,
+                folder: FOLDER_ID,
+                isOnline: false
+            });
+
+            const fileId = nsFile.save();
+            log.audit('uploadToFileCabinet: archivo guardado', { fileName, fileId });
+            return fileId;
+
+        } catch (e) {
+            log.error('uploadToFileCabinet: excepción', { fileName, error: e.message });
+            return null;
+        }
+    }
 
     // Función que se dispara cuando AWS manda el POST con el JSON
     function doPost(requestBody) {
@@ -14,7 +47,7 @@ define(['N/record', 'N/search', 'N/error'], function (record, search, error) {
 
             // ─── Acción 1: Crear Vendor Bill desde Recepción / Orden de Compra ───────────
             if (action === 'createVendorBill') {
-                const { fromId, fromType, uuidFactura } = requestBody;
+                const { fromId, fromType, uuidFactura, facturaXMLUrl, facturaPDFUrl } = requestBody;
 
                 const vendorBill = record.transform({
                     fromType: fromType,
@@ -24,6 +57,30 @@ define(['N/record', 'N/search', 'N/error'], function (record, search, error) {
                 });
 
                 vendorBill.setValue({ fieldId: 'tranid', value: uuidFactura });
+
+                // Subir XML al File Cabinet y asignar al campo custbody_fe_sf_xml_sat
+                if (facturaXMLUrl) {
+                    const xmlFileId = uploadToFileCabinet(
+                        facturaXMLUrl,
+                        uuidFactura + '.xml',
+                        file.Type.XMLDOC
+                    );
+                    if (xmlFileId) {
+                        vendorBill.setValue({ fieldId: 'custbody_fe_sf_xml_sat', value: xmlFileId });
+                    }
+                }
+
+                // Subir PDF al File Cabinet y asignar al campo custbody_fe_sf_pdf
+                if (facturaPDFUrl) {
+                    const pdfFileId = uploadToFileCabinet(
+                        facturaPDFUrl,
+                        uuidFactura + '.pdf',
+                        file.Type.PDF
+                    );
+                    if (pdfFileId) {
+                        vendorBill.setValue({ fieldId: 'custbody_fe_sf_pdf', value: pdfFileId });
+                    }
+                }
 
                 const newBillId = vendorBill.save({
                     enableSourcing: true,
