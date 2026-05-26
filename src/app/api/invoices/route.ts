@@ -106,6 +106,7 @@ export async function GET(request: Request) {
         ordenDeCompra: poFolio,
         recepcion: receptionFolio,
         syncStatus: invoice.syncStatus,
+        syncError: invoice.syncError ?? null,
         pdfUrl: pdfPresignedUrl || invoice.pdfUrl,
         xmlUrl: xmlPresignedUrl || invoice.xmlUrl,
       };
