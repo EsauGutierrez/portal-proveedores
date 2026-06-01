@@ -75,23 +75,24 @@ export async function POST(request: Request) {
             const referenceFolio = primaryReception?.folio ?? invoice.purchaseOrder?.folio ?? 'N/A';
 
             // 4. Validar Totales Cruzados (omitido para consignación — saldo validado al subir)
+            const tolerance = invoice.tenant.invoiceTolerance ?? 0.5;
             const errors: string[] = [];
             if (!isConsignment) {
                 if (primaryReception) {
                     const receptionSubtotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
                     const receptionTotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
 
-                    if (Math.abs(Number(invoice.subtotal) - receptionSubtotal) > 0.5) {
-                        errors.push(`El subtotal de la factura ($${invoice.subtotal}) difiere de la recepción ($${receptionSubtotal.toFixed(2)}).`);
+                    if (Math.abs(Number(invoice.subtotal) - receptionSubtotal) > tolerance) {
+                        errors.push(`El subtotal de la factura ($${invoice.subtotal}) difiere de la recepción ($${receptionSubtotal.toFixed(2)}) — tolerancia configurada: $${tolerance.toFixed(2)}.`);
                     }
-                    if (Math.abs(Number(invoice.total) - receptionTotal) > 0.5) {
-                        errors.push(`El total de la factura ($${invoice.total}) difiere de la recepción ($${receptionTotal.toFixed(2)}).`);
+                    if (Math.abs(Number(invoice.total) - receptionTotal) > tolerance) {
+                        errors.push(`El total de la factura ($${invoice.total}) difiere de la recepción ($${receptionTotal.toFixed(2)}) — tolerancia configurada: $${tolerance.toFixed(2)}.`);
                     }
                 } else if (isPoLevelInvoice) {
                     // Para facturas integrales de OC validamos contra el total de la OC
                     const poTotal = Number(invoice.purchaseOrder!.total);
-                    if (poTotal > 0 && Math.abs(Number(invoice.total) - poTotal) > 0.5) {
-                        errors.push(`El total de la factura ($${invoice.total}) difiere del total de la OC ($${poTotal.toFixed(2)}).`);
+                    if (poTotal > 0 && Math.abs(Number(invoice.total) - poTotal) > tolerance) {
+                        errors.push(`El total de la factura ($${invoice.total}) difiere del total de la OC ($${poTotal.toFixed(2)}) — tolerancia configurada: $${tolerance.toFixed(2)}.`);
                     }
                 } else {
                     await updateSyncStatus(invoiceId, 'FAILED', 'La factura no tiene recepción ni orden de compra asociada.');
