@@ -13,6 +13,7 @@ import SuperAdminTenantsPage from './SuperAdminTenantsPage';
 import AdminInvoicesPage from './AdminInvoicesPage';
 import OverviewPage from './OverviewPage';
 import DocumentSettingsPage from './DocumentSettingsPage';
+import InvoiceSettingsPage from './InvoiceSettingsPage';
 import PaymentComplementsPage from './PaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
 import SyncLogsPage from './SyncLogsPage';
@@ -30,7 +31,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -138,6 +139,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'empresas': return <SuperAdminTenantsPage />;
             case 'facturas_admin': return <AdminInvoicesPage />;
             case 'ajustes_documentos': return <DocumentSettingsPage />;
+            case 'ajustes_facturas': return <InvoiceSettingsPage />;
             case 'soporte': return <SupportRequestPage />;
             case 'sync_logs': return <SyncLogsPage />;
             default: return <OverviewPage user={user} />;
@@ -191,6 +193,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                 <NavLink view="proveedores" icon={Users} label="Proveedores" />
                                 <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
                                 <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
+                                <NavLink view="ajustes_facturas" icon={Settings} label="Config. de Facturas" />
                                 <NavLink view="sync_logs" icon={DatabaseZap} label="Log de Sincronización" />
                             </>
                         )}
