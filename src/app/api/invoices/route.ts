@@ -1,7 +1,7 @@
 // app/api/invoices/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js'; // Se añade la importación para leer XML
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
@@ -139,8 +139,13 @@ export async function POST(request: Request) {
     }
 
     // --- EXTRACCIÓN BÁSICA DEL XML ---
-    const xmlText = await xmlFile.text();
-    const xmlData = await parseStringPromise(xmlText, { explicitArray: false, trim: true });
+    let xmlData: any;
+    try {
+      const xmlText = await xmlFile.text();
+      xmlData = await parseStringPromise(xmlText, { explicitArray: false, trim: true });
+    } catch (parseError) {
+      return NextResponse.json({ message: 'El archivo XML no se pudo leer. Verifica que sea un CFDI válido.', error: (parseError as Error).message }, { status: 400 });
+    }
 
     const comprobante = xmlData['cfdi:Comprobante'];
     if (!comprobante) {
@@ -364,6 +369,14 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Error al procesar la factura:', error);
+
+    // Violación de constraint única: mismo UUID/folio ya existe para este tenant
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({
+        message: 'Esta factura (UUID) ya fue registrada anteriormente en el sistema. No se puede cargar dos veces el mismo CFDI.',
+      }, { status: 409 });
+    }
+
     return NextResponse.json({ message: 'Error interno al procesar la factura.', error: (error as Error).message }, { status: 500 });
   }
 }

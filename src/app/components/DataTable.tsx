@@ -106,7 +106,8 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
 
       if (!response.ok) {
         const detailedErrors = result.errors ? result.errors.join('\n- ') : '';
-        const finalMessage = `${result.message}\n${detailedErrors ? '- ' + detailedErrors : ''}`;
+        const errorDetail = result.error ? `\nDetalle: ${result.error}` : '';
+        const finalMessage = `${result.message}${detailedErrors ? '\n- ' + detailedErrors : ''}${errorDetail}`;
         throw new Error(finalMessage);
       }
 
