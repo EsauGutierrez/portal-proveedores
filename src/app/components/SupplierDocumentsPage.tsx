@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock, UploadCloud, Download, AlertCircle, FileText, RefreshCw } from 'lucide-react';
 
+<<<<<<< HEAD
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
@@ -13,6 +14,8 @@ function validateFile(file: File): string | null {
   return null;
 }
 
+=======
+>>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
 type DocStatus = 'PENDING' | 'UPLOADED' | 'APPROVED' | 'REJECTED';
 
 interface DocRow {
@@ -118,12 +121,15 @@ const SupplierDocumentsPage = ({ user }: { user: any }) => {
     if (!file) return;
     e.target.value = '';
 
+<<<<<<< HEAD
     const fileError = validateFile(file);
     if (fileError) {
       showNotification('error', fileError);
       return;
     }
 
+=======
+>>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
     setUploading(prev => ({ ...prev, [documentType]: true }));
     try {
       const token = localStorage.getItem('token');

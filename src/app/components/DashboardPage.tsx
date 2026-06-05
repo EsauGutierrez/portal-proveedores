@@ -31,7 +31,11 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
+<<<<<<< HEAD
         if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
+=======
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
+>>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
             setIsLoading(false);
             return;
         }
