@@ -37,12 +37,16 @@ model Tenant {
 }
 
 model DocumentRequirement {
-  id           String  @id @default(cuid())
+  id           String       @id @default(cuid())
   documentType String
-  isRequired   Boolean @default(true)
-  isOcrEnabled Boolean @default(true)
+  name         String       @default("")
+  isRequired   Boolean      @default(true)
+  isOcrEnabled Boolean      @default(true)
+  isActive     Boolean      @default(true)
+  isSystem     Boolean      @default(false)
+  supplierType SupplierType @default(BOTH)
   tenantId     String
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, documentType])
 }
@@ -81,6 +85,7 @@ model SupplierProfile {
   tenantId     String
   netsuiteId        String?
   requireDocuments  Boolean            @default(false)
+  supplierType      SupplierType       @default(NATIONAL)
   documents         SupplierDocument[]
   subsidiary   Subsidiary         @relation(fields: [subsidiaryId], references: [id])
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -284,4 +289,10 @@ enum PaymentComplementStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum SupplierType {
+  NATIONAL
+  FOREIGN
+  BOTH
 }

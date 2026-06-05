@@ -1,17 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, UploadCloud, CheckCircle, FileText, AlertCircle, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle, FileText, AlertCircle, ArrowRight } from 'lucide-react';
 
-const DOCUMENT_LABELS: Record<string, string> = {
-  CONSTANCIA_SITUACION_FISCAL: 'Constancia de Situación Fiscal',
-  OPINION_CUMPLIMIENTO_SAT: 'Opinión de Cumplimiento (SAT)',
-  IDENTIFICACION_OFICIAL: 'Identificación Oficial del Representante',
-  COMPROBANTE_DOMICILIO: 'Comprobante de Domicilio',
-  ACTA_CONSTITUTIVA: 'Acta Constitutiva',
-};
-
-const SupplierDocUploadPage = ({ user, onDocumentsUploaded }: { user: any; onDocumentsUploaded: () => void }) => {
+const SupplierDocUploadPage = ({ onDocumentsUploaded }: { user: any; onDocumentsUploaded: () => void }) => {
     const [docRequirements, setDocRequirements] = useState<any[]>([]);
     const [uploadedDocs, setUploadedDocs] = useState<Record<string, 'idle' | 'uploading' | 'done' | 'error'>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -107,7 +99,7 @@ const SupplierDocUploadPage = ({ user, onDocumentsUploaded }: { user: any; onDoc
                 <div className="space-y-3 mb-6">
                     {docRequirements.map((doc) => {
                         const state = uploadedDocs[doc.documentType] ?? 'idle';
-                        const label = DOCUMENT_LABELS[doc.documentType] || doc.documentType;
+                        const label = doc.name || doc.documentType;
 
                         return (
                             <div

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Configuración del cliente S3 con las variables de entorno
@@ -74,4 +74,19 @@ export async function getPresignedUrl(fileKey: string): Promise<string> {
         console.error("Error generando presigned URL para", cleanKey, error);
         return '';
     }
+}
+
+/**
+ * Elimina un archivo de S3 dado su key interno.
+ * @param fileKey La clave interna del archivo en S3 (guardada en base de datos).
+ */
+export async function deleteFromS3(fileKey: string): Promise<void> {
+    if (!fileKey || fileKey.startsWith('http')) return;
+
+    const command = new DeleteObjectCommand({
+        Bucket: (process.env.APP_AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME)!,
+        Key: fileKey,
+    });
+
+    await s3Client.send(command);
 }
