@@ -136,7 +136,7 @@ const ConfirmToggleModal = ({ supplier, isOpen, onClose, onConfirm }) => {
 
 // --- Componente Modal para Invitar Proveedor ---
 const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', subsidiaryId: '', requireDocuments: false });
+  const [formData, setFormData] = useState({ name: '', email: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
   const [isSaving, setIsSaving] = useState(false);
   const [subsidiaries, setSubsidiaries] = useState<any[]>([]);
   const [loadingSubsidiaries, setLoadingSubsidiaries] = useState(false);
@@ -169,7 +169,7 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
     setIsSaving(true);
     await onInvite(formData);
     setIsSaving(false);
-    setFormData({ name: '', email: '', subsidiaryId: '', requireDocuments: false });
+    setFormData({ name: '', email: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
   };
 
   return (
@@ -207,6 +207,31 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
             )}
           </div>
 
+          {/* Tipo de proveedor */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Proveedor</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'NATIONAL', label: 'Nacional', desc: 'Proveedor con RFC mexicano' },
+                { value: 'FOREIGN', label: 'Extranjero', desc: 'Proveedor de otro país' },
+              ].map(opt => (
+                <div
+                  key={opt.value}
+                  onClick={() => setFormData({ ...formData, supplierType: opt.value })}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${formData.supplierType === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${formData.supplierType === opt.value ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
+                      {formData.supplierType === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800">{opt.label}</p>
+                  </div>
+                  <p className="text-xs text-gray-500 ml-6">{opt.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Checkbox: Solicitar documentación */}
           <div
             onClick={() => setFormData({ ...formData, requireDocuments: !formData.requireDocuments })}
@@ -238,23 +263,36 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
   const [rejectingDocId, setRejectingDocId] = React.useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [isSubmittingReject, setIsSubmittingReject] = React.useState(false);
+  const [docRequirements, setDocRequirements] = React.useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isOpen || !supplier) return;
+    const fetchDocs = async () => {
+      setLoadingDocs(true);
+      try {
+        const token = localStorage.getItem('token');
+        const supplierType = supplier.supplierType || 'NATIONAL';
+        const res = await fetch(`/api/settings/documents?forSupplierType=${supplierType}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) setDocRequirements(await res.json());
+      } finally {
+        setLoadingDocs(false);
+      }
+    };
+    fetchDocs();
+  }, [isOpen, supplier]);
 
   if (!isOpen) return null;
 
-  const documentTypes = [
-    { type: 'CONSTANCIA_SITUACION_FISCAL', displayName: 'Constancia de Situación Fiscal' },
-    { type: 'OPINION_CUMPLIMIENTO_SAT', displayName: 'Opinión de Cumplimiento (SAT)' },
-    { type: 'IDENTIFICACION_OFICIAL', displayName: 'Identificación Oficial del Representante' },
-    { type: 'COMPROBANTE_DOMICILIO', displayName: 'Comprobante de Domicilio' },
-    { type: 'ACTA_CONSTITUTIVA', displayName: 'Acta Constitutiva' },
-  ];
-
-  const documentsToShow = documentTypes.map(reqDoc => {
-    const uploadedDoc = supplier.documents?.find(doc => doc.documentType === reqDoc.type);
+  const documentsToShow = docRequirements.map(reqDoc => {
+    const uploadedDoc = supplier.documents?.find((doc: any) => doc.documentType === reqDoc.documentType);
     return {
       id: uploadedDoc?.id,
-      displayName: reqDoc.displayName,
-      type: reqDoc.type,
+      displayName: reqDoc.name || reqDoc.documentType,
+      type: reqDoc.documentType,
+      isRequired: reqDoc.isRequired,
       fileName: uploadedDoc?.fileName,
       fileUrl: uploadedDoc?.fileUrl,
       status: uploadedDoc?.status || 'PENDING',
@@ -295,12 +333,26 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
           </div>
           <p className="text-gray-600 mb-6">RFC: {supplier.rfc} | Contacto: {supplier.user.name}</p>
 
-          <h4 className="text-lg font-semibold text-gray-700 mb-4">Validación de Documentos</h4>
+          <h4 className="text-lg font-semibold text-gray-700 mb-4">
+            Validación de Documentos
+            {supplier.supplierType && (
+              <span className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full ${supplier.supplierType === 'FOREIGN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                {supplier.supplierType === 'FOREIGN' ? 'Extranjero' : 'Nacional'}
+              </span>
+            )}
+          </h4>
           <div className="space-y-3 border rounded-lg p-4 max-h-72 overflow-y-auto">
-            {documentsToShow.map((doc) => (
+            {loadingDocs ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>
+            ) : documentsToShow.map((doc) => (
               <div key={doc.type} className="flex items-start justify-between p-3 rounded-md hover:bg-gray-50 gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800">{doc.displayName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-800">{doc.displayName}</p>
+                    {!doc.isRequired && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">Opcional</span>
+                    )}
+                  </div>
                   {doc.fileName && <p className="text-xs text-gray-500 truncate">{doc.fileName}</p>}
                   {doc.status === 'REJECTED' && doc.rejectionReason && (
                     <p className="text-xs text-red-600 mt-1 bg-red-50 px-2 py-1 rounded">

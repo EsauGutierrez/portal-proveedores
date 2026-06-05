@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Home, DollarSign, LogOut, User, Book, Loader2, AlertCircle, Users, Building2, Menu, HelpCircle } from 'lucide-react';
+import { FileText, Home, LogOut, User, Book, Loader2, AlertCircle, Users, Building2, Menu, HelpCircle } from 'lucide-react';
 import DataTable from './DataTable';
 import ProfilePage from './ProfilePage';
 import DocumentationPage from './DocumentationPage';
@@ -16,6 +16,7 @@ import DocumentSettingsPage from './DocumentSettingsPage';
 import PaymentComplementsPage from './PaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
 import SyncLogsPage from './SyncLogsPage';
+import SupplierDocumentsPage from './SupplierDocumentsPage';
 import { LayoutDashboard, Settings, DatabaseZap } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
@@ -29,7 +30,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte', 'sync_logs'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -129,6 +130,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <PaymentComplementsPage user={user} />;
+            case 'mis_documentos': return <SupplierDocumentsPage user={user} />;
             case 'perfil': return <ProfilePage />;
             case 'documentacion': return <DocumentationPage />;
             case 'proveedores': return <SupplierApprovalPage />;
@@ -178,6 +180,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                 <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
                                 <NavLink view="facturas" icon={FileText} label="Facturas" />
                                 <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
+                                <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
                         )}

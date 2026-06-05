@@ -3,8 +3,39 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
-import { uploadFileToS3 } from '../../lib/s3';
+import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 const prisma = new PrismaClient();
+
+export async function GET(request: Request) {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
+    }
+    const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as { userId: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: { supplierProfile: { include: { documents: true } } },
+    });
+
+    if (!user?.supplierProfile) {
+      return NextResponse.json({ message: 'Perfil de proveedor no encontrado.' }, { status: 404 });
+    }
+
+    const docs = await Promise.all(
+      user.supplierProfile.documents.map(async (doc) => ({
+        ...doc,
+        fileUrl: doc.fileUrl ? await getPresignedUrl(doc.fileUrl) : null,
+      }))
+    );
+
+    return NextResponse.json(docs);
+  } catch (error) {
+    console.error('Error al obtener documentos del proveedor:', error);
+    return NextResponse.json({ message: 'Error interno del servidor.' }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {
