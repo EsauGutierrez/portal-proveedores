@@ -6,7 +6,6 @@ import jwt from 'jsonwebtoken';
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 const prisma = new PrismaClient();
 
-<<<<<<< HEAD
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
@@ -34,8 +33,6 @@ async function validateUploadedFile(file: File): Promise<string | null> {
   return null;
 }
 
-=======
->>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');

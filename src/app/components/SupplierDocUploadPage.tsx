@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, FileText, AlertCircle, ArrowRight } from 'lucide-react';
 
-<<<<<<< HEAD
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
@@ -14,8 +13,6 @@ function validateFile(file: File): string | null {
   return null;
 }
 
-=======
->>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
 const SupplierDocUploadPage = ({ onDocumentsUploaded }: { user: any; onDocumentsUploaded: () => void }) => {
     const [docRequirements, setDocRequirements] = useState<any[]>([]);
     const [uploadedDocs, setUploadedDocs] = useState<Record<string, 'idle' | 'uploading' | 'done' | 'error'>>({});
