@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, UploadCloud, CheckCircle, FileText, AlertCircle, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle, FileText, AlertCircle, ArrowRight } from 'lucide-react';
 
-const DOCUMENT_LABELS: Record<string, string> = {
-  CONSTANCIA_SITUACION_FISCAL: 'Constancia de Situación Fiscal',
-  OPINION_CUMPLIMIENTO_SAT: 'Opinión de Cumplimiento (SAT)',
-  IDENTIFICACION_OFICIAL: 'Identificación Oficial del Representante',
-  COMPROBANTE_DOMICILIO: 'Comprobante de Domicilio',
-  ACTA_CONSTITUTIVA: 'Acta Constitutiva',
-};
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
-const SupplierDocUploadPage = ({ user, onDocumentsUploaded }: { user: any; onDocumentsUploaded: () => void }) => {
+function validateFile(file: File): string | null {
+  if (file.size > MAX_FILE_SIZE) return `El archivo no puede superar los ${MAX_FILE_SIZE_MB} MB.`;
+  if (!ALLOWED_TYPES.has(file.type)) return 'Solo se aceptan archivos PDF, JPG o PNG.';
+  return null;
+}
+
+const SupplierDocUploadPage = ({ onDocumentsUploaded }: { user: any; onDocumentsUploaded: () => void }) => {
     const [docRequirements, setDocRequirements] = useState<any[]>([]);
     const [uploadedDocs, setUploadedDocs] = useState<Record<string, 'idle' | 'uploading' | 'done' | 'error'>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +45,14 @@ const SupplierDocUploadPage = ({ user, onDocumentsUploaded }: { user: any; onDoc
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, documentType: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        e.target.value = '';
+
+        const fileError = validateFile(file);
+        if (fileError) {
+            setGlobalError(fileError);
+            return;
+        }
+        setGlobalError('');
 
         setUploadedDocs(prev => ({ ...prev, [documentType]: 'uploading' }));
 
@@ -107,7 +117,7 @@ const SupplierDocUploadPage = ({ user, onDocumentsUploaded }: { user: any; onDoc
                 <div className="space-y-3 mb-6">
                     {docRequirements.map((doc) => {
                         const state = uploadedDocs[doc.documentType] ?? 'idle';
-                        const label = DOCUMENT_LABELS[doc.documentType] || doc.documentType;
+                        const label = doc.name || doc.documentType;
 
                         return (
                             <div
