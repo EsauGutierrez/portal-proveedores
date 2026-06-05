@@ -3,6 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, FileText, AlertCircle, ArrowRight } from 'lucide-react';
 
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+function validateFile(file: File): string | null {
+  if (file.size > MAX_FILE_SIZE) return `El archivo no puede superar los ${MAX_FILE_SIZE_MB} MB.`;
+  if (!ALLOWED_TYPES.has(file.type)) return 'Solo se aceptan archivos PDF, JPG o PNG.';
+  return null;
+}
+
 const SupplierDocUploadPage = ({ onDocumentsUploaded }: { user: any; onDocumentsUploaded: () => void }) => {
     const [docRequirements, setDocRequirements] = useState<any[]>([]);
     const [uploadedDocs, setUploadedDocs] = useState<Record<string, 'idle' | 'uploading' | 'done' | 'error'>>({});
@@ -35,6 +45,14 @@ const SupplierDocUploadPage = ({ onDocumentsUploaded }: { user: any; onDocuments
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, documentType: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        e.target.value = '';
+
+        const fileError = validateFile(file);
+        if (fileError) {
+            setGlobalError(fileError);
+            return;
+        }
+        setGlobalError('');
 
         setUploadedDocs(prev => ({ ...prev, [documentType]: 'uploading' }));
 

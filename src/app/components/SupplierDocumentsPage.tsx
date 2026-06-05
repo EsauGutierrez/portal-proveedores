@@ -3,6 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock, UploadCloud, Download, AlertCircle, FileText, RefreshCw } from 'lucide-react';
 
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+function validateFile(file: File): string | null {
+  if (file.size > MAX_FILE_SIZE) return `El archivo no puede superar los ${MAX_FILE_SIZE_MB} MB.`;
+  if (!ALLOWED_TYPES.has(file.type)) return 'Solo se aceptan archivos PDF, JPG o PNG.';
+  return null;
+}
+
 type DocStatus = 'PENDING' | 'UPLOADED' | 'APPROVED' | 'REJECTED';
 
 interface DocRow {
@@ -107,6 +117,12 @@ const SupplierDocumentsPage = ({ user }: { user: any }) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+
+    const fileError = validateFile(file);
+    if (fileError) {
+      showNotification('error', fileError);
+      return;
+    }
 
     setUploading(prev => ({ ...prev, [documentType]: true }));
     try {
