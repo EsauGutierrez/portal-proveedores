@@ -18,11 +18,14 @@ import PaymentComplementsPage from './PaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
 import SyncLogsPage from './SyncLogsPage';
 import SupplierDocumentsPage from './SupplierDocumentsPage';
+import OperatorsPage from './OperatorsPage';
+import CargadorPage from './CargadorPage';
 import { LayoutDashboard, Settings, DatabaseZap } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
-    // La vista inicial ahora depende del rol del usuario.
-    const [activeView, setActiveView] = useState('resumen');
+    // La vista inicial depende del rol del usuario.
+    // CARGADOR inicia directamente en su vista de selección de proveedor.
+    const [activeView, setActiveView] = useState(user?.role === 'CARGADOR' ? 'cargador_home' : 'resumen');
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +34,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'soporte', 'sync_logs', 'mis_documentos', 'cargadores'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -142,6 +145,8 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'ajustes_facturas': return <InvoiceSettingsPage />;
             case 'soporte': return <SupportRequestPage />;
             case 'sync_logs': return <SyncLogsPage />;
+            case 'cargadores': return <OperatorsPage />;
+            case 'cargador_home': return <CargadorPage user={user} />;
             default: return <OverviewPage user={user} />;
         }
     };
@@ -175,7 +180,14 @@ const DashboardPage = ({ user, onLogout }) => {
                         )}
                     </div>
                     <nav className="flex-grow space-y-2">
-                        <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
+                        {user?.role !== 'CARGADOR' && <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />}
+
+                        {user && user.role === 'CARGADOR' && (
+                            <>
+                                <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
+                                <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
+                            </>
+                        )}
 
                         {user && user.role === 'SUPPLIER' && (
                             <>
@@ -191,6 +203,7 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="facturas_admin" icon={FileText} label="Facturas y Documentos" />
                                 <NavLink view="proveedores" icon={Users} label="Proveedores" />
+                                <NavLink view="cargadores" icon={Users} label="Cargadores" />
                                 <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
                                 <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
                                 <NavLink view="ajustes_facturas" icon={Settings} label="Config. de Facturas" />

@@ -23,6 +23,7 @@ model Tenant {
   maxSuppliers          Int?
   subscriptionExpiresAt DateTime?
   invoiceTolerance      Float               @default(0.5)
+  bulkUploadForSuppliers Boolean            @default(false)
   createdAt             DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   invoices            Invoice[]
@@ -34,6 +35,8 @@ model Tenant {
   syncLogs            SyncLog[]
   users               User[]
   documentRequirements DocumentRequirement[]
+  operatorAssignments  OperatorAssignment[]
+  bulkUploadJobs       BulkUploadJob[]
 }
 
 model DocumentRequirement {
@@ -70,6 +73,9 @@ model User {
   purchaseOrders       PurchaseOrder[]
   supplierProfile      SupplierProfile?
   tenant               Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operatorAssignments  OperatorAssignment[] @relation("OperatorUser")
+  uploadedInvoices     Invoice[]            @relation("InvoiceUploadedBy")
+  bulkUploadJobs       BulkUploadJob[]
 }
 
 model SupplierProfile {
@@ -86,10 +92,11 @@ model SupplierProfile {
   netsuiteId        String?
   requireDocuments  Boolean            @default(false)
   supplierType      SupplierType       @default(NATIONAL)
-  documents         SupplierDocument[]
-  subsidiary   Subsidiary         @relation(fields: [subsidiaryId], references: [id])
-  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user         User               @relation(fields: [userId], references: [id])
+  documents           SupplierDocument[]
+  subsidiary          Subsidiary          @relation(fields: [subsidiaryId], references: [id])
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                User                @relation(fields: [userId], references: [id])
+  operatorAssignments OperatorAssignment[]
 
   // Unicidad parcial: gestionada por índice en DB (excluye RFC genéricos XAXX/XEXX)
 }
@@ -196,12 +203,18 @@ model Invoice {
   purchaseOrderId    String?
   syncError          String?
   syncStatus         InvoiceSyncStatus   @default(PENDING_SYNC)
-  netsuiteId         String?             // Internal ID del VendorBill en NetSuite
+  netsuiteId         String?
   tenantId           String
+  uploadedBy         String?
+  bulkJobId          String?
+  matchMethod        MatchMethod?
+  pendingAssignment  Boolean             @default(false)
   purchaseOrder      PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
   receptions         Reception[]
   tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user               User                @relation(fields: [userId], references: [id])
+  uploadedByUser     User?               @relation("InvoiceUploadedBy", fields: [uploadedBy], references: [id])
+  bulkJob            BulkUploadJob?      @relation(fields: [bulkJobId], references: [id])
   paymentComplements PaymentComplement[]
 
   @@unique([tenantId, folio])
@@ -259,12 +272,26 @@ enum Role {
   SUPERADMIN
   TENANT_ADMIN
   SUPPLIER
+  CARGADOR
 }
 
 enum InvoiceSyncStatus {
   PENDING_SYNC
   SYNCED
   FAILED
+  PENDING_ASSIGNMENT
+}
+
+enum MatchMethod {
+  AUTO
+  MANUAL
+  STANDALONE
+}
+
+enum BulkJobStatus {
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
 }
 
 enum DocumentStatus {
@@ -295,4 +322,34 @@ enum SupplierType {
   NATIONAL
   FOREIGN
   BOTH
+}
+
+model OperatorAssignment {
+  id                String          @id @default(cuid())
+  operatorId        String
+  supplierProfileId String
+  tenantId          String
+  createdAt         DateTime        @default(now())
+  operator          User            @relation("OperatorUser", fields: [operatorId], references: [id])
+  supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id])
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([operatorId, supplierProfileId])
+}
+
+model BulkUploadJob {
+  id          String        @id @default(cuid())
+  uploadedBy  String
+  tenantId    String
+  totalFiles  Int           @default(0)
+  processed   Int           @default(0)
+  succeeded   Int           @default(0)
+  failed      Int           @default(0)
+  pending     Int           @default(0)
+  status      BulkJobStatus @default(PROCESSING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  uploader    User          @relation(fields: [uploadedBy], references: [id])
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices    Invoice[]
 }

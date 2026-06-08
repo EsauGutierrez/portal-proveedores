@@ -30,8 +30,11 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        supplierProfile: true, // Incluimos el perfil si es proveedor
-        tenant: true,          // Y también incluimos su Tenant para saber a qué empresa pertenece
+        supplierProfile: true,
+        tenant: true,
+        operatorAssignments: {
+          select: { supplierProfileId: true },
+        },
       },
     });
 
@@ -75,6 +78,13 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
+    } else if (user.role === 'CARGADOR') {
+      if (!user.tenant?.isActive) {
+        return NextResponse.json(
+          { message: 'El acceso al portal de esta empresa está suspendido.' },
+          { status: 403 }
+        );
+      }
     } else if (user.role === 'TENANT_ADMIN') {
       if (!user.tenant?.isActive) {
         return NextResponse.json(
@@ -103,6 +113,10 @@ export async function POST(request: Request) {
     }
 
     // 6. Generar un JSON Web Token (JWT)
+    const assignedSupplierIds = user.role === 'CARGADOR'
+      ? user.operatorAssignments.map(a => a.supplierProfileId)
+      : [];
+
     const token = jwt.sign(
       {
         userId: user.id,
@@ -115,6 +129,7 @@ export async function POST(request: Request) {
         requireDocuments: user.supplierProfile?.requireDocuments || false,
         firstLogin: user.firstLogin,
         subscriptionWarning: isInGrace,
+        assignedSupplierIds,
       },
       process.env.JWT_SECRET!,
       {
