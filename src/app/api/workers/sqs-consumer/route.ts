@@ -139,24 +139,42 @@ export async function POST(request: Request) {
                 const SCRIPT_ID = invoice.tenant.netsuiteScriptId || process.env.NETSUITE_SCRIPT_ID || '3878';
                 const DEPLOY_ID = invoice.tenant.netsuiteDeployId || process.env.NETSUITE_DEPLOY_ID || '1';
 
-                // fromId: si es factura por OC completa → ID interno de la OC en NetSuite
-                //         si es factura por recepción → ID interno de la recepción en NetSuite
-                const fromIdRaw = isPoLevelInvoice
-                    ? invoice.purchaseOrder!.netsuiteId
-                    : primaryReception?.netsuiteId ?? null;
-                const fromId = fromIdRaw ? parseInt(fromIdRaw, 10) : null;
-                const fromType = isPoLevelInvoice ? 'purchaseorder' : 'itemreceipt';
+                const isStandalone = (invoice as any).matchMethod === 'STANDALONE';
 
-                const netsuitePayload = {
-                    fromId,
-                    fromType,
-                    proveedorId: supplier.rfc,
-                    recepcionFolio: referenceFolio,
-                    uuidFactura: invoice.folio,
-                    totalFactura: invoice.total,
-                    facturaPDFUrl: pdfPresignedUrl,
-                    facturaXMLUrl: xmlPresignedUrl
-                };
+                let netsuitePayload: Record<string, any>;
+
+                if (isStandalone) {
+                    // Factura sin OC: crear VendorBill directamente desde los datos del proveedor
+                    netsuitePayload = {
+                        action: 'createStandaloneVendorBill',
+                        vendorNetsuiteId: supplier.netsuiteId,
+                        uuidFactura: invoice.folio,
+                        totalFactura: invoice.total,
+                        subtotalFactura: invoice.subtotal,
+                        taxFactura: invoice.tax,
+                        fechaFactura: invoice.fecha.toISOString(),
+                        facturaPDFUrl: pdfPresignedUrl,
+                        facturaXMLUrl: xmlPresignedUrl,
+                    };
+                } else {
+                    const fromIdRaw = isPoLevelInvoice
+                        ? invoice.purchaseOrder!.netsuiteId
+                        : primaryReception?.netsuiteId ?? null;
+                    const fromId = fromIdRaw ? parseInt(fromIdRaw, 10) : null;
+                    const fromType = isPoLevelInvoice ? 'purchaseorder' : 'itemreceipt';
+
+                    netsuitePayload = {
+                        action: 'createVendorBill',
+                        fromId,
+                        fromType,
+                        proveedorId: supplier.rfc,
+                        recepcionFolio: referenceFolio,
+                        uuidFactura: invoice.folio,
+                        totalFactura: invoice.total,
+                        facturaPDFUrl: pdfPresignedUrl,
+                        facturaXMLUrl: xmlPresignedUrl,
+                    };
+                }
 
                 const nsCreds = {
                     accountId: invoice.tenant.netsuiteAccountId!,

@@ -21,6 +21,7 @@ import SyncLogsPage from './SyncLogsPage';
 import SupplierDocumentsPage from './SupplierDocumentsPage';
 import OperatorsPage from './OperatorsPage';
 import CargadorPage from './CargadorPage';
+import BulkUploadPage from './BulkUploadPage';
 import { LayoutDashboard, Settings, DatabaseZap } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
@@ -35,9 +36,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'pagos_masivos', 'soporte', 'sync_logs', 'mis_documentos', 'cargadores'].includes(activeView)) {
-            setIsLoading(false);
-            return;
+          if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'pagos_masivos', 'soporte', 'sync_logs', 'mis_documentos', 'cargadores', 'cargador_home', 'carga_masiva'].includes(activeView)) {
         }
 
         const fetchData = async () => {
@@ -149,6 +148,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'sync_logs': return <SyncLogsPage />;
             case 'cargadores': return <OperatorsPage />;
             case 'cargador_home': return <CargadorPage user={user} />;
+            case 'carga_masiva': return <BulkUploadPage user={user} />;
             default: return <OverviewPage user={user} />;
         }
     };
@@ -187,6 +187,7 @@ const DashboardPage = ({ user, onLogout }) => {
                         {user && user.role === 'CARGADOR' && (
                             <>
                                 <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
+                                <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
                         )}
