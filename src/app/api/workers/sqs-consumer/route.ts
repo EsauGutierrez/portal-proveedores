@@ -67,6 +67,13 @@ export async function POST(request: Request) {
                 continue;
             }
 
+            // Idempotencia: si ya existe un VendorBill en NetSuite, no volver a crearlo
+            if (invoice.netsuiteId) {
+                console.log(`[Worker] Factura ${invoiceId} ya tiene VendorBill en NetSuite (NS ID: ${invoice.netsuiteId}). Corrigiendo estado a SYNCED.`);
+                await updateSyncStatus(invoiceId, 'SYNCED', null, invoice.netsuiteId);
+                continue;
+            }
+
             const supplier = invoice.user.supplierProfile;
             const primaryReception = invoice.receptions?.[0];
             // Factura puede estar ligada a recepciones o directamente a una OC
