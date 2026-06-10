@@ -196,6 +196,9 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
                                 <NavLink view="facturas" icon={FileText} label="Facturas" />
+                                {user.bulkUploadForSuppliers && (
+                                    <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
+                                )}
                                 <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
                                 <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />

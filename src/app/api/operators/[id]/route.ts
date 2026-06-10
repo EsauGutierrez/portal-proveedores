@@ -17,22 +17,31 @@ function requireAdmin(request: Request): { userId: string; tenantId: string } | 
   }
 }
 
-// PATCH /api/operators/[id] — actualizar nombre
+// PATCH /api/operators/[id] — actualizar nombre y/o email
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = requireAdmin(request);
   if (!admin) return NextResponse.json({ message: 'No autorizado.' }, { status: 401 });
 
   const { id } = await params;
-  const { name } = await request.json();
+  const { name, email } = await request.json();
 
   const operator = await prisma.user.findFirst({
     where: { id, tenantId: admin.tenantId, role: 'CARGADOR' },
   });
   if (!operator) return NextResponse.json({ message: 'Cargador no encontrado.' }, { status: 404 });
 
+  // Verificar que el nuevo email no esté en uso por otro usuario
+  if (email && email !== operator.email) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return NextResponse.json({ message: 'Ese email ya está en uso por otro usuario.' }, { status: 409 });
+  }
+
   const updated = await prisma.user.update({
     where: { id },
-    data: { name },
+    data: {
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+    },
     select: { id: true, name: true, email: true },
   });
 
