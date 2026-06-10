@@ -86,11 +86,8 @@ model SupplierProfile {
   netsuiteId        String?
   requireDocuments  Boolean            @default(false)
   supplierType      SupplierType       @default(NATIONAL)
-<<<<<<< HEAD
   lista69bStatus    Lista69bStatus     @default(NOT_CHECKED)
   lista69bCheckedAt DateTime?
-=======
->>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
   documents         SupplierDocument[]
   subsidiary   Subsidiary         @relation(fields: [subsidiaryId], references: [id])
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -301,7 +298,6 @@ enum SupplierType {
   FOREIGN
   BOTH
 }
-<<<<<<< HEAD
 
 enum Lista69bStatus {
   NOT_CHECKED
@@ -311,5 +307,3 @@ enum Lista69bStatus {
   DESVIRTUADO
   SENTENCIA_FAVORABLE
 }
-=======
->>>>>>> 3707048 (feat: agregar gestión de documentos por tipo de proveedor)
