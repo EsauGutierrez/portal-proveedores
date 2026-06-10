@@ -3,6 +3,9 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
+import { checkLista69bBulk } from '../../lib/zentax';
+import { sendEmail } from '../../lib/mailer';
+import { buildLista69bAlertEmail } from '../../lib/emails';
 
 const prisma = new PrismaClient();
 
@@ -90,6 +93,41 @@ export async function POST(request: Request) {
         include: { supplierProfile: { include: { documents: true } } },
       });
     });
+
+    // Verificar Lista 69B en background — no bloquea el registro
+    const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+    const rfcNorm = rfc.toUpperCase();
+    if (!GENERIC_RFCS.includes(rfcNorm)) {
+      checkLista69bBulk([rfcNorm]).then(async (results) => {
+        if (!newUserAndProfile?.supplierProfile) return;
+        const match = results.find(r => r.rfc === rfcNorm);
+        const newStatus = match ? match.status : 'NO_LISTADO';
+        await prisma.supplierProfile.update({
+          where: { id: newUserAndProfile.supplierProfile.id },
+          data: { lista69bStatus: newStatus, lista69bCheckedAt: new Date() } as any,
+        });
+
+        if (match) {
+          const admins = await prisma.user.findMany({
+            where: { tenantId: newUserAndProfile.supplierProfile.tenantId, role: 'TENANT_ADMIN' },
+            select: { email: true },
+          });
+          const adminEmails = admins.map(u => u.email).filter(Boolean).join(',');
+          if (adminEmails) {
+            await sendEmail({
+              to: adminEmails,
+              subject: `⚠️ RFC en Lista 69B SAT — ${companyName}`,
+              html: buildLista69bAlertEmail({
+                suppliers: [{ companyName, rfc: rfcNorm, statusLabel: match.status }],
+                contextMessage: 'Un proveedor que acaba de registrarse aparece en la <strong>Lista 69B del SAT</strong>:',
+              }),
+            });
+          }
+        }
+      }).catch((err) => {
+        console.error('[LISTA69B] Error al verificar RFC en registro:', err.message);
+      });
+    }
 
     return NextResponse.json(newUserAndProfile, { status: 201 });
 
