@@ -1,0 +1,7 @@
+-- CreateEnum
+CREATE TYPE "Lista69bStatus" AS ENUM ('NOT_CHECKED', 'NO_LISTADO', 'PRESUNTO', 'DEFINITIVO', 'DESVIRTUADO', 'SENTENCIA_FAVORABLE');
+
+-- AlterTable
+ALTER TABLE "SupplierProfile"
+  ADD COLUMN "lista69bStatus" "Lista69bStatus" NOT NULL DEFAULT 'NOT_CHECKED',
+  ADD COLUMN "lista69bCheckedAt" TIMESTAMP(3);

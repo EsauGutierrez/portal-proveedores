@@ -98,6 +98,8 @@ export async function GET(request: Request) {
             const provActivos = supplierProfiles.filter(p => p.status === 'ACTIVE').length;
             const provPendientes = supplierProfiles.filter(p => p.status === 'PENDING').length;
             const provRechazados = supplierProfiles.filter(p => p.status === 'REJECTED').length;
+            const LISTA69B_ALERT = ['PRESUNTO', 'DEFINITIVO', 'DESVIRTUADO', 'SENTENCIA_FAVORABLE'];
+            const provEnLista69b = supplierProfiles.filter(p => LISTA69B_ALERT.includes((p as any).lista69bStatus)).length;
 
             const facturasRecibidas = invoices.length;
             const facturasAprobadas = invoices.filter(i => i.syncStatus === 'SYNCED').length;
@@ -162,6 +164,7 @@ export async function GET(request: Request) {
                     proveedoresSinAprobar: provPendientes,
                     facturasSinProcesar: facturasPendientes,
                     facturasFallidas,
+                    proveedoresEnLista69b: provEnLista69b,
                 },
             };
 

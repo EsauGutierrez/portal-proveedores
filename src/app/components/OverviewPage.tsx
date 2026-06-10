@@ -26,7 +26,7 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, borderClass, subtitl
 );
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
-const AlertBanner = ({ count, label, href, color }) => {
+const AlertBanner = ({ count, label, color, onClick }: { count: number, label: string, color: string, onClick?: () => void }) => {
     if (!count) return null;
     const colors = {
         amber: 'bg-amber-50 border-amber-300 text-amber-800',
@@ -34,7 +34,10 @@ const AlertBanner = ({ count, label, href, color }) => {
         blue: 'bg-blue-50 border-blue-300 text-blue-800',
     };
     return (
-        <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${colors[color]} text-sm font-medium`}>
+        <div
+            onClick={onClick}
+            className={`flex items-center justify-between px-4 py-3 rounded-lg border ${colors[color]} text-sm font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        >
             <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4" />
                 <span><strong>{count}</strong> {label}</span>
@@ -74,7 +77,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const OverviewPage = ({ user }) => {
+const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: string) => void }) => {
     const [metrics, setMetrics] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -270,11 +273,14 @@ const OverviewPage = ({ user }) => {
                 )}
 
                 {/* Alertas */}
-                {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0) && (
+                {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0 || alertas.proveedoresEnLista69b > 0) && (
                     <div className="space-y-2">
-                        <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" href="#" color="amber" />
-                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" href="#" color="red" />
-                        <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" href="#" color="blue" />
+                        {alertas.proveedoresEnLista69b > 0 && (
+                            <AlertBanner count={alertas.proveedoresEnLista69b} label="proveedores detectados en Lista 69B del SAT" color="red" onClick={onNavigate ? () => onNavigate('proveedores') : undefined} />
+                        )}
+                        <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" color="amber" onClick={onNavigate ? () => onNavigate('proveedores') : undefined} />
+                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" color="red" />
+                        <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" color="blue" />
                     </div>
                 )}
 
