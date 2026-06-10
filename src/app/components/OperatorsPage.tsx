@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, UserPlus, X, Search, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Plus, Trash2, UserPlus, X, Search, ChevronDown, ChevronRight, Loader2, Pencil } from 'lucide-react';
 
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
@@ -46,7 +46,7 @@ const CreateOperatorModal = ({ isOpen, onClose, onCreated }) => {
                 type={field === 'password' ? 'password' : field === 'email' ? 'email' : 'text'}
                 value={form[field]}
                 onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           ))}
@@ -63,19 +63,84 @@ const CreateOperatorModal = ({ isOpen, onClose, onCreated }) => {
   );
 };
 
+// --- Modal: Editar Cargador ---
+const EditOperatorModal = ({ isOpen, onClose, operator, onUpdated }) => {
+  const [form, setForm] = useState({ name: '', email: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (operator) setForm({ name: operator.name || '', email: operator.email || '' });
+  }, [operator]);
+
+  if (!isOpen || !operator) return null;
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.email) { setError('Nombre y email son requeridos.'); return; }
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`/api/operators/${operator.id}`, {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      onUpdated(data);
+      onClose();
+    } catch { setError('Error de conexión.'); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-gray-800">Editar Cargador</h3>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input
+              type="text" value={form.name}
+              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email" value={form.email}
+              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
+          <button onClick={handleSubmit} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />} Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Modal: Asignar Proveedor ---
 const AssignSupplierModal = ({ isOpen, onClose, operator, onAssigned }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
     fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${getToken()}` } })
       .then(r => r.json())
-      .then(data => setSuppliers(Array.isArray(data) ? data : (data.suppliers ?? [])))
+      .then(data => setSuppliers(Array.isArray(data) ? data : (data.data ?? data.suppliers ?? [])))
       .finally(() => setLoading(false));
   }, [isOpen]);
 
@@ -89,13 +154,22 @@ const AssignSupplierModal = ({ isOpen, onClose, operator, onAssigned }) => {
 
   const handleAssign = async (supplierProfileId: string) => {
     setAssigning(supplierProfileId);
+    setAssignError('');
     try {
       const res = await fetch(`/api/operators/${operator.id}/assignments`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ supplierProfileId }),
       });
       const data = await res.json();
-      if (res.ok) onAssigned(operator.id, data);
-    } finally { setAssigning(null); }
+      if (res.ok) {
+        onAssigned(operator.id, data);
+      } else {
+        setAssignError(data.message || 'Error al asignar el proveedor.');
+      }
+    } catch {
+      setAssignError('Error de conexión. Intenta de nuevo.');
+    } finally {
+      setAssigning(null);
+    }
   };
 
   return (
@@ -110,7 +184,7 @@ const AssignSupplierModal = ({ isOpen, onClose, operator, onAssigned }) => {
           <input
             value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre o RFC..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
@@ -134,6 +208,9 @@ const AssignSupplierModal = ({ isOpen, onClose, operator, onAssigned }) => {
             </div>
           ))}
         </div>
+        {assignError && (
+          <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{assignError}</p>
+        )}
         <div className="mt-4 flex justify-end">
           <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200">Cerrar</button>
         </div>
@@ -149,6 +226,7 @@ const OperatorsPage = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<any | null>(null);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
 
   const fetchOperators = async () => {
     setLoading(true);
@@ -162,6 +240,10 @@ const OperatorsPage = () => {
   useEffect(() => { fetchOperators(); }, []);
 
   const handleCreated = (op: any) => setOperators(prev => [{ ...op, operatorAssignments: [] }, ...prev]);
+
+  const handleUpdated = (updated: any) => setOperators(prev =>
+    prev.map(op => op.id === updated.id ? { ...op, name: updated.name, email: updated.email } : op)
+  );
 
   const handleAssigned = (operatorId: string, assignment: any) => {
     setOperators(prev => prev.map(op =>
@@ -240,8 +322,16 @@ const OperatorsPage = () => {
                       <UserPlus className="w-3 h-3" /> Asignar proveedor
                     </button>
                     <button
+                      onClick={() => setEditTarget(op)}
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Editar cargador"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleDelete(op.id)}
                       className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar cargador"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -279,6 +369,7 @@ const OperatorsPage = () => {
       )}
 
       <CreateOperatorModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onCreated={handleCreated} />
+      <EditOperatorModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} operator={editTarget} onUpdated={handleUpdated} />
       <AssignSupplierModal
         isOpen={!!assignTarget}
         onClose={() => setAssignTarget(null)}

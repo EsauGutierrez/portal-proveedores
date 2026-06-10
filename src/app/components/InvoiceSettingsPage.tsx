@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertTriangle, Loader2, UploadCloud } from 'lucide-react';
 
 export default function InvoiceSettingsPage() {
     const [tolerance, setTolerance] = useState<string>('');
+    const [bulkUploadForSuppliers, setBulkUploadForSuppliers] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState('');
@@ -19,6 +20,7 @@ export default function InvoiceSettingsPage() {
             .then(r => r.json())
             .then(data => {
                 setTolerance(String(data.invoiceTolerance ?? 0.5));
+                setBulkUploadForSuppliers(data.bulkUploadForSuppliers ?? false);
             })
             .catch(() => setError('No se pudo cargar la configuración.'))
             .finally(() => setLoading(false));
@@ -42,7 +44,7 @@ export default function InvoiceSettingsPage() {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ invoiceTolerance: value }),
+                body: JSON.stringify({ invoiceTolerance: value, bulkUploadForSuppliers }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message);
@@ -107,6 +109,36 @@ export default function InvoiceSettingsPage() {
                         <p className="mt-2 text-xs text-gray-400">
                             Ejemplo: con valor <span className="font-mono">1.00</span> un proveedor puede subir una factura con hasta $1.00 de diferencia respecto al total de la recepción.
                         </p>
+                    </div>
+
+                    {/* Separador */}
+                    <div className="border-t pt-6 mt-2">
+                        <div className="flex items-start gap-3 mb-4 pb-4 border-b">
+                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <UploadCloud className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-800">Carga masiva para proveedores</h3>
+                                <p className="text-sm text-gray-500">Permite que los proveedores de esta empresa suban múltiples facturas mediante un archivo ZIP, sin necesidad de un cargador asignado.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                            <div>
+                                <p className="text-sm font-medium text-gray-800">Habilitar carga masiva para proveedores</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    {bulkUploadForSuppliers
+                                        ? 'Los proveedores verán la opción "Carga Masiva" en su menú.'
+                                        : 'Solo los cargadores asignados pueden usar la carga masiva.'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setBulkUploadForSuppliers(p => !p)}
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${bulkUploadForSuppliers ? 'bg-blue-600' : 'bg-gray-300'}`}
+                            >
+                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${bulkUploadForSuppliers ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
                     </div>
 
                     {success && (

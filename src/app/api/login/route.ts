@@ -127,6 +127,7 @@ export async function POST(request: Request) {
         supplierProfileId: user.supplierProfile?.id || null,
         supplierStatus: user.supplierProfile?.status || null,
         requireDocuments: user.supplierProfile?.requireDocuments || false,
+        bulkUploadForSuppliers: user.tenant?.bulkUploadForSuppliers || false,
         firstLogin: user.firstLogin,
         subscriptionWarning: isInGrace,
         assignedSupplierIds,
