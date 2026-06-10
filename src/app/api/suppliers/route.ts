@@ -62,6 +62,9 @@ export async function GET(request: Request) {
       }))
     );
 
+
+
+    
     return NextResponse.json(
       { data: suppliers, total, page, limit, totalPages: Math.ceil(total / limit) },
       { status: 200 }
