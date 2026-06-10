@@ -3,6 +3,9 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { checkLista69bBulk } from '../../../lib/zentax';
+import { sendEmail } from '../../../lib/mailer';
+import { buildLista69bAlertEmail } from '../../../lib/emails';
 
 const prisma = new PrismaClient();
 
@@ -51,7 +54,7 @@ export async function PATCH(
     // Primero obtenemos el perfil para conocer el userId y tenantId asociados
     const currentProfile = await prisma.supplierProfile.findUnique({
       where: { id },
-      select: { userId: true, tenantId: true }
+      select: { userId: true, tenantId: true, rfc: true }
     });
 
     if (!currentProfile || !currentProfile.userId) {
@@ -141,6 +144,44 @@ export async function PATCH(
     ]);
 
     const finalProfile = results[results.length - 1];
+
+    // Si se cambió el RFC, re-verificar contra Lista 69B en background
+    const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+    const savedRfc = dataToUpdate.rfc as string | undefined;
+    if (savedRfc && savedRfc !== currentProfile.rfc && !GENERIC_RFCS.includes(savedRfc)) {
+      checkLista69bBulk([savedRfc]).then(async (zentaxResults) => {
+        const match = zentaxResults.find(r => r.rfc === savedRfc);
+        const newStatus = match ? match.status : 'NO_LISTADO';
+        await prisma.supplierProfile.update({
+          where: { id },
+          data: { lista69bStatus: newStatus, lista69bCheckedAt: new Date() } as any,
+        });
+
+        if (match) {
+          const profile = await prisma.supplierProfile.findUnique({
+            where: { id },
+            select: { companyName: true, tenantId: true },
+          });
+          const admins = await prisma.user.findMany({
+            where: { tenantId: currentProfile.tenantId, role: 'TENANT_ADMIN' },
+            select: { email: true },
+          });
+          const adminEmails = admins.map(u => u.email).filter(Boolean).join(',');
+          if (adminEmails && profile) {
+            await sendEmail({
+              to: adminEmails,
+              subject: `⚠️ RFC actualizado en Lista 69B SAT — ${profile.companyName}`,
+              html: buildLista69bAlertEmail({
+                suppliers: [{ companyName: profile.companyName, rfc: savedRfc, statusLabel: match.status }],
+                contextMessage: 'Se actualizó el RFC de un proveedor y el nuevo RFC aparece en la <strong>Lista 69B del SAT</strong>:',
+              }),
+            });
+          }
+        }
+      }).catch((err) => {
+        console.error('[LISTA69B] Error al re-verificar RFC editado:', err.message);
+      });
+    }
 
     return NextResponse.json(
       { message: 'Proveedor actualizado correctamente.', supplierProfile: finalProfile },

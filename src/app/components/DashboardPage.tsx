@@ -127,7 +127,7 @@ const DashboardPage = ({ user, onLogout }) => {
         }
 
         switch (activeView) {
-            case 'resumen': return <OverviewPage user={user} />;
+            case 'resumen': return <OverviewPage user={user} onNavigate={setActiveView} />;
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <PaymentComplementsPage user={user} />;
