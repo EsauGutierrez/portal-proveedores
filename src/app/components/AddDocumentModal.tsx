@@ -215,7 +215,7 @@ const AddDocumentModal: React.FC<AddDocumentModalProps> = ({
                 placeholder="Ej. Poder notarial"
                 maxLength={100}
                 disabled={isSubmitting}
-                className={`w-full px-3 py-2 text-sm border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400 transition-colors ${
+                className={`w-full px-3 py-2 text-sm text-gray-900 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400 transition-colors ${
                   errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'
                 }`}
               />
