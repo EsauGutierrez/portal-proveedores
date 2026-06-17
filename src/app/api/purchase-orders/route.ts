@@ -15,16 +15,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
     }
     const token = authHeader.split(' ')[1];
-    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-    const { userId } = decodedToken;
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; role: string; tenantId: string };
+    const { userId, role, tenantId } = decodedToken;
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
 
+    // CARGADOR puede consultar OCs de un proveedor asignado mediante supplierUserId
+    let effectiveUserId = userId;
+    if (role === 'CARGADOR') {
+      const supplierUserId = searchParams.get('supplierUserId');
+      if (supplierUserId) {
+        const supplierProfile = await prisma.supplierProfile.findFirst({
+          where: { userId: supplierUserId, tenantId },
+          select: { id: true },
+        });
+        const assignment = supplierProfile
+          ? await prisma.operatorAssignment.findFirst({
+              where: { operatorId: userId, supplierProfileId: supplierProfile.id },
+            })
+          : null;
+        if (!assignment) {
+          return NextResponse.json({ message: 'No tienes acceso a las OCs de este proveedor.' }, { status: 403 });
+        }
+        effectiveUserId = supplierUserId;
+      }
+    }
+
     const [purchaseOrders, total] = await Promise.all([
       prisma.purchaseOrder.findMany({
-        where: { userId },
+        where: { userId: effectiveUserId },
         include: {
           subsidiary: true,
           invoices: {
@@ -42,7 +63,7 @@ export async function GET(request: Request) {
         take: limit,
         skip: (page - 1) * limit,
       }),
-      prisma.purchaseOrder.count({ where: { userId } }),
+      prisma.purchaseOrder.count({ where: { userId: effectiveUserId } }),
     ]);
 
     const formattedData = await Promise.all(

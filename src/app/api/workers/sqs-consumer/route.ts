@@ -75,6 +75,13 @@ export async function POST(request: Request) {
                 continue;
             }
 
+            // Idempotencia: si ya existe un VendorBill en NetSuite, no volver a crearlo
+            if (invoice.netsuiteId) {
+                console.log(`[Worker] Factura ${invoiceId} ya tiene VendorBill en NetSuite (NS ID: ${invoice.netsuiteId}). Corrigiendo estado a SYNCED.`);
+                await updateSyncStatus(invoiceId, 'SYNCED', null, invoice.netsuiteId);
+                continue;
+            }
+
             const supplier = invoice.user.supplierProfile;
             const primaryReception = invoice.receptions?.[0];
             // Factura puede estar ligada a recepciones o directamente a una OC
@@ -83,23 +90,24 @@ export async function POST(request: Request) {
             const referenceFolio = primaryReception?.folio ?? invoice.purchaseOrder?.folio ?? 'N/A';
 
             // 4. Validar Totales Cruzados (omitido para consignación — saldo validado al subir)
+            const tolerance = invoice.tenant.invoiceTolerance ?? 0.5;
             const errors: string[] = [];
             if (!isConsignment) {
                 if (primaryReception) {
                     const receptionSubtotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.subtotal as any), 0);
                     const receptionTotal = primaryReception.articles.reduce((sum, article) => sum + parseFloat(article.total as any), 0);
 
-                    if (Math.abs(Number(invoice.subtotal) - receptionSubtotal) > 0.5) {
-                        errors.push(`El subtotal de la factura ($${invoice.subtotal}) difiere de la recepción ($${receptionSubtotal.toFixed(2)}).`);
+                    if (Math.abs(Number(invoice.subtotal) - receptionSubtotal) > tolerance) {
+                        errors.push(`El subtotal de la factura ($${invoice.subtotal}) difiere de la recepción ($${receptionSubtotal.toFixed(2)}) — tolerancia configurada: $${tolerance.toFixed(2)}.`);
                     }
-                    if (Math.abs(Number(invoice.total) - receptionTotal) > 0.5) {
-                        errors.push(`El total de la factura ($${invoice.total}) difiere de la recepción ($${receptionTotal.toFixed(2)}).`);
+                    if (Math.abs(Number(invoice.total) - receptionTotal) > tolerance) {
+                        errors.push(`El total de la factura ($${invoice.total}) difiere de la recepción ($${receptionTotal.toFixed(2)}) — tolerancia configurada: $${tolerance.toFixed(2)}.`);
                     }
                 } else if (isPoLevelInvoice) {
                     // Para facturas integrales de OC validamos contra el total de la OC
                     const poTotal = Number(invoice.purchaseOrder!.total);
-                    if (poTotal > 0 && Math.abs(Number(invoice.total) - poTotal) > 0.5) {
-                        errors.push(`El total de la factura ($${invoice.total}) difiere del total de la OC ($${poTotal.toFixed(2)}).`);
+                    if (poTotal > 0 && Math.abs(Number(invoice.total) - poTotal) > tolerance) {
+                        errors.push(`El total de la factura ($${invoice.total}) difiere del total de la OC ($${poTotal.toFixed(2)}) — tolerancia configurada: $${tolerance.toFixed(2)}.`);
                     }
                 } else {
                     await updateSyncStatus(invoiceId, 'FAILED', 'La factura no tiene recepción ni orden de compra asociada.');
@@ -131,24 +139,42 @@ export async function POST(request: Request) {
                 const SCRIPT_ID = invoice.tenant.netsuiteScriptId || process.env.NETSUITE_SCRIPT_ID || '3878';
                 const DEPLOY_ID = invoice.tenant.netsuiteDeployId || process.env.NETSUITE_DEPLOY_ID || '1';
 
-                // fromId: si es factura por OC completa → ID interno de la OC en NetSuite
-                //         si es factura por recepción → ID interno de la recepción en NetSuite
-                const fromIdRaw = isPoLevelInvoice
-                    ? invoice.purchaseOrder!.netsuiteId
-                    : primaryReception?.netsuiteId ?? null;
-                const fromId = fromIdRaw ? parseInt(fromIdRaw, 10) : null;
-                const fromType = isPoLevelInvoice ? 'purchaseorder' : 'itemreceipt';
+                const isStandalone = (invoice as any).matchMethod === 'STANDALONE';
 
-                const netsuitePayload = {
-                    fromId,
-                    fromType,
-                    proveedorId: supplier.rfc,
-                    recepcionFolio: referenceFolio,
-                    uuidFactura: invoice.folio,
-                    totalFactura: invoice.total,
-                    facturaPDFUrl: pdfPresignedUrl,
-                    facturaXMLUrl: xmlPresignedUrl
-                };
+                let netsuitePayload: Record<string, any>;
+
+                if (isStandalone) {
+                    // Factura sin OC: crear VendorBill directamente desde los datos del proveedor
+                    netsuitePayload = {
+                        action: 'createStandaloneVendorBill',
+                        vendorNetsuiteId: supplier.netsuiteId,
+                        uuidFactura: invoice.folio,
+                        totalFactura: invoice.total,
+                        subtotalFactura: invoice.subtotal,
+                        taxFactura: invoice.tax,
+                        fechaFactura: invoice.fecha.toISOString(),
+                        facturaPDFUrl: pdfPresignedUrl,
+                        facturaXMLUrl: xmlPresignedUrl,
+                    };
+                } else {
+                    const fromIdRaw = isPoLevelInvoice
+                        ? invoice.purchaseOrder!.netsuiteId
+                        : primaryReception?.netsuiteId ?? null;
+                    const fromId = fromIdRaw ? parseInt(fromIdRaw, 10) : null;
+                    const fromType = isPoLevelInvoice ? 'purchaseorder' : 'itemreceipt';
+
+                    netsuitePayload = {
+                        action: 'createVendorBill',
+                        fromId,
+                        fromType,
+                        proveedorId: supplier.rfc,
+                        recepcionFolio: referenceFolio,
+                        uuidFactura: invoice.folio,
+                        totalFactura: invoice.total,
+                        facturaPDFUrl: pdfPresignedUrl,
+                        facturaXMLUrl: xmlPresignedUrl,
+                    };
+                }
 
                 const nsCreds = {
                     accountId: invoice.tenant.netsuiteAccountId!,

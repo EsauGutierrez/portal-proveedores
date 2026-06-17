@@ -60,7 +60,7 @@ const ReceptionDetailsModal = ({ isOpen, onClose, reception }) => {
 };
 
 // --- Componente: Modal para Subir Factura ---
-const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = [], isConsignment = false }: { isOpen: boolean, onClose: () => void, reception?: any, order?: any, receptionIds?: string[], isConsignment?: boolean }) => {
+const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = [], isConsignment = false, uploadedBy = null, supplierUserId = null }: { isOpen: boolean, onClose: () => void, reception?: any, order?: any, receptionIds?: string[], isConsignment?: boolean, uploadedBy?: string | null, supplierUserId?: string | null }) => {
   if (!isOpen) return null;
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -92,7 +92,9 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
     } else if (order?.id) {
       formData.append('purchaseOrderId', order.id);
     }
-    formData.append('userId', order.userId);
+    // Si es CARGADOR: userId = proveedor (para RFC), uploadedBy = cargador (auditoría)
+    formData.append('userId', supplierUserId || order.userId);
+    if (uploadedBy) formData.append('uploadedBy', uploadedBy);
     formData.append('xmlFile', xmlFile);
     formData.append('pdfFile', pdfFile);
 
@@ -106,7 +108,8 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
 
       if (!response.ok) {
         const detailedErrors = result.errors ? result.errors.join('\n- ') : '';
-        const finalMessage = `${result.message}\n${detailedErrors ? '- ' + detailedErrors : ''}`;
+        const errorDetail = result.error ? `\nDetalle: ${result.error}` : '';
+        const finalMessage = `${result.message}${detailedErrors ? '\n- ' + detailedErrors : ''}${errorDetail}`;
         throw new Error(finalMessage);
       }
 
@@ -190,7 +193,7 @@ const UploadPaymentProofModal = ({ isOpen, onClose, payment }) => {
 
 
 // --- Componente DataTable Principal ---
-export const DataTable = ({ title, data }) => {
+export const DataTable = ({ title, data, uploadedBy = null, supplierUserId = null }: { title: string, data: any[], uploadedBy?: string | null, supplierUserId?: string | null }) => {
   const [expandedRows, setExpandedRows] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
@@ -516,6 +519,8 @@ export const DataTable = ({ title, data }) => {
         order={currentOrder}
         receptionIds={currentOrder?.selectedReceptionIds || []}
         isConsignment={isConsignmentUpload}
+        uploadedBy={uploadedBy}
+        supplierUserId={supplierUserId}
       />
       <ReceptionDetailsModal isOpen={isDetailsModalOpen} onClose={handleCloseDetailsModal} reception={selectedItem} />
       <UploadPaymentProofModal isOpen={isPaymentModalOpen} onClose={handleClosePaymentModal} payment={selectedItem} />

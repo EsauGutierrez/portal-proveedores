@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Search, Filter, FileText, Download, AlertCircle, FileDigit, RefreshCw, ShoppingCart, CheckCircle, XCircle, History, ChevronUp, ChevronDown, Calendar, Zap, CheckSquare, Activity, X, AlertCircle as AlertCircleIcon } from 'lucide-react';
-
-// --- Helpers ---
-const formatDuration = (ms: number) => (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
-const formatLogDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+import { Loader2, Search, Filter, FileText, Download, AlertCircle, FileDigit, RefreshCw } from 'lucide-react';
 
 const AdminInvoicesPage = () => {
     // --- Estado principal ---
@@ -14,50 +9,8 @@ const AdminInvoicesPage = () => {
     const [isDownloading, setIsDownloading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // --- Estado del panel de sync ---
-    const [syncLogs, setSyncLogs] = useState<any[]>([]);
-    const [isLoadingLogs, setIsLoadingLogs] = useState(true);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [syncResult, setSyncResult] = useState<any>(null);
-    const [syncError, setSyncError] = useState<string | null>(null);
-    const [syncHistoryExpanded, setSyncHistoryExpanded] = useState(false);
-
     // --- Estado de retry de complementos de pago ---
     const [retryLoadingId, setRetryLoadingId] = useState<string | null>(null);
-
-    const syncStatusConfig: Record<string, { color: string; bg: string; icon: React.ReactNode; label: string }> = {
-        SUCCESS: { color: 'text-green-700', bg: 'bg-green-50 border-green-200', icon: <CheckCircle className="w-4 h-4" />, label: 'Exitosa' },
-        PARTIAL: { color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-200', icon: <AlertCircleIcon className="w-4 h-4" />, label: 'Parcial' },
-        FAILED:  { color: 'text-red-700',   bg: 'bg-red-50 border-red-200',      icon: <XCircle className="w-4 h-4" />,   label: 'Fallida' },
-    };
-
-    const fetchSyncLogs = async () => {
-        setIsLoadingLogs(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('/api/admin/sync/purchase-orders', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setSyncLogs(await res.json());
-        } catch { /* silencioso */ } finally { setIsLoadingLogs(false); }
-    };
-
-    const handleSyncNow = async () => {
-        setIsSyncing(true);
-        setSyncResult(null);
-        setSyncError(null);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('/api/admin/sync/purchase-orders', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await res.json();
-            if (!res.ok) { setSyncError(data.message || 'Error durante la sincronización.'); }
-            else { setSyncResult(data); fetchSyncLogs(); }
-        } catch (err: any) { setSyncError(err.message); }
-        finally { setIsSyncing(false); }
-    };
 
     // Filtros
     const [startDate, setStartDate] = useState('');
@@ -100,7 +53,6 @@ const AdminInvoicesPage = () => {
     // Auto-fetch on component load
     useEffect(() => {
         fetchDocuments();
-        fetchSyncLogs();
     }, []);
 
     // Also fetch when a filter button is clicked (handled explicitly below)
@@ -194,7 +146,6 @@ const AdminInvoicesPage = () => {
         });
     };
 
-    const lastSyncLog = syncLogs[0];
     const isPurchaseOrderView = docType === 'PURCHASE_ORDER';
 
     // --- Paginación ---
@@ -215,106 +166,6 @@ const AdminInvoicesPage = () => {
                 <p className="text-sm text-gray-500 mt-1">
                     Consulta facturas, complementos de pago y órdenes de compra de los proveedores registrados en el portal.
                 </p>
-            </div>
-
-            {/* ===== Panel de Sincronización de OC ===== */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between p-5 border-b border-gray-100">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 rounded-lg">
-                            <ShoppingCart className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div>
-                            <h3 className="text-base font-bold text-gray-800">Sincronización de Órdenes de Compra</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                                Solo se sincronizan OC de proveedores <span className="font-semibold text-green-600">activos</span> registrados en el portal
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {lastSyncLog && !isLoadingLogs && (
-                            <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${syncStatusConfig[lastSyncLog.status]?.bg} ${syncStatusConfig[lastSyncLog.status]?.color}`}>
-                                {syncStatusConfig[lastSyncLog.status]?.icon}
-                                Último: {formatLogDate(lastSyncLog.createdAt)}
-                            </div>
-                        )}
-                        <button
-                            onClick={() => setSyncHistoryExpanded(!syncHistoryExpanded)}
-                            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                        >
-                            <History className="w-3.5 h-3.5" />
-                            Historial
-                            {syncHistoryExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                        </button>
-                        <button
-                            onClick={handleSyncNow}
-                            disabled={isSyncing}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-all shadow-sm"
-                        >
-                            {isSyncing
-                                ? <><Loader2 className="w-4 h-4 animate-spin" /> Sincronizando...</>
-                                : <><RefreshCw className="w-4 h-4" /> Sincronizar ahora</>
-                            }
-                        </button>
-                    </div>
-                </div>
-
-                {/* Resultado de sync */}
-                {syncResult && (
-                    <div className="mx-5 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex flex-wrap items-center gap-4">
-                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                        <p className="text-sm font-semibold text-green-800 flex-1">{syncResult.message}</p>
-                        <div className="flex gap-4 text-xs font-medium text-green-700">
-                            <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {syncResult.totalFound ?? 0} encontradas</span>
-                            <span className="flex items-center gap-1"><CheckSquare className="w-3 h-3" /> {syncResult.createdCount ?? 0} nuevas</span>
-                            <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3" /> {syncResult.updatedCount ?? 0} actualizadas</span>
-                            {syncResult.durationMs > 0 && <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {formatDuration(syncResult.durationMs)}</span>}
-                        </div>
-                        <button onClick={() => setSyncResult(null)} className="text-green-500 hover:text-green-700"><X className="w-4 h-4" /></button>
-                    </div>
-                )}
-                {syncError && (
-                    <div className="mx-5 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
-                        <AlertCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0" />
-                        <p className="text-sm font-medium text-red-700 flex-1">{syncError}</p>
-                        <button onClick={() => setSyncError(null)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
-                    </div>
-                )}
-
-                {/* Historial de logs */}
-                {syncHistoryExpanded && (
-                    <div className="p-5 border-t border-gray-100 bg-gray-50/50">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Últimas 10 sincronizaciones</h4>
-                        {isLoadingLogs ? (
-                            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
-                        ) : syncLogs.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-4">No hay registros de sincronización aún.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {syncLogs.map((log) => {
-                                    const cfg = syncStatusConfig[log.status] || syncStatusConfig.FAILED;
-                                    return (
-                                        <div key={log.id} className={`flex flex-wrap items-center gap-3 p-3 rounded-lg border text-xs ${cfg.bg}`}>
-                                            <span className={`flex items-center gap-1 font-semibold ${cfg.color}`}>{cfg.icon} {cfg.label}</span>
-                                            <span className={`px-2 py-0.5 rounded-full font-medium ${log.type === 'MANUAL' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>
-                                                {log.type === 'MANUAL' ? '⚡ Manual' : '⏰ Programado'}
-                                            </span>
-                                            <span className="text-gray-600 flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatLogDate(log.createdAt)}</span>
-                                            <span className="text-gray-600">
-                                                {log.totalFound} encontradas · <span className="text-green-700">{log.createdCount} nuevas</span> · <span className="text-blue-600">{log.updatedCount} actualizadas</span>
-                                                {log.skippedCount > 0 && <span className="text-yellow-700"> · {log.skippedCount} omitidas</span>}
-                                            </span>
-                                            {log.durationMs > 0 && <span className="text-gray-500 flex items-center gap-1 ml-auto"><Activity className="w-3 h-3" /> {formatDuration(log.durationMs)}</span>}
-                                            {log.triggeredBy && <span className="text-gray-400">por: {log.triggeredBy}</span>}
-                                            {log.errorMessage && <span className="text-red-600 w-full mt-1 pl-1 border-l-2 border-red-300">{log.errorMessage}</span>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
 
             {/* Panel de Filtros */}
