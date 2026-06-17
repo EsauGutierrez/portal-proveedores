@@ -54,29 +54,33 @@ export async function PATCH(
     const companyName = supplierProfile.companyName || 'Tu empresa';
 
     if (providerEmail) {
-      await sendEmail({
-        to: providerEmail,
-        subject: '⚠️ Solicitud de registro rechazada',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 20px; color: white; border-radius: 8px 8px 0 0;">
-              <h2 style="margin: 0;">⚠️ Solicitud Rechazada</h2>
-            </div>
-            <div style="padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 0 0 8px 8px;">
-              <p>Hola <strong>${providerName}</strong>,</p>
-              <p>Lamentamos informarte que la solicitud de registro de <strong>${companyName}</strong> en el portal de proveedores ha sido rechazada.</p>
-              <div style="background: white; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
-                <p style="margin: 0 0 8px 0; color: #666; font-size: 13px;"><strong>Motivo del rechazo:</strong></p>
-                <p style="margin: 0; color: #333; font-size: 14px;">${rejectionReason.trim()}</p>
+      try {
+        await sendEmail({
+          to: providerEmail,
+          subject: '⚠️ Solicitud de registro rechazada',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 20px; color: white; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0;">⚠️ Solicitud Rechazada</h2>
               </div>
-              <p>Si tienes preguntas o crees que esto es un error, contacta al equipo de administración.</p>
-              <p style="color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
-                Este es un mensaje automático del Portal de Proveedores.
-              </p>
+              <div style="padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 0 0 8px 8px;">
+                <p>Hola <strong>${providerName}</strong>,</p>
+                <p>Lamentamos informarte que la solicitud de registro de <strong>${companyName}</strong> en el portal de proveedores ha sido rechazada.</p>
+                <div style="background: white; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                  <p style="margin: 0 0 8px 0; color: #666; font-size: 13px;"><strong>Motivo del rechazo:</strong></p>
+                  <p style="margin: 0; color: #333; font-size: 14px;">${rejectionReason.trim()}</p>
+                </div>
+                <p>Si tienes preguntas o crees que esto es un error, contacta al equipo de administración.</p>
+                <p style="color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
+                  Este es un mensaje automático del Portal de Proveedores.
+                </p>
+              </div>
             </div>
-          </div>
-        `,
-      });
+          `,
+        });
+      } catch (emailError) {
+        console.error('Error enviando correo de rechazo:', emailError);
+      }
     }
 
     return NextResponse.json({ message: 'Proveedor rechazado y notificado.' }, { status: 200 });
