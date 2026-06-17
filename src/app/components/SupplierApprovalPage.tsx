@@ -691,6 +691,15 @@ const SupplierApprovalPage = () => {
       }
       await fetchSuppliers();
       setIsEditModalOpen(false);
+
+      // Si cambió el RFC, mostrar "Sin verificar" y re-consultar tras 4s para capturar resultado de Zentax
+      const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+      if (formData.rfc && !GENERIC_RFCS.includes(formData.rfc.toUpperCase())) {
+        setSuppliers((prev: any[]) =>
+          prev.map((s: any) => s.id === supplierId ? { ...s, lista69bStatus: 'NOT_CHECKED' } : s)
+        );
+        setTimeout(() => fetchSuppliers(), 4000);
+      }
     } catch (err: any) {
       setNotification({ type: 'error', title: 'Error', message: err.message });
     }
@@ -814,6 +823,7 @@ const SupplierApprovalPage = () => {
                     Estado <SortIcon columnKey="status" />
                   </div>
                 </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Lista 69B</th>
                 <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">Acciones</th>
               </tr>
             </thead>
@@ -832,6 +842,18 @@ const SupplierApprovalPage = () => {
                         {supplier.status === 'REJECTED' ? 'INACTIVO' : supplier.status}
                       </span>
                     </td>
+                    <td className="px-4 py-4 text-sm">
+                      {(() => {
+                        const s = supplier.lista69bStatus;
+                        if (!s || s === 'NOT_CHECKED') return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500 font-medium">Sin verificar</span>;
+                        if (s === 'NO_LISTADO')          return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-green-50 text-green-700 border border-green-100 font-medium">No listado</span>;
+                        if (s === 'PRESUNTO')            return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 border border-orange-200 font-semibold">Presunto</span>;
+                        if (s === 'DEFINITIVO')          return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 border border-red-200 font-semibold">Definitivo</span>;
+                        if (s === 'DESVIRTUADO')         return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-medium">Desvirtuado</span>;
+                        if (s === 'SENTENCIA_FAVORABLE') return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-medium">Sentencia favor.</span>;
+                        return null;
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center space-x-2">
                         <button onClick={() => handleOpenModal(supplier)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-100 flex items-center transition-colors border border-blue-200 shadow-sm" title="Validar Documentos">
@@ -849,7 +871,7 @@ const SupplierApprovalPage = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
                     No se encontraron proveedores que coincidan con la búsqueda.
                   </td>
                 </tr>

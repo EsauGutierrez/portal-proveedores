@@ -92,6 +92,8 @@ model SupplierProfile {
   netsuiteId        String?
   requireDocuments  Boolean            @default(false)
   supplierType      SupplierType       @default(NATIONAL)
+  lista69bStatus      Lista69bStatus     @default(NOT_CHECKED)
+  lista69bCheckedAt   DateTime?
   documents           SupplierDocument[]
   subsidiary          Subsidiary          @relation(fields: [subsidiaryId], references: [id])
   tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -352,4 +354,13 @@ model BulkUploadJob {
   uploader    User          @relation(fields: [uploadedBy], references: [id])
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoices    Invoice[]
+}
+
+enum Lista69bStatus {
+  NOT_CHECKED
+  NO_LISTADO
+  PRESUNTO
+  DEFINITIVO
+  DESVIRTUADO
+  SENTENCIA_FAVORABLE
 }

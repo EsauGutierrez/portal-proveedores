@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EventBridge Rule para sincronización automática de OC y Recepciones
+  desde NetSuite hacia el Portal de Proveedores — ambiente QA.
+
+Parameters:
+  AppUrl:
+    Type: String
+    Description: "URL base del ambiente QA SIN barra final (ej: https://qa.d1234.amplifyapp.com)"
+
+  SyncApiKey:
+    Type: String
+    NoEcho: true
+    Description: "Valor de la variable SYNC_API_KEY configurada en el ambiente QA"
+
+  ScheduleExpression:
+    Type: String
+    Default: "rate(4 hours)"
+    Description: >
+      Frecuencia de sincronización de OC. Ejemplos:
+        rate(4 hours)           — cada 4 horas
+        cron(0 12,20 * * ? *)   — a las 6am y 2pm (UTC = CST+6)
+
+  Lista69bScheduleExpression:
+    Type: String
+    Default: "cron(0 6 1 * ? *)"
+    Description: >
+      Frecuencia de verificación de Lista 69B. Ejemplos:
+        cron(0 6 1 * ? *)   — día 1 de cada mes a las 6am UTC
+        rate(5 minutes)     — cada 5 minutos (para pruebas)
+
+Resources:
+
+  SyncConnectionQa:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: portal-proveedores-sync-conn-qa
+      Description: "Autenticación para el endpoint de sync del Portal de Proveedores — QA"
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: x-sync-key
+          ApiKeyValue: !Ref SyncApiKey
+
+  SyncApiDestinationQa:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: portal-proveedores-sync-all-tenants-qa
+      Description: "GET /api/sync/all-tenants — sincroniza todos los tenants con NetSuite (QA)"
+      ConnectionArn: !GetAtt SyncConnectionQa.Arn
+      HttpMethod: GET
+      InvocationEndpoint: !Sub "${AppUrl}/api/sync/all-tenants"
+      InvocationRateLimitPerSecond: 1
+
+  Lista69bApiDestinationQa:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: portal-proveedores-lista69b-check-qa
+      Description: "GET /api/sync/lista-69b — verifica todos los proveedores contra Lista 69B del SAT (QA)"
+      ConnectionArn: !GetAtt SyncConnectionQa.Arn
+      HttpMethod: GET
+      InvocationEndpoint: !Sub "${AppUrl}/api/sync/lista-69b"
+      InvocationRateLimitPerSecond: 1
+
+  EventBridgeRoleQa:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: portal-proveedores-eventbridge-role-qa
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeApiDestinationQa
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource:
+                  - !GetAtt SyncApiDestinationQa.Arn
+                  - !GetAtt Lista69bApiDestinationQa.Arn
+
+  OCSyncRuleQa:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: portal-proveedores-oc-sync-all-qa
+      Description: "Sincronización automática de OC y Recepciones para todos los tenants — QA"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: SyncAllTenantsTargetQa
+          Arn: !GetAtt SyncApiDestinationQa.Arn
+          RoleArn: !GetAtt EventBridgeRoleQa.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
+  Lista69bSyncRuleQa:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: portal-proveedores-lista69b-monthly-qa
+      Description: "Verificación de proveedores contra Lista 69B del SAT — QA"
+      ScheduleExpression: !Ref Lista69bScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: Lista69bTargetQa
+          Arn: !GetAtt Lista69bApiDestinationQa.Arn
+          RoleArn: !GetAtt EventBridgeRoleQa.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
+Outputs:
+  RuleName:
+    Description: "Nombre de la regla de sync de OC creada"
+    Value: !Ref OCSyncRuleQa
+
+  SyncEndpoint:
+    Description: "Endpoint de sync de OC que será llamado automáticamente"
+    Value: !Sub "${AppUrl}/api/sync/all-tenants"
+
+  Lista69bRuleName:
+    Description: "Nombre de la regla mensual de Lista 69B creada"
+    Value: !Ref Lista69bSyncRuleQa
+
+  Lista69bEndpoint:
+    Description: "Endpoint de Lista 69B que será llamado según el schedule configurado"
+    Value: !Sub "${AppUrl}/api/sync/lista-69b"

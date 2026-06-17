@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { querySuiteQL } from '../../../lib/netsuite';
+import { checkLista69bBulk } from '../../../lib/zentax';
 
 const prisma = new PrismaClient();
 
@@ -137,6 +138,33 @@ export async function GET(request: Request) {
         });
         createdCount++;
       }
+    }
+
+    // Verificar Lista 69B en batch para todos los RFC procesados
+    const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+    const rfcsToCheck = results
+      .filter((v: any) => v.rfc && isValidRFC(v.rfc))
+      .map((v: any) => v.rfc.toUpperCase().replace(/\s/g, '').replace(/-/g, ''))
+      .filter((rfc: string) => !GENERIC_RFCS.includes(rfc));
+
+    if (rfcsToCheck.length > 0) {
+      checkLista69bBulk(rfcsToCheck).then(async (zentaxResults) => {
+        const zentaxMap = new Map(zentaxResults.map((r: any) => [r.rfc, r.status]));
+        const now = new Date();
+        const profiles = await prisma.supplierProfile.findMany({
+          where: { tenantId, rfc: { in: rfcsToCheck } },
+          select: { id: true, rfc: true },
+        });
+        for (const profile of profiles) {
+          const status = zentaxMap.get(profile.rfc) ?? 'NO_LISTADO';
+          await prisma.supplierProfile.update({
+            where: { id: profile.id },
+            data: { lista69bStatus: status, lista69bCheckedAt: now } as any,
+          });
+        }
+      }).catch((err: any) => {
+        console.error('[LISTA69B] Error en sync de proveedores NetSuite:', err.message);
+      });
     }
 
     return NextResponse.json({
