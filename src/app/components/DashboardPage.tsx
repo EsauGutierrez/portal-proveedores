@@ -14,6 +14,7 @@ import AdminInvoicesPage from './AdminInvoicesPage';
 import OverviewPage from './OverviewPage';
 import DocumentSettingsPage from './DocumentSettingsPage';
 import PaymentComplementsPage from './PaymentComplementsPage';
+import BulkPaymentComplementsPage from './BulkPaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
 import SyncLogsPage from './SyncLogsPage';
 import SupplierDocumentsPage from './SupplierDocumentsPage';
@@ -30,7 +31,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'pagos', 'pagos_masivos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -130,6 +131,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <PaymentComplementsPage user={user} />;
+            case 'pagos_masivos': return <BulkPaymentComplementsPage user={user} />;
             case 'mis_documentos': return <SupplierDocumentsPage user={user} />;
             case 'perfil': return <ProfilePage />;
             case 'documentacion': return <DocumentationPage />;
@@ -180,6 +182,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                 <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
                                 <NavLink view="facturas" icon={FileText} label="Facturas" />
                                 <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { invokeRestlet } from '../../../lib/netsuite';
 import { getPresignedUrl } from '../../../lib/s3';
+import { processBulkPaymentComplements } from '../../../lib/processBulkPaymentComplements';
 
 const prisma = new PrismaClient();
 
@@ -31,10 +32,17 @@ export async function POST(request: Request) {
                 messageBody = record;
             }
 
-            const { invoiceId, userId, receptionId } = messageBody;
+            const { invoiceId, bulkLogId, s3ZipKey, userId: msgUserId, tenantId: msgTenantId } = messageBody;
+
+            // Enrutar mensajes de carga masiva de complementos
+            if (bulkLogId) {
+                console.log(`[Worker] Procesando carga masiva de complementos: ${bulkLogId}`);
+                await processBulkPaymentComplements(bulkLogId, s3ZipKey, msgUserId, msgTenantId);
+                continue;
+            }
 
             if (!invoiceId) {
-                console.warn('Mensaje SQS ignorado, no contiene invoiceId', messageBody);
+                console.warn('Mensaje SQS ignorado, no contiene invoiceId ni bulkLogId', messageBody);
                 continue; // Skip silently to remove bad message from queue
             }
 
