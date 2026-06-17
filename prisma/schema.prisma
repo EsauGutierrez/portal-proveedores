@@ -34,6 +34,7 @@ model Tenant {
   syncLogs            SyncLog[]
   users               User[]
   documentRequirements DocumentRequirement[]
+  bulkPaymentLogs     BulkPaymentComplementLog[]
 }
 
 model DocumentRequirement {
@@ -70,6 +71,7 @@ model User {
   purchaseOrders       PurchaseOrder[]
   supplierProfile      SupplierProfile?
   tenant               Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bulkPaymentLogs      BulkPaymentComplementLog[]
 }
 
 model SupplierProfile {
@@ -249,6 +251,24 @@ model SyncLog {
   createdAt    DateTime   @default(now())
   tenantId     String
   tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model BulkPaymentComplementLog {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String
+  zipFilename  String?
+  s3ZipKey     String?
+  status       String   @default("PROCESSING") // PROCESSING | COMPLETED | COMPLETED_WITH_ERRORS | FAILED
+  totalFiles   Int      @default(0)
+  successCount Int      @default(0)
+  failedCount  Int      @default(0)
+  results      Json     @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
 }
 
 enum SupplierStatus {
