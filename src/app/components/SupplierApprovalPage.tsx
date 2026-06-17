@@ -478,6 +478,9 @@ const SupplierApprovalPage = () => {
   const [supplierToToggle, setSupplierToToggle] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string; tempPassword?: string } | null>(null);
+  const [rejectingSupplier, setRejectingSupplier] = useState<{ id: string; name: string } | null>(null);
+  const [supplierRejectionReason, setSupplierRejectionReason] = useState('');
+  const [isSubmittingSupplierReject, setIsSubmittingSupplierReject] = useState(false);
 
   // Estados para búsqueda, ordenamiento y paginación
   const [searchTerm, setSearchTerm] = useState('');
@@ -579,8 +582,35 @@ const SupplierApprovalPage = () => {
   };
 
   const handleReject = (supplierId: string) => {
+    const supplier = suppliers.find((s: any) => s.id === supplierId);
     setIsModalOpen(false);
-    setNotification({ type: 'info', title: 'No implementado', message: 'La lógica para rechazar proveedores aún no está implementada.' });
+    setRejectingSupplier({ id: supplierId, name: (supplier as any)?.companyName || 'Proveedor' });
+    setSupplierRejectionReason('');
+  };
+
+  const handleConfirmSupplierReject = async () => {
+    if (!rejectingSupplier || !supplierRejectionReason.trim()) return;
+    const token = localStorage.getItem('token');
+    setIsSubmittingSupplierReject(true);
+    try {
+      const response = await fetch(`/api/suppliers/${rejectingSupplier.id}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ rejectionReason: supplierRejectionReason.trim() }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Error al rechazar el proveedor.');
+      }
+      fetchSuppliers();
+      setRejectingSupplier(null);
+      setSupplierRejectionReason('');
+      setNotification({ type: 'info', title: 'Proveedor rechazado', message: 'El proveedor ha sido notificado con el motivo del rechazo.' });
+    } catch (err: any) {
+      setNotification({ type: 'error', title: 'Error', message: err.message });
+    } finally {
+      setIsSubmittingSupplierReject(false);
+    }
   };
 
   const handleValidateDocument = async (documentId: string, status: 'APPROVED' | 'REJECTED') => {
@@ -957,6 +987,47 @@ const SupplierApprovalPage = () => {
         onClose={() => setIsInviteModalOpen(false)}
         onInvite={handleInvite}
       />
+
+      {/* Modal: Motivo de rechazo de proveedor */}
+      {rejectingSupplier && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-800">Motivo del Rechazo</h3>
+                <p className="text-xs text-gray-500">Se notificará al proveedor por email</p>
+              </div>
+            </div>
+            <textarea
+              value={supplierRejectionReason}
+              onChange={(e) => setSupplierRejectionReason(e.target.value)}
+              placeholder="Explica claramente por qué se rechaza al proveedor..."
+              className="w-full border border-gray-300 rounded-lg p-3 mb-4 h-28 text-sm text-gray-900 focus:ring-2 focus:ring-red-400 focus:border-red-400 resize-none"
+              autoFocus
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setRejectingSupplier(null); setSupplierRejectionReason(''); }}
+                disabled={isSubmittingSupplierReject}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmSupplierReject}
+                disabled={isSubmittingSupplierReject || !supplierRejectionReason.trim()}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSubmittingSupplierReject && <Loader2 className="w-4 h-4 animate-spin" />}
+                Rechazar y Notificar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Notificación (reemplaza todos los alert()) */}
       {notification && (
