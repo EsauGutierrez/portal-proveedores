@@ -15,6 +15,7 @@ import OverviewPage from './OverviewPage';
 import DocumentSettingsPage from './DocumentSettingsPage';
 import InvoiceSettingsPage from './InvoiceSettingsPage';
 import PaymentComplementsPage from './PaymentComplementsPage';
+import BulkPaymentComplementsPage from './BulkPaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
 import SyncLogsPage from './SyncLogsPage';
 import SupplierDocumentsPage from './SupplierDocumentsPage';
@@ -35,7 +36,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'soporte', 'sync_logs', 'mis_documentos', 'cargadores', 'cargador_home', 'carga_masiva'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'pagos_masivos', 'soporte', 'sync_logs', 'mis_documentos', 'cargadores', 'cargador_home', 'carga_masiva'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -135,6 +136,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <PaymentComplementsPage user={user} />;
+            case 'pagos_masivos': return <BulkPaymentComplementsPage user={user} />;
             case 'mis_documentos': return <SupplierDocumentsPage user={user} />;
             case 'perfil': return <ProfilePage />;
             case 'documentacion': return <DocumentationPage />;
@@ -188,6 +190,7 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
                                 <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
                         )}
@@ -200,6 +203,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                     <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
                                 )}
                                 <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
