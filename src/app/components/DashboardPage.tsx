@@ -15,14 +15,19 @@ import OverviewPage from './OverviewPage';
 import DocumentSettingsPage from './DocumentSettingsPage';
 import InvoiceSettingsPage from './InvoiceSettingsPage';
 import PaymentComplementsPage from './PaymentComplementsPage';
+import BulkPaymentComplementsPage from './BulkPaymentComplementsPage';
 import SupportRequestPage from './SupportRequestPage';
 import SyncLogsPage from './SyncLogsPage';
 import SupplierDocumentsPage from './SupplierDocumentsPage';
+import OperatorsPage from './OperatorsPage';
+import CargadorPage from './CargadorPage';
+import BulkUploadPage from './BulkUploadPage';
 import { LayoutDashboard, Settings, DatabaseZap } from 'lucide-react';
 
 const DashboardPage = ({ user, onLogout }) => {
-    // La vista inicial ahora depende del rol del usuario.
-    const [activeView, setActiveView] = useState('resumen');
+    // La vista inicial depende del rol del usuario.
+    // CARGADOR inicia directamente en su vista de selección de proveedor.
+    const [activeView, setActiveView] = useState(user?.role === 'CARGADOR' ? 'cargador_home' : 'resumen');
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +36,7 @@ const DashboardPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         // Si la vista no requiere datos de una tabla, no hacemos la llamada a la API.
-        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'soporte', 'sync_logs', 'mis_documentos'].includes(activeView)) {
+        if (['resumen', 'perfil', 'documentacion', 'proveedores', 'subsidiarias', 'empresas', 'facturas_admin', 'ajustes_documentos', 'ajustes_facturas', 'pagos', 'pagos_masivos', 'soporte', 'sync_logs', 'mis_documentos', 'cargadores', 'cargador_home', 'carga_masiva'].includes(activeView)) {
             setIsLoading(false);
             return;
         }
@@ -131,6 +136,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <PaymentComplementsPage user={user} />;
+            case 'pagos_masivos': return <BulkPaymentComplementsPage user={user} />;
             case 'mis_documentos': return <SupplierDocumentsPage user={user} />;
             case 'perfil': return <ProfilePage />;
             case 'documentacion': return <DocumentationPage />;
@@ -142,6 +148,9 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'ajustes_facturas': return <InvoiceSettingsPage />;
             case 'soporte': return <SupportRequestPage />;
             case 'sync_logs': return <SyncLogsPage />;
+            case 'cargadores': return <OperatorsPage />;
+            case 'cargador_home': return <CargadorPage user={user} />;
+            case 'carga_masiva': return <BulkUploadPage user={user} />;
             default: return <OverviewPage user={user} />;
         }
     };
@@ -175,13 +184,26 @@ const DashboardPage = ({ user, onLogout }) => {
                         )}
                     </div>
                     <nav className="flex-grow space-y-2">
-                        <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />
+                        {user?.role !== 'CARGADOR' && <NavLink view="resumen" icon={LayoutDashboard} label="Resumen" />}
+
+                        {user && user.role === 'CARGADOR' && (
+                            <>
+                                <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
+                                <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
+                                <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
+                            </>
+                        )}
 
                         {user && user.role === 'SUPPLIER' && (
                             <>
                                 <NavLink view="ordenes" icon={Home} label="Órdenes de Compra" />
                                 <NavLink view="facturas" icon={FileText} label="Facturas" />
+                                {user.bulkUploadForSuppliers && (
+                                    <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
+                                )}
                                 <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
@@ -191,6 +213,7 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="facturas_admin" icon={FileText} label="Facturas y Documentos" />
                                 <NavLink view="proveedores" icon={Users} label="Proveedores" />
+                                <NavLink view="cargadores" icon={Users} label="Cargadores" />
                                 <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
                                 <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
                                 <NavLink view="ajustes_facturas" icon={Settings} label="Config. de Facturas" />

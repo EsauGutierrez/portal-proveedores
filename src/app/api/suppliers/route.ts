@@ -10,17 +10,30 @@ import { getPresignedUrl } from '../../lib/s3';
 
 const prisma = new PrismaClient();
 
-// Función para obtener proveedores, filtrando por estado
+// Función para obtener proveedores, filtrando por estado y tenant
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status'); // Permite filtrar por ej: /api/suppliers?status=PENDING
+    const status = searchParams.get('status');
 
     const { searchParams: sp } = new URL(request.url);
     const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
     const limit = Math.min(200, Math.max(1, parseInt(sp.get('limit') || '100', 10)));
 
-    const where = { status: status ? { equals: status as any } : undefined };
+    // Extraer tenantId del JWT si está presente
+    let tenantId: string | undefined;
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as any;
+        tenantId = decoded.tenantId ?? undefined;
+      } catch { /* token inválido, continuar sin filtro */ }
+    }
+
+    const where = {
+      ...(tenantId ? { tenantId } : {}),
+      ...(status ? { status: { equals: status as any } } : {}),
+    };
 
     const [rawSuppliers, total] = await Promise.all([
       prisma.supplierProfile.findMany({

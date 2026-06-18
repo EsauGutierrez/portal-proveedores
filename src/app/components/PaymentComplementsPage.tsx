@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle } from 'lucide-react';
 
 const SYNC_STATUS_MAP: Record<string, { label: string; color: string; bg: string; Icon: any }> = {
   SYNCED:       { label: 'Registrado en NetSuite', color: 'text-green-700',  bg: 'bg-green-50',  Icon: CheckCircle },
@@ -259,6 +259,11 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                           {c.netsuiteSyncError}
                         </p>
                       )}
+                      {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
+                        <p className="text-xs text-green-700 mt-1">
+                          <span className="font-semibold">ID: </span>{c.netsuitePaymentId}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -279,15 +284,6 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                       </div>
                     </td>
                   </tr>
-                  {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
-                    <tr className="bg-green-50/50">
-                      <td colSpan={6} className="px-4 py-1.5">
-                        <p className="text-xs text-green-700">
-                          <span className="font-semibold">ID NetSuite: </span>{c.netsuitePaymentId}
-                        </p>
-                      </td>
-                    </tr>
-                  )}
                 </React.Fragment>
               ))}
             </tbody>
