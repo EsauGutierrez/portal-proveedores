@@ -94,9 +94,9 @@ model SupplierProfile {
   netsuiteId        String?
   requireDocuments  Boolean            @default(false)
   supplierType      SupplierType       @default(NATIONAL)
-  lista69bStatus      Lista69bStatus     @default(NOT_CHECKED)
-  lista69bCheckedAt   DateTime?
-  documents           SupplierDocument[]
+  lista69bStatus    Lista69bStatus     @default(NOT_CHECKED)
+  lista69bCheckedAt DateTime?
+  documents         SupplierDocument[]
   subsidiary          Subsidiary          @relation(fields: [subsidiaryId], references: [id])
   tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user                User                @relation(fields: [userId], references: [id])
@@ -284,6 +284,36 @@ model BulkPaymentComplementLog {
   user   User   @relation(fields: [userId], references: [id])
 }
 
+model OperatorAssignment {
+  id                String          @id @default(cuid())
+  operatorId        String
+  supplierProfileId String
+  tenantId          String
+  createdAt         DateTime        @default(now())
+  operator          User            @relation("OperatorUser", fields: [operatorId], references: [id])
+  supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id])
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([operatorId, supplierProfileId])
+}
+
+model BulkUploadJob {
+  id          String        @id @default(cuid())
+  uploadedBy  String
+  tenantId    String
+  totalFiles  Int           @default(0)
+  processed   Int           @default(0)
+  succeeded   Int           @default(0)
+  failed      Int           @default(0)
+  pending     Int           @default(0)
+  status      BulkJobStatus @default(PROCESSING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  uploader    User          @relation(fields: [uploadedBy], references: [id])
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices    Invoice[]
+}
+
 enum SupplierStatus {
   PENDING
   ACTIVE
@@ -344,36 +374,6 @@ enum SupplierType {
   NATIONAL
   FOREIGN
   BOTH
-}
-
-model OperatorAssignment {
-  id                String          @id @default(cuid())
-  operatorId        String
-  supplierProfileId String
-  tenantId          String
-  createdAt         DateTime        @default(now())
-  operator          User            @relation("OperatorUser", fields: [operatorId], references: [id])
-  supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id])
-  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([operatorId, supplierProfileId])
-}
-
-model BulkUploadJob {
-  id          String        @id @default(cuid())
-  uploadedBy  String
-  tenantId    String
-  totalFiles  Int           @default(0)
-  processed   Int           @default(0)
-  succeeded   Int           @default(0)
-  failed      Int           @default(0)
-  pending     Int           @default(0)
-  status      BulkJobStatus @default(PROCESSING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  uploader    User          @relation(fields: [uploadedBy], references: [id])
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  invoices    Invoice[]
 }
 
 enum Lista69bStatus {
