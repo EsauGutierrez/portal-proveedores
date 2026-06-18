@@ -390,6 +390,11 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                           {c.netsuiteSyncError}
                         </p>
                       )}
+                      {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
+                        <p className="text-xs text-green-700 mt-1">
+                          <span className="font-semibold">ID: </span>{c.netsuitePaymentId}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">

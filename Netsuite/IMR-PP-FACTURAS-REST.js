@@ -173,6 +173,74 @@ define(['N/record', 'N/file', 'N/https'], function (record, file, https) {
                 };
             }
 
+            // ─── Acción 3: Crear Vendor Bill independiente (sin OC/Recepción) ───────────
+            // Usado cuando el CARGADOR o admin sube una factura sin orden de compra
+            if (action === 'createStandaloneVendorBill') {
+                const {
+                    vendorNetsuiteId, // Internal ID del proveedor en NetSuite
+                    uuidFactura,
+                    totalFactura,
+                    subtotalFactura,
+                    taxFactura,
+                    fechaFactura,
+                    facturaXMLUrl,
+                    facturaPDFUrl
+                } = requestBody;
+
+                if (!vendorNetsuiteId || !uuidFactura || !totalFactura) {
+                    return {
+                        success: false,
+                        error: 'Faltan campos requeridos: vendorNetsuiteId, uuidFactura, totalFactura'
+                    };
+                }
+
+                const vendorBill = record.create({
+                    type: record.Type.VENDOR_BILL,
+                    isDynamic: true
+                });
+
+                vendorBill.setValue({ fieldId: 'entity', value: parseInt(vendorNetsuiteId) });
+                vendorBill.setValue({ fieldId: 'tranid', value: uuidFactura });
+
+                if (fechaFactura) {
+                    vendorBill.setValue({ fieldId: 'trandate', value: new Date(fechaFactura) });
+                }
+
+                // Línea de cargo genérica con el monto total
+                vendorBill.selectNewLine({ sublistId: 'expense' });
+                vendorBill.setCurrentSublistValue({ sublistId: 'expense', fieldId: 'amount', value: parseFloat(subtotalFactura || totalFactura) });
+                vendorBill.setCurrentSublistValue({ sublistId: 'expense', fieldId: 'memo', value: 'Factura sin OC: ' + uuidFactura });
+                vendorBill.commitLine({ sublistId: 'expense' });
+
+                // Subir XML y PDF al File Cabinet
+                if (facturaXMLUrl) {
+                    const xmlFileId = uploadToFileCabinet(facturaXMLUrl, uuidFactura + '.xml', file.Type.XMLDOC);
+                    if (xmlFileId) vendorBill.setValue({ fieldId: 'custbody_fe_sf_xml_sat', value: xmlFileId });
+                }
+                if (facturaPDFUrl) {
+                    const pdfFileId = uploadToFileCabinet(facturaPDFUrl, uuidFactura + '.pdf', file.Type.PDF);
+                    if (pdfFileId) vendorBill.setValue({ fieldId: 'custbody_fe_sf_pdf', value: pdfFileId });
+                }
+
+                // Campo custom para identificar que no tiene OC ligada
+                try {
+                    vendorBill.setValue({ fieldId: 'custbody_sin_oc', value: true });
+                } catch (_) { /* campo custom puede no existir en todos los ambientes */ }
+
+                const newBillId = vendorBill.save({
+                    enableSourcing: true,
+                    ignoreMandatoryFields: true
+                });
+
+                log.audit('Vendor Bill standalone creado', { newBillId, uuidFactura });
+
+                return {
+                    success: true,
+                    vendorBillId: newBillId,
+                    message: 'Vendor Bill sin OC creado correctamente.'
+                };
+            }
+
             // ─── Acción desconocida ──────────────────────────────────────────────────────
             return {
                 success: false,
