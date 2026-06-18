@@ -188,6 +188,7 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
                                 <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
                         )}

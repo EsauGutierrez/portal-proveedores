@@ -20,12 +20,16 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json({ message: 'Token inválido.' }, { status: 401 });
     }
-    if (decoded.role !== 'SUPPLIER') {
-      return NextResponse.json({ message: 'Solo proveedores pueden usar esta función.' }, { status: 403 });
+    const isCargador = decoded.role === 'CARGADOR';
+    const isSupplier = decoded.role === 'SUPPLIER';
+    if (!isSupplier && !isCargador) {
+      return NextResponse.json({ message: 'Sin permiso para usar esta función.' }, { status: 403 });
     }
 
     const formData = await request.formData();
     const zipFile = formData.get('zipFile') as File | null;
+    const supplierUserIdParam = formData.get('supplierUserId') as string | null;
+
     if (!zipFile) {
       return NextResponse.json({ message: 'Se requiere un archivo ZIP.' }, { status: 400 });
     }
@@ -33,9 +37,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'El archivo debe ser un ZIP.' }, { status: 400 });
     }
 
-    // Verificar que el usuario tiene un tenant
+    // Para CARGADOR: debe indicar el proveedor y tener asignación válida
+    if (isCargador) {
+      if (!supplierUserIdParam) {
+        return NextResponse.json({ message: 'El CARGADOR debe especificar el proveedor (supplierUserId).' }, { status: 400 });
+      }
+      const assignment = await prisma.operatorAssignment.findFirst({
+        where: { operatorId: decoded.userId, supplierProfile: { userId: supplierUserIdParam } },
+      });
+      if (!assignment) {
+        return NextResponse.json({ message: 'No tienes asignación para este proveedor.' }, { status: 403 });
+      }
+    }
+
+    // Determinar el userId efectivo (a nombre de quién se sube)
+    const effectiveUserId = isCargador && supplierUserIdParam ? supplierUserIdParam : decoded.userId;
+
+    // Verificar que el usuario efectivo tiene un tenant
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: effectiveUserId },
       select: { tenantId: true },
     });
     if (!user?.tenantId) {

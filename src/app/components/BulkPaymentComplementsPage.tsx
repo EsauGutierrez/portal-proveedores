@@ -254,7 +254,16 @@ function HistoryRow({ log, token, defaultOpen = false }: { log: BulkLog; token: 
 
 const HISTORY_PAGE_SIZE = 20;
 
+interface AssignedSupplier {
+  id: string;
+  companyName: string;
+  rfc: string;
+  userId: string;
+}
+
 export default function BulkPaymentComplementsPage({ user: _user }: { user: any }) {
+  const isCargador = _user?.role === 'CARGADOR';
+
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [activeLogId, setActiveLogId] = useState<string | null>(null);
@@ -266,6 +275,8 @@ export default function BulkPaymentComplementsPage({ user: _user }: { user: any 
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [assignedSuppliers, setAssignedSuppliers] = useState<AssignedSupplier[]>([]);
+  const [supplierUserId, setSupplierUserId] = useState('');
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
 
@@ -288,6 +299,14 @@ export default function BulkPaymentComplementsPage({ user: _user }: { user: any 
   useEffect(() => { fetchHistory(1); }, [fetchHistory]);
 
   useEffect(() => {
+    if (!isCargador) return;
+    fetch('/api/cargador/suppliers', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: AssignedSupplier[]) => setAssignedSuppliers(data))
+      .catch(() => {});
+  }, [isCargador, token]);
+
+  useEffect(() => {
     if (!success) return;
     const t = setTimeout(() => setSuccess(''), 5000);
     return () => clearTimeout(t);
@@ -295,12 +314,17 @@ export default function BulkPaymentComplementsPage({ user: _user }: { user: any 
 
   const handleUpload = async () => {
     if (!zipFile) return;
+    if (isCargador && !supplierUserId) {
+      setError('Debes seleccionar un proveedor antes de subir el ZIP.');
+      return;
+    }
     setUploading(true);
     setError('');
     setSuccess('');
     try {
       const form = new FormData();
       form.append('zipFile', zipFile);
+      if (isCargador && supplierUserId) form.append('supplierUserId', supplierUserId);
       const res = await fetch('/api/payment-complements/bulk', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -344,6 +368,26 @@ export default function BulkPaymentComplementsPage({ user: _user }: { user: any 
       {/* Upload card */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <h2 className="text-base font-semibold text-gray-800 mb-4">Subir archivo ZIP</h2>
+
+        {isCargador && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Proveedor <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={supplierUserId}
+              onChange={e => setSupplierUserId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">— Selecciona un proveedor —</option>
+              {assignedSuppliers.map(s => (
+                <option key={s.userId} value={s.userId}>
+                  {s.companyName} ({s.rfc})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <label
           htmlFor="zip-input"
