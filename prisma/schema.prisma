@@ -247,7 +247,7 @@ model PaymentComplement {
   tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user                User                     @relation(fields: [userId], references: [id])
 
-  @@unique([tenantId, folio])
+  @@unique([tenantId, folio, invoiceId])
 }
 
 model SyncLog {
