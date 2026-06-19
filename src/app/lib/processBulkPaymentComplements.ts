@@ -26,9 +26,11 @@ function toArray<T>(val: T | T[] | undefined): T[] {
   return Array.isArray(val) ? val : [val];
 }
 
+const isGenericRfc = (rfc: string) => rfc.startsWith('XAXX') || rfc.startsWith('XEXX');
+
 interface ParsedCfdi {
   complementUUID: string | null;
-  invoiceUUID: string | null;
+  invoiceUUIDs: string[];
   rfcEmisor: string;
   rfcReceptor: string;
   total: number;
@@ -50,7 +52,7 @@ async function parseCfdiPago(xmlText: string): Promise<ParsedCfdi | null> {
   const emisorAttrs = (comprobante['cfdi:Emisor'] || comprobante['Emisor'] || {})['$'] || {};
   const receptorAttrs = (comprobante['cfdi:Receptor'] || comprobante['Receptor'] || {})['$'] || {};
 
-  // UUID del complemento
+  // UUID del complemento (Timbre Fiscal Digital)
   const timbre = comprobante['cfdi:Complemento']?.['tfd:TimbreFiscalDigital']?.['$']
     || comprobante['cfdi:Complemento']?.['TimbreFiscalDigital']?.['$'];
   const complementUUID = timbre?.UUID || null;
@@ -58,25 +60,39 @@ async function parseCfdiPago(xmlText: string): Promise<ParsedCfdi | null> {
   // Nodo Pagos (pago10 = CFDI 3.3, pago20 = CFDI 4.0)
   const complemento = comprobante['cfdi:Complemento'] || {};
   const pagosNode = complemento['pago10:Pagos'] || complemento['pago20:Pagos'] || complemento['Pagos'];
+
+  // Todos los nodos Pago (puede haber más de uno)
   const pagoRaw = pagosNode?.['pago10:Pago'] || pagosNode?.['pago20:Pago'] || pagosNode?.['Pago'];
-  const pago = toArray(pagoRaw)[0];
-  const pagoAttrs = pago?.['$'] || {};
+  const pagoArr = toArray(pagoRaw);
+  const pagoAttrs = pagoArr[0]?.['$'] || {};
 
-  // UUID de la factura relacionada (primer DoctoRelacionado)
-  const doctoRaw = pago?.['pago10:DoctoRelacionado'] || pago?.['pago20:DoctoRelacionado'] || pago?.['DoctoRelacionado'];
-  const docto = toArray(doctoRaw)[0];
-  const invoiceUUID = docto?.['$']?.IdDocumento || null;
+  // Todos los UUID de facturas relacionadas (todos los DoctoRelacionado de todos los Pago)
+  const doctos = pagoArr.flatMap((p: any) => {
+    const d = p['pago10:DoctoRelacionado'] || p['pago20:DoctoRelacionado'] || p['DoctoRelacionado'];
+    return toArray(d);
+  });
+  const invoiceUUIDs = doctos
+    .map((d: any) => (d?.['$']?.IdDocumento || '').toUpperCase())
+    .filter(Boolean);
 
-  // Monto: preferir el Monto del nodo Pago; fallback al Total del Comprobante
-  const monto = parseFloat(pagoAttrs.Monto) || parseFloat(attrs.Total) || 0;
+  // Total: para TipoDeComprobante="P" el SAT requiere Total="0"; el monto real está en MontoTotalPagos
+  const montoTotalPagos = parseFloat(
+    pagosNode?.['pago20:Totales']?.['$']?.MontoTotalPagos
+    || pagosNode?.['pago10:Totales']?.['$']?.MontoTotalPagos
+    || pagosNode?.['Totales']?.['$']?.MontoTotalPagos
+    || '0'
+  );
+  const monto = attrs.TipoDeComprobante === 'P'
+    ? montoTotalPagos
+    : (parseFloat(pagoAttrs.Monto) || parseFloat(attrs.Total) || 0);
 
-  // Fecha: preferir FechaPago del nodo Pago; fallback a Fecha del Comprobante
+  // Fecha: preferir FechaPago del primer Pago; fallback a Fecha del Comprobante
   const fechaStr = pagoAttrs.FechaPago || attrs.Fecha;
   const fecha = fechaStr ? new Date(fechaStr) : new Date();
 
   return {
     complementUUID,
-    invoiceUUID,
+    invoiceUUIDs,
     rfcEmisor: (emisorAttrs.Rfc || '').toUpperCase().replace(/[\s-]/g, ''),
     rfcReceptor: (receptorAttrs.Rfc || '').toUpperCase().replace(/[\s-]/g, ''),
     total: monto,
@@ -90,7 +106,6 @@ export async function processBulkPaymentComplements(
   userId: string,
   tenantId: string
 ): Promise<void> {
-  // Marcar como procesando
   await prisma.bulkPaymentComplementLog.update({
     where: { id: bulkLogId },
     data: { status: 'PROCESSING' },
@@ -108,7 +123,6 @@ export async function processBulkPaymentComplements(
     const fileMap = new Map<string, { xml?: Buffer; pdf?: Buffer; xmlName?: string; pdfName?: string }>();
     for (const entry of entries) {
       if (entry.isDirectory) continue;
-      // Ignorar archivos de metadata de macOS y carpetas especiales
       const entryName = entry.entryName;
       if (entryName.startsWith('__MACOSX/') || entryName.includes('/.')) continue;
       const name = entryName.replace(/^.*[\\/]/, '');
@@ -156,7 +170,10 @@ export async function processBulkPaymentComplements(
     if (!user?.supplierProfile || !user.tenant) {
       await prisma.bulkPaymentComplementLog.update({
         where: { id: bulkLogId },
-        data: { status: 'FAILED', results: [{ filename: '—', complementUUID: null, invoiceUUID: null, status: 'error', error: 'Perfil de proveedor o tenant no encontrado.' }] },
+        data: {
+          status: 'FAILED',
+          results: [{ filename: '—', complementUUID: null, invoiceUUID: null, status: 'error', error: 'Perfil de proveedor o tenant no encontrado.' }],
+        },
       });
       return;
     }
@@ -164,7 +181,7 @@ export async function processBulkPaymentComplements(
     const rfcProveedor = user.supplierProfile.rfc.toUpperCase().replace(/[\s-]/g, '');
     const rfcsSubsidiarias = user.tenant.subsidiaries
       .map((s: any) => (s.rfc || '').toUpperCase().replace(/[\s-]/g, ''))
-      .filter(Boolean);
+      .filter((r: string) => r && !isGenericRfc(r));
 
     const nsCreds: NetSuiteCredentials | null = user.tenant.netsuiteAccountId ? {
       accountId: user.tenant.netsuiteAccountId,
@@ -177,94 +194,129 @@ export async function processBulkPaymentComplements(
     const scriptId = (user.tenant as any).netsuiteScriptId || FALLBACK_SCRIPT_ID;
     const deployId = (user.tenant as any).netsuiteDeployId || FALLBACK_DEPLOY_ID;
 
-    // Parsear todos los XMLs primero
+    // ── Fase 1: Parsear XMLs y resolver facturas ──────────────────────────────
     interface ParsedItem {
       base: string;
       group: { xml?: Buffer; pdf?: Buffer; xmlName?: string; pdfName?: string };
       cfdi: ParsedCfdi;
-      invoice: any | null;
-      parseError?: string;
+      invoices: any[];
     }
 
     const parsedItems: ParsedItem[] = [];
 
     for (const [base, group] of xmlGroups) {
+      const filename = group.xmlName || base + '.xml';
       const xmlText = group.xml!.toString('utf-8');
       const cfdi = await parseCfdiPago(xmlText);
 
       if (!cfdi) {
-        results.push({ filename: group.xmlName || base + '.xml', complementUUID: null, invoiceUUID: null, status: 'error', error: 'XML inválido o no es un CFDI.' });
+        results.push({ filename, complementUUID: null, invoiceUUID: null, status: 'error', error: 'XML inválido o no es un CFDI.' });
         continue;
       }
       if (!cfdi.complementUUID) {
-        results.push({ filename: group.xmlName || base + '.xml', complementUUID: null, invoiceUUID: null, status: 'error', error: 'El CFDI no tiene Timbre Fiscal Digital (UUID).' });
+        results.push({ filename, complementUUID: null, invoiceUUID: null, status: 'error', error: 'El CFDI no tiene Timbre Fiscal Digital (UUID).' });
         continue;
       }
-      if (!cfdi.invoiceUUID) {
-        results.push({ filename: group.xmlName || base + '.xml', complementUUID: cfdi.complementUUID, invoiceUUID: null, status: 'error', error: 'No se encontró IdDocumento (UUID de factura relacionada) en el XML.' });
+      if (cfdi.invoiceUUIDs.length === 0) {
+        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: null, status: 'error', error: 'No se encontró IdDocumento (UUID de factura relacionada) en el XML.' });
         continue;
       }
       if (cfdi.total <= 0) {
-        results.push({ filename: group.xmlName || base + '.xml', complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: `El monto del pago ($${cfdi.total}) debe ser mayor a cero.` });
+        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: null, status: 'error', error: `El monto del pago ($${cfdi.total}) debe ser mayor a cero.` });
         continue;
       }
 
-      // Buscar factura en BD por UUID
-      const invoice = await prisma.invoice.findFirst({
-        where: { tenantId, folio: cfdi.invoiceUUID },
+      // Buscar TODAS las facturas referenciadas en el XML
+      const invoices = await prisma.invoice.findMany({
+        where: { tenantId, folio: { in: cfdi.invoiceUUIDs } },
         include: {
           user: { include: { supplierProfile: { select: { rfc: true, netsuiteId: true } } } },
         },
       });
 
-      parsedItems.push({ base, group, cfdi, invoice });
+      // Reportar UUIDs no encontrados en el sistema
+      const foundUUIDs = new Set(invoices.map((inv: any) => (inv.folio || '').toUpperCase()));
+      for (const uuid of cfdi.invoiceUUIDs) {
+        if (!foundUUIDs.has(uuid)) {
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: uuid, status: 'error', error: `Factura con UUID ${uuid} no encontrada en el sistema.` });
+        }
+      }
+
+      if (invoices.length > 0) {
+        parsedItems.push({ base, group, cfdi, invoices });
+      }
     }
 
-    // Validaciones locales y recolección de netsuiteIds para batch query
-    interface ValidItem extends ParsedItem {
-      invoice: NonNullable<ParsedItem['invoice']>;
+    // ── Fase 2: Validaciones por factura ──────────────────────────────────────
+    // Un ValidItem = un par (XML, factura) que pasó todas las validaciones
+    interface ValidItem {
+      base: string;
+      group: { xml?: Buffer; pdf?: Buffer; xmlName?: string; pdfName?: string };
+      cfdi: ParsedCfdi;
+      invoice: NonNullable<any>;
     }
     const validItems: ValidItem[] = [];
 
     for (const item of parsedItems) {
       const filename = item.group.xmlName || item.base + '.xml';
-      const { cfdi, invoice } = item;
+      const { cfdi } = item;
 
-      if (!invoice) {
-        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: `Factura con UUID ${cfdi.invoiceUUID} no encontrada en el sistema.` });
-        continue;
-      }
-      if (invoice.syncStatus !== 'SYNCED' || !invoice.netsuiteId) {
-        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: 'La factura aún no está sincronizada con NetSuite.' });
-        continue;
-      }
+      for (const invoice of item.invoices) {
+        const invoiceUUID = (invoice.folio || '').toUpperCase();
 
-      // Validar RFC Emisor
-      const rfcEmisorInvoice = (invoice.user?.supplierProfile?.rfc || '').toUpperCase().replace(/[\s-]/g, '');
-      if (cfdi.rfcEmisor !== rfcProveedor || cfdi.rfcEmisor !== rfcEmisorInvoice) {
-        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: `RFC emisor (${cfdi.rfcEmisor}) no coincide con el proveedor de la factura (${rfcEmisorInvoice}).` });
-        continue;
-      }
+        if (invoice.syncStatus !== 'SYNCED' || !invoice.netsuiteId) {
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: 'La factura aún no está sincronizada con NetSuite.' });
+          continue;
+        }
 
-      // Validar RFC Receptor
-      if (rfcsSubsidiarias.length > 0 && cfdi.rfcReceptor && !rfcsSubsidiarias.includes(cfdi.rfcReceptor)) {
-        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: `RFC receptor (${cfdi.rfcReceptor}) no corresponde a ninguna empresa registrada.` });
-        continue;
-      }
+        // Validar RFC Emisor — bypass para RFC genérico (XAXX/XEXX)
+        const rfcEmisorInvoice = (invoice.user?.supplierProfile?.rfc || '').toUpperCase().replace(/[\s-]/g, '');
+        if (!isGenericRfc(rfcProveedor) && !isGenericRfc(rfcEmisorInvoice)) {
+          if (cfdi.rfcEmisor !== rfcProveedor || cfdi.rfcEmisor !== rfcEmisorInvoice) {
+            results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: `RFC emisor (${cfdi.rfcEmisor}) no coincide con el proveedor de la factura (${rfcEmisorInvoice}).` });
+            continue;
+          }
+        }
 
-      // Verificar duplicado
-      const existing = await prisma.paymentComplement.findFirst({
-        where: { tenantId, folio: cfdi.complementUUID! },
-      });
-      if (existing) {
-        results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: 'Este complemento ya fue registrado anteriormente (UUID duplicado).' });
-        continue;
-      }
+        // Validar RFC Receptor — bypass para RFC genérico (XAXX/XEXX)
+        if (cfdi.rfcReceptor && !isGenericRfc(cfdi.rfcReceptor) && rfcsSubsidiarias.length > 0 && !rfcsSubsidiarias.includes(cfdi.rfcReceptor)) {
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: `RFC receptor (${cfdi.rfcReceptor}) no corresponde a ninguna empresa registrada.` });
+          continue;
+        }
 
-      validItems.push(item as ValidItem);
+        // Validar que el complemento no exceda el saldo pendiente de la factura (con tolerancia configurada)
+        const existingAgg = await prisma.paymentComplement.aggregate({
+          where: { invoiceId: invoice.id },
+          _sum: { total: true },
+        });
+        const alreadyPaid = Number(existingAgg._sum.total ?? 0);
+        const pendingBalance = Number(invoice.total) - alreadyPaid;
+        const invoiceTolerance = Number((user.tenant as any).invoiceTolerance ?? 0.5);
+        if (cfdi.total > pendingBalance + invoiceTolerance) {
+          results.push({
+            filename,
+            complementUUID: cfdi.complementUUID,
+            invoiceUUID,
+            status: 'error',
+            error: `El total del complemento ($${cfdi.total.toFixed(2)}) excede el saldo pendiente de la factura ($${pendingBalance.toFixed(2)} MXN). Tolerancia: $${invoiceTolerance.toFixed(2)} MXN.`,
+          });
+          continue;
+        }
+
+        // Verificar duplicado por (folio + invoiceId) — mismo UUID puede existir para distintas facturas
+        const existing = await prisma.paymentComplement.findFirst({
+          where: { tenantId, folio: cfdi.complementUUID!, invoiceId: invoice.id },
+        });
+        if (existing) {
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: 'Este complemento ya fue registrado para esta factura (UUID duplicado).' });
+          continue;
+        }
+
+        validItems.push({ base: item.base, group: item.group, cfdi, invoice });
+      }
     }
 
-    // Verificación batch en NetSuite: un solo query con todos los IDs
+    // ── Fase 3: Verificación batch en NetSuite ────────────────────────────────
     const nsValidIds = new Set<string>();
     let nsVerifyError: string | null = null;
     if (nsCreds && validItems.length > 0) {
@@ -290,18 +342,19 @@ export async function processBulkPaymentComplements(
       }
     }
 
-    // Procesar cada item válido
+    // ── Fase 4: Crear complementos y sincronizar ──────────────────────────────
     await Promise.allSettled(
       validItems.map(async (item) => {
         const filename = item.group.xmlName || item.base + '.xml';
         const { cfdi, invoice } = item;
+        const invoiceUUID = (invoice.folio || '').toUpperCase();
 
         // Verificar que el VendorBill existe en NetSuite
         if (nsCreds && !nsValidIds.has(invoice.netsuiteId)) {
           const detail = nsVerifyError
             ? `Error al consultar NetSuite: ${nsVerifyError}`
             : `VendorBill ID ${invoice.netsuiteId} no encontrado en NetSuite.`;
-          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: detail });
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: detail });
           return;
         }
 
@@ -339,12 +392,11 @@ export async function processBulkPaymentComplements(
               netsuiteSyncStatus: 'PENDING_SYNC',
             },
           });
-          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'success', netsuiteSyncStatus: 'PENDING_SYNC', paymentComplementId: complement.id });
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'success', netsuiteSyncStatus: 'PENDING_SYNC', paymentComplementId: complement.id });
           return;
         }
 
-        // Intentar sincronización con NetSuite ANTES de crear registro local.
-        // Si falla, no se crea nada en la BD.
+        // Sincronizar con NetSuite ANTES de crear registro local
         try {
           let xmlUrl = '';
           let pdfUrl = '';
@@ -382,14 +434,14 @@ export async function processBulkPaymentComplements(
                 netsuitePaymentId: String(nsResponse.vendorPaymentId),
               },
             });
-            results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'success', netsuiteSyncStatus: 'SYNCED', netsuitePaymentId: String(nsResponse.vendorPaymentId), paymentComplementId: complement.id });
+            results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'success', netsuiteSyncStatus: 'SYNCED', netsuitePaymentId: String(nsResponse.vendorPaymentId), paymentComplementId: complement.id });
           } else {
             const errMsg = (nsResponse?.error || 'Respuesta inesperada de NetSuite').substring(0, 255);
-            results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: `Error al sincronizar con NetSuite: ${errMsg}` });
+            results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: `Error al sincronizar con NetSuite: ${errMsg}` });
           }
         } catch (nsErr: any) {
           const errMsg = (nsErr.message || 'Error de red').substring(0, 255);
-          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID: cfdi.invoiceUUID, status: 'error', error: `Error al sincronizar con NetSuite: ${errMsg}` });
+          results.push({ filename, complementUUID: cfdi.complementUUID, invoiceUUID, status: 'error', error: `Error al sincronizar con NetSuite: ${errMsg}` });
         }
       })
     );
@@ -412,7 +464,10 @@ export async function processBulkPaymentComplements(
     console.error('[BulkWorker] Error fatal:', err);
     await prisma.bulkPaymentComplementLog.update({
       where: { id: bulkLogId },
-      data: { status: 'FAILED', results: [{ filename: '—', complementUUID: null, invoiceUUID: null, status: 'error', error: `Error interno: ${err.message}` }] as any },
+      data: {
+        status: 'FAILED',
+        results: [{ filename: '—', complementUUID: null, invoiceUUID: null, status: 'error', error: `Error interno: ${err.message}` }] as any,
+      },
     });
   }
 }

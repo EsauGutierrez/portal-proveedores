@@ -215,6 +215,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validar que el complemento no exceda el saldo pendiente de la factura (con tolerancia configurada)
+    const existingComplementsAgg = await prisma.paymentComplement.aggregate({
+      where: { invoiceId: invoice.id },
+      _sum: { total: true },
+    });
+    const alreadyPaid = Number(existingComplementsAgg._sum.total ?? 0);
+    const pendingBalance = Number(invoice.total) - alreadyPaid;
+    const invoiceTolerance = Number(invoice.tenant?.invoiceTolerance ?? 0.5);
+    if (total > pendingBalance + invoiceTolerance) {
+      return NextResponse.json(
+        {
+          message: `El total del complemento ($${total.toFixed(2)}) excede el saldo pendiente de la factura ($${pendingBalance.toFixed(2)} MXN). Tolerancia configurada: $${invoiceTolerance.toFixed(2)} MXN.`,
+        },
+        { status: 422 }
+      );
+    }
+
     // RFC del Emisor debe coincidir con el RFC del proveedor registrado
     // Se omite la validación cuando el RFC del proveedor es genérico (XAXX/XEXX)
     const rfcProveedor = (invoice.user?.supplierProfile?.rfc || '').toUpperCase().replace(/\s/g, '').replace(/-/g, '');
