@@ -93,6 +93,8 @@ model SupplierProfile {
   supplierType      SupplierType       @default(NATIONAL)
   lista69bStatus    Lista69bStatus     @default(NOT_CHECKED)
   lista69bCheckedAt DateTime?
+  rejectionReason   String?
+  rejectedAt        DateTime?
   documents         SupplierDocument[]
   subsidiary   Subsidiary         @relation(fields: [subsidiaryId], references: [id])
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)

@@ -12,6 +12,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ message: 'No autorizado.' }, { status: 401 });
+    }
+    const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as { role: string; tenantId?: string };
+
+    if (decoded.role !== 'ADMIN' && decoded.role !== 'TENANT_ADMIN') {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
+    }
+
     const { id: supplierProfileId } = await params;
 
     // 1. Buscar el perfil del proveedor y su usuario asociado
@@ -25,6 +35,11 @@ export async function PATCH(
         { message: 'Proveedor no encontrado.' },
         { status: 404 }
       );
+    }
+
+    // Verificar que el proveedor pertenece al tenant del admin
+    if (decoded.tenantId && supplierProfile.tenantId !== decoded.tenantId) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
     }
 
     if (supplierProfile.status === 'ACTIVE') {
