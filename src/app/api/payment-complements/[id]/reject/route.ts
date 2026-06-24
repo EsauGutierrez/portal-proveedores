@@ -40,6 +40,10 @@ export async function PATCH(
       return NextResponse.json({ message: 'Complemento no encontrado.' }, { status: 404 });
     }
 
+    if (decoded.tenantId && complement.tenantId !== decoded.tenantId) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
+    }
+
     const updated = await prisma.paymentComplement.update({
       where: { id },
       data: {

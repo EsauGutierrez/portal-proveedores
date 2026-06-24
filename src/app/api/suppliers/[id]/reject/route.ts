@@ -17,7 +17,7 @@ export async function PATCH(
       return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
     }
     const token = authHeader.split(' ')[1];
-    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { role: string };
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { role: string; tenantId?: string };
 
     if (decodedToken.role !== 'ADMIN' && decodedToken.role !== 'TENANT_ADMIN') {
       return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
@@ -40,13 +40,21 @@ export async function PATCH(
       return NextResponse.json({ message: 'Proveedor no encontrado.' }, { status: 404 });
     }
 
+    if (decodedToken.tenantId && supplierProfile.user?.tenantId !== decodedToken.tenantId) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
+    }
+
     if (supplierProfile.status === 'REJECTED') {
       return NextResponse.json({ message: 'Este proveedor ya ha sido rechazado.' }, { status: 400 });
     }
 
     await prisma.supplierProfile.update({
       where: { id: supplierProfileId },
-      data: { status: 'REJECTED' },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: rejectionReason.trim(),
+        rejectedAt: new Date(),
+      },
     });
 
     const providerEmail = supplierProfile.user?.email;
