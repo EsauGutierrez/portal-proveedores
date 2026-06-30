@@ -17,7 +17,7 @@ export async function PATCH(
       return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
     }
     const token = authHeader.split(' ')[1];
-    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { role: string };
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { role: string; tenantId?: string };
 
     if (decodedToken.role !== 'ADMIN' && decodedToken.role !== 'TENANT_ADMIN') {
       return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
@@ -39,6 +39,10 @@ export async function PATCH(
 
     if (!supplierDoc) {
       return NextResponse.json({ message: 'Documento no encontrado.' }, { status: 404 });
+    }
+
+    if (decodedToken.tenantId && supplierDoc.supplierProfile?.tenantId !== decodedToken.tenantId) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
     }
 
     // Actualizar documento
@@ -74,7 +78,7 @@ export async function PATCH(
               </div>
               <p>Por favor, sube un nuevo documento que cumpla con los requisitos solicitados.</p>
               <div style="text-align: center; margin: 24px 0;">
-                <a href="${process.env.NEXT_PUBLIC_APP_URL}" style="background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`}" style="background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                   Ir al Portal
                 </a>
               </div>
