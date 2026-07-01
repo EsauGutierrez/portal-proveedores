@@ -18,28 +18,50 @@ const AdminInvoicesPage = () => {
     const [supplierId, setSupplierId] = useState('');
     const [docType, setDocType] = useState('ALL');
 
-    const fetchDocuments = async () => {
+    // --- Paginación (server-side) ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [total, setTotal] = useState(0);
+
+    const totalPages = Math.ceil(total / pageSize) || 1;
+
+    const fetchDocuments = async (overrides: {
+        page?: number;
+        limit?: number;
+        startDate?: string;
+        endDate?: string;
+        supplierId?: string;
+        docType?: string;
+    } = {}) => {
         setIsLoading(true);
         setError(null);
         try {
             const token = localStorage.getItem('token');
-            // Construir Query Params para los filtros
             const params = new URLSearchParams();
-            if (startDate) params.append('startDate', startDate);
-            if (endDate) params.append('endDate', endDate);
-            if (supplierId) params.append('supplierId', supplierId);
-            if (docType) params.append('docType', docType);
+
+            const effectiveStartDate = 'startDate' in overrides ? overrides.startDate! : startDate;
+            const effectiveEndDate = 'endDate' in overrides ? overrides.endDate! : endDate;
+            const effectiveSupplierId = 'supplierId' in overrides ? overrides.supplierId! : supplierId;
+            const effectiveDocType = overrides.docType ?? docType;
+            const effectivePage = overrides.page ?? currentPage;
+            const effectiveLimit = overrides.limit ?? pageSize;
+
+            if (effectiveStartDate) params.append('startDate', effectiveStartDate);
+            if (effectiveEndDate) params.append('endDate', effectiveEndDate);
+            if (effectiveSupplierId) params.append('supplierId', effectiveSupplierId);
+            if (effectiveDocType) params.append('docType', effectiveDocType);
+            params.append('page', effectivePage.toString());
+            params.append('limit', effectiveLimit.toString());
 
             const res = await fetch(`/api/admin/documents?${params.toString()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) throw new Error('Error al cargar la información.');
             const data = await res.json();
 
-            // Expected that the API returns { documents: [...], suppliers: [...] } (only on initial fetch we might save suppliers)
             setDocuments(data.documents || []);
+            setTotal(data.total ?? 0);
 
-            // Only update suppliers if it's the first time or they are returned
             if (data.suppliers && suppliers.length === 0) {
                 setSuppliers(data.suppliers);
             }
@@ -50,16 +72,16 @@ const AdminInvoicesPage = () => {
         }
     };
 
-    // Auto-fetch on component load
+    // Initial load
     useEffect(() => {
         fetchDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    // Also fetch when a filter button is clicked (handled explicitly below)
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        fetchDocuments();
+        setCurrentPage(1);
+        fetchDocuments({ page: 1 });
     };
 
     const handleClearFilters = () => {
@@ -67,8 +89,19 @@ const AdminInvoicesPage = () => {
         setEndDate('');
         setSupplierId('');
         setDocType('ALL');
-        // Usar setTimeout para permitir que el estado se actualice antes de re-hacer fetchDocuments.
-        setTimeout(() => fetchDocuments(), 0);
+        setCurrentPage(1);
+        fetchDocuments({ page: 1, startDate: '', endDate: '', supplierId: '', docType: 'ALL' });
+    };
+
+    const handlePageChange = (newPage: number) => {
+        setCurrentPage(newPage);
+        fetchDocuments({ page: newPage });
+    };
+
+    const handlePageSizeChange = (newSize: number) => {
+        setPageSize(newSize);
+        setCurrentPage(1);
+        fetchDocuments({ page: 1, limit: newSize });
     };
 
     const handleRetryComplement = async (id: string) => {
@@ -105,7 +138,7 @@ const AdminInvoicesPage = () => {
 
             const res = await fetch(`/api/admin/documents/export-zip?${params.toString()}`, {
                 method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
             });
 
             if (!res.ok) {
@@ -129,12 +162,10 @@ const AdminInvoicesPage = () => {
         }
     };
 
-
-
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
             style: 'currency',
-            currency: 'MXN'
+            currency: 'MXN',
         }).format(amount);
     };
 
@@ -142,19 +173,11 @@ const AdminInvoicesPage = () => {
         if (!dateString) return '—';
         return new Date(dateString).toLocaleDateString('es-MX', {
             year: 'numeric', month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
+            hour: '2-digit', minute: '2-digit',
         });
     };
 
     const isPurchaseOrderView = docType === 'PURCHASE_ORDER';
-
-    // --- Paginación ---
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
-    useEffect(() => { setCurrentPage(1); }, [startDate, endDate, supplierId, docType, pageSize]);
-    const totalItems = documents.length;
-    const totalPages = Math.ceil(totalItems / pageSize);
-    const paginatedDocuments = documents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return (
         <div className="space-y-6">
@@ -206,7 +229,7 @@ const AdminInvoicesPage = () => {
             </div>
 
             {/* Panel de Acciones Adicionales - Solo descarga ZIP */}
-            {documents.length > 0 && (
+            {total > 0 && (
                 <div className="flex justify-end">
                     <button
                         onClick={handleDownloadZip}
@@ -263,7 +286,7 @@ const AdminInvoicesPage = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedDocuments.map(doc => (
+                                documents.map(doc => (
                                     <tr key={doc.id} className="hover:bg-indigo-50/30 transition-colors">
                                         <td className="px-6 py-3 whitespace-nowrap">
                                             <span className={`inline-flex px-2 py-1 text-xs rounded-md border font-medium ${
@@ -297,7 +320,6 @@ const AdminInvoicesPage = () => {
                                                 </td>
                                                 <td className="px-6 py-3 whitespace-nowrap text-right text-sm">
                                                     <div className="flex items-center justify-end gap-1">
-                                                        {/* Retry para complementos con sync fallido */}
                                                         {doc.tipo === 'Complemento de Pago' && doc.estadoCentral === 'FAILED' && (
                                                             <button
                                                                 onClick={() => handleRetryComplement(doc.id)}
@@ -330,14 +352,14 @@ const AdminInvoicesPage = () => {
                     </table>
                 </div>
 
-                {/* --- Controles de Paginación --- */}
-                {documents.length > 0 && (
+                {/* --- Controles de Paginación (server-side) --- */}
+                {total > 0 && (
                     <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-gray-200 text-sm text-gray-600 bg-white">
                         <div className="flex items-center space-x-2 mb-4 sm:mb-0">
                             <span>Mostrar</span>
                             <select
                                 value={pageSize}
-                                onChange={(e) => setPageSize(Number(e.target.value))}
+                                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                                 className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value={10}>10</option>
@@ -350,22 +372,22 @@ const AdminInvoicesPage = () => {
 
                         <div className="flex items-center space-x-4">
                             <span>
-                                Mostrando del {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} al {Math.min(currentPage * pageSize, totalItems)} de {totalItems} registros
+                                Mostrando del {total === 0 ? 0 : (currentPage - 1) * pageSize + 1} al {Math.min(currentPage * pageSize, total)} de {total} registros
                             </span>
                             <div className="flex items-center space-x-1">
                                 <button
-                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1}
+                                    onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
+                                    disabled={currentPage === 1 || isLoading}
                                     className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     Anterior
                                 </button>
                                 <div className="px-3 py-1 font-semibold text-gray-800 border border-transparent">
-                                    Página {currentPage} de {totalPages || 1}
+                                    Página {currentPage} de {totalPages}
                                 </div>
                                 <button
-                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
+                                    disabled={currentPage === totalPages || isLoading}
                                     className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     Siguiente
@@ -375,7 +397,6 @@ const AdminInvoicesPage = () => {
                     </div>
                 )}
             </div>
-
         </div>
     );
 };
