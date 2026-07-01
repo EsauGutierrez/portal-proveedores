@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UploadCloud, CheckCircle, AlertTriangle, Clock, Loader2, X, Search, ChevronDown } from 'lucide-react';
+import { UploadCloud, CheckCircle, AlertTriangle, Clock, Loader2, X, Search } from 'lucide-react';
 
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 const authFetch = (url: string, opts: RequestInit = {}) => fetch(url, {
@@ -116,11 +116,13 @@ const BulkUploadPage = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'pending'>('upload');
+  const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const isCargador = user?.role === 'CARGADOR';
 
   const handleUpload = async () => {
-    if (!zipFile) return;
+    if (!zipFile) { setError('Debes seleccionar un archivo ZIP antes de continuar.'); return; }
+    setError('');
     setLoading(true);
     setResults(null);
 
@@ -185,18 +187,23 @@ const BulkUploadPage = ({ user }) => {
             type="file"
             accept=".zip,application/zip"
             className="hidden"
-            onChange={e => setZipFile(e.target.files?.[0] ?? null)}
+            onChange={e => { setZipFile(e.target.files?.[0] ?? null); setError(''); }}
           />
 
-          <div className="mt-6 flex justify-end gap-3">
+          {error && (
+            <div className="mt-4 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {error}
+            </div>
+          )}
+          <div className="mt-4 flex justify-end gap-3">
             {zipFile && (
-              <button onClick={() => { setZipFile(null); setResults(null); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-1">
+              <button onClick={() => { setZipFile(null); setResults(null); setError(''); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-1">
                 <X className="w-4 h-4" /> Quitar
               </button>
             )}
             <button
               onClick={handleUpload}
-              disabled={!zipFile || loading}
+              disabled={loading}
               className="px-6 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</> : 'Procesar ZIP'}

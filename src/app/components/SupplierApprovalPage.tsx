@@ -466,7 +466,10 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
 };
 
 // --- Componente Principal de la Página ---
-const SupplierApprovalPage = () => {
+const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Activo', PENDING: 'Pendiente', REJECTED: 'Inactivo' };
+
+const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => {
+  const [activeFilter, setActiveFilter] = useState<string | undefined>(initialFilter);
   const [suppliers, setSuppliers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -512,7 +515,14 @@ const SupplierApprovalPage = () => {
   const filteredAndSortedSuppliers = React.useMemo(() => {
     let result = [...suppliers];
 
-    // Filtrado
+    // Filtro rápido desde alertas del dashboard
+    if (activeFilter === 'pendiente') {
+      result = result.filter((s: any) => s.status === 'PENDING');
+    } else if (activeFilter === 'lista69b') {
+      result = result.filter((s: any) => !['NOT_CHECKED', 'NO_LISTADO', null, undefined].includes(s.lista69bStatus));
+    }
+
+    // Filtrado por búsqueda
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(supplier =>
@@ -540,7 +550,7 @@ const SupplierApprovalPage = () => {
     }
 
     return result;
-  }, [suppliers, searchTerm, sortConfig]);
+  }, [suppliers, searchTerm, sortConfig, activeFilter]);
 
   // Resetear página cuando cambia la búsqueda o el orden
   useEffect(() => {
@@ -791,6 +801,16 @@ const SupplierApprovalPage = () => {
     <>
     <div className="bg-white rounded-lg shadow-md p-6">
 
+        {activeFilter && (
+          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <span className="font-semibold">Filtro activo:</span>
+            <span>{activeFilter === 'pendiente' ? 'Proveedores pendientes de aprobación' : 'Proveedores en Lista 69B'}</span>
+            <button onClick={() => setActiveFilter(undefined)} className="ml-auto text-blue-500 hover:text-blue-700 font-bold text-xs px-2 py-0.5 rounded border border-blue-300 hover:bg-blue-100">
+              Quitar filtro ✕
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-4">
             <h2 className="text-2xl font-bold text-gray-800">Gestión de Proveedores</h2>
@@ -862,14 +882,18 @@ const SupplierApprovalPage = () => {
                 paginatedSuppliers.map((supplier: any) => (
                   <tr key={supplier.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-4 text-sm font-medium text-gray-800">{supplier.companyName}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700 font-mono">{supplier.rfc}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{supplier.user?.name || '---'}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700 font-mono">
+                      {supplier.rfc?.startsWith('INVITE-') ? <span className="text-gray-400 italic">Pendiente</span> : supplier.rfc}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {supplier.user?.name && supplier.user.name !== supplier.companyName ? supplier.user.name : <span className="text-gray-400">—</span>}
+                    </td>
                     <td className="px-4 py-4 text-sm">
                       <span className={`inline-flex px-2.5 py-1 text-xs rounded-full font-semibold ${supplier.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border border-green-100' :
                         supplier.status === 'PENDING' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
                           'bg-red-50 text-red-700 border border-red-100'
                         }`}>
-                        {supplier.status === 'REJECTED' ? 'INACTIVO' : supplier.status}
+                        {STATUS_LABELS[supplier.status] ?? supplier.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-sm">

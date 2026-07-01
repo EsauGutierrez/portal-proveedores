@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { DollarSign, CheckCircle, AlertTriangle, ArrowLeft, Upload } from 'lucide-react';
+import { Building2, CheckCircle, AlertTriangle, ArrowLeft, Upload } from 'lucide-react';
 
 // --- Componente para un campo de carga de archivo ---
 const FileUploadField = ({ label, onFileSelect, selectedFile }) => (
@@ -103,7 +103,7 @@ const RegistrationPage = ({ onSwitchToLogin }: { onSwitchToLogin: () => void }) 
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8 m-4">
         <div className="text-center mb-8">
-          <DollarSign className="w-12 h-12 text-blue-600 mx-auto" />
+          <Building2 className="w-12 h-12 text-blue-600 mx-auto" />
           <h2 className="mt-4 text-3xl font-bold text-gray-800">Registro de Proveedor</h2>
           <p className="text-gray-500">Completa tus datos para solicitar acceso.</p>
         </div>
@@ -112,13 +112,37 @@ const RegistrationPage = ({ onSwitchToLogin }: { onSwitchToLogin: () => void }) 
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input name="companyName" type="text" placeholder="Razón Social" required onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
-            <input name="rfc" type="text" placeholder="RFC" required onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
-            <input name="taxAddress" type="text" placeholder="Dirección Fiscal" required onChange={handleChange} className="col-span-1 md:col-span-2 w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
-            <input name="name" type="text" placeholder="Nombre del Contacto Principal" required onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
-            <input name="email" type="email" placeholder="Correo Electrónico del Contacto" required onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">Razón Social <span className="text-red-500">*</span></label>
+              <input id="companyName" name="companyName" type="text" placeholder="Ej. Empresa S.A. de C.V." required maxLength={150} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
+            </div>
+            <div>
+              <label htmlFor="rfc" className="block text-sm font-medium text-gray-700 mb-1">RFC <span className="text-red-500">*</span></label>
+              <input
+                id="rfc" name="rfc" type="text" placeholder="Ej. EMP901231AB1" required
+                maxLength={13} minLength={12}
+                pattern="^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$"
+                title="RFC válido: 12 caracteres para personas morales, 13 para personas físicas (letras y números)"
+                onChange={(e) => { e.target.value = e.target.value.toUpperCase(); handleChange(e); }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 uppercase"
+              />
+            </div>
             <div className="col-span-1 md:col-span-2">
+              <label htmlFor="taxAddress" className="block text-sm font-medium text-gray-700 mb-1">Dirección Fiscal <span className="text-red-500">*</span></label>
+              <input id="taxAddress" name="taxAddress" type="text" placeholder="Calle, número, colonia, municipio, estado, CP" required maxLength={300} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
+            </div>
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nombre del Contacto Principal <span className="text-red-500">*</span></label>
+              <input id="name" name="name" type="text" placeholder="Nombre completo" required maxLength={100} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico <span className="text-red-500">*</span></label>
+              <input id="email" name="email" type="email" placeholder="contacto@empresa.com" required maxLength={150} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500" />
+            </div>
+            <div className="col-span-1 md:col-span-2">
+              <label htmlFor="subsidiaryId" className="block text-sm font-medium text-gray-700 mb-1">Empresa <span className="text-red-500">*</span></label>
               <select
+                id="subsidiaryId"
                 name="subsidiaryId"
                 required
                 value={formData.subsidiaryId}
