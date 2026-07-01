@@ -171,12 +171,23 @@ export async function POST(request: Request) {
     }
     const supplierProfile = await prisma.supplierProfile.findFirst({
       where: { userId },
-      select: { rfc: true },
+      select: { id: true, rfc: true },
     });
-    if (supplierProfile && supplierProfile.rfc.toUpperCase() !== xmlEmisorRfc.toUpperCase()) {
-      return NextResponse.json({
-        message: `El RFC del emisor en el XML (${xmlEmisorRfc}) no coincide con el RFC registrado del proveedor (${supplierProfile.rfc}).`,
-      }, { status: 422 });
+    if (supplierProfile) {
+      const rfcRegistrado = supplierProfile.rfc.toUpperCase();
+      const rfcXml = xmlEmisorRfc.toUpperCase();
+      if (rfcRegistrado.startsWith('INVITE-')) {
+        // RFC temporal de invitación: actualizarlo automáticamente con el RFC del XML
+        await prisma.supplierProfile.update({
+          where: { id: supplierProfile.id },
+          data: { rfc: rfcXml },
+        });
+        console.log(`[RFC] Actualizado RFC temporal ${rfcRegistrado} → ${rfcXml} para userId ${userId}`);
+      } else if (rfcRegistrado !== rfcXml) {
+        return NextResponse.json({
+          message: `El RFC del emisor en el XML (${xmlEmisorRfc}) no coincide con el RFC registrado del proveedor (${supplierProfile.rfc}).`,
+        }, { status: 422 });
+      }
     }
 
     // --- VALIDACIÓN 2: VIGENCIA DEL CERTIFICADO SAT ---

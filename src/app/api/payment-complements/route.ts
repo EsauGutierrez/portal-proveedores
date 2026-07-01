@@ -187,7 +187,7 @@ export async function POST(request: Request) {
       where: invoiceQuery,
       include: {
         tenant: { include: { subsidiaries: { select: { rfc: true } } } },
-        user: { include: { supplierProfile: { select: { rfc: true, netsuiteId: true } } } },
+        user: { include: { supplierProfile: { select: { id: true, rfc: true, netsuiteId: true } } } },
       },
     });
 
@@ -236,7 +236,17 @@ export async function POST(request: Request) {
     // Se omite la validación cuando el RFC del proveedor es genérico (XAXX/XEXX)
     const rfcProveedor = (invoice.user?.supplierProfile?.rfc || '').toUpperCase().replace(/\s/g, '').replace(/-/g, '');
     const isGenericSupplier = rfcProveedor.startsWith('XAXX') || rfcProveedor.startsWith('XEXX');
-    if (!isGenericSupplier && rfcEmisor !== rfcProveedor) {
+    if (rfcProveedor.startsWith('INVITE')) {
+      // RFC temporal de invitación: actualizarlo automáticamente con el RFC del CFDI
+      const spId = invoice.user?.supplierProfile?.id;
+      if (spId && rfcEmisor) {
+        await prisma.supplierProfile.update({
+          where: { id: spId },
+          data: { rfc: rfcEmisor },
+        });
+        console.log(`[RFC] Actualizado RFC temporal ${rfcProveedor} → ${rfcEmisor} para complemento de pago`);
+      }
+    } else if (!isGenericSupplier && rfcEmisor !== rfcProveedor) {
       return NextResponse.json(
         { message: `El RFC del emisor en el CFDI (${rfcEmisor}) no coincide con tu RFC registrado (${rfcProveedor}).` },
         { status: 422 }

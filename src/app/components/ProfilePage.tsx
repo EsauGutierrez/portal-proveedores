@@ -471,6 +471,23 @@ const ProfilePage = () => {
               setOcrModalConfig({ isOpen: true, data: ocrResult.data, isMatch: false, wasRejected: true, documentType });
             } else if (!isMatch && isNewUser) {
               // Si es nuevo usuario, permitimos la discrepancia para que puedan auto-rellenar su perfil
+              // Si el OCR extrajo un RFC válido, actualizamos automáticamente el RFC temporal del perfil
+              if (extractedRfc && documentType === 'CONSTANCIA_SITUACION_FISCAL') {
+                try {
+                  await fetch('/api/profile', {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      companyName: extractedName || profile.supplierProfile.companyName,
+                      rfc: extractedRfc,
+                      taxAddress: profile.supplierProfile.taxAddress || 'Pendiente de completar',
+                    }),
+                  });
+                  console.log(`[RFC] Auto-actualizado RFC temporal → ${extractedRfc} desde OCR`);
+                } catch (rfcErr) {
+                  console.error('[RFC] Error al auto-actualizar RFC desde OCR:', rfcErr);
+                }
+              }
               setOcrModalConfig({ isOpen: true, data: ocrResult.data, isMatch: false, wasRejected: false, documentType });
             } else {
               setOcrModalConfig({ isOpen: true, data: ocrResult.data, isMatch: true, wasRejected: false, documentType });
