@@ -72,7 +72,17 @@ export async function PUT(request: Request) {
     const { userId } = decodedToken;
 
     const data = await request.json();
-    const { companyName, rfc, taxAddress } = data;
+    const { companyName, rfc, taxAddress, name } = data;
+
+    // Name-only update for non-supplier roles (e.g. CARGADOR)
+    if (name && !companyName && !rfc && !taxAddress) {
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { name },
+        select: { id: true, name: true, email: true, role: true },
+      });
+      return NextResponse.json(updatedUser, { status: 200 });
+    }
 
     if (!companyName || !rfc || !taxAddress) {
       return NextResponse.json({ message: 'Faltan datos requeridos (Razón Social, RFC, Dirección Fiscal).' }, { status: 400 });

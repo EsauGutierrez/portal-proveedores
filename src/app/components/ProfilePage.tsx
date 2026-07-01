@@ -286,6 +286,7 @@ const ProfilePage = () => {
   const [ocrModalConfig, setOcrModalConfig] = useState({ isOpen: false, data: null, isMatch: false, wasRejected: false, documentType: '' });
   const [docRequirements, setDocRequirements] = useState<any[]>([]);
   const [editFormData, setEditFormData] = useState({
+    name: '',
     companyName: '',
     rfc: '',
     taxAddress: '',
@@ -340,28 +341,34 @@ const ProfilePage = () => {
 
   const handleEditClick = () => {
     if (profile?.supplierProfile) {
-      // Si fue invitado (RFC empieza con INVITE-), el nombre de la compañía es el nombre del usuario por defecto
       const isInvited = profile.supplierProfile.rfc?.startsWith('INVITE-');
       setEditFormData({
+        name: profile.name || '',
         companyName: profile.supplierProfile.companyName || '',
         rfc: isInvited ? '' : (profile.supplierProfile.rfc || ''),
-        taxAddress: isInvited ? '' : (profile.supplierProfile.taxAddress || ''),
+        taxAddress: isInvited ? '' : (profile.supplierProfile.taxAddress === 'Pendiente de completar' ? '' : (profile.supplierProfile.taxAddress || '')),
       });
-      setIsEditing(true);
+    } else {
+      setEditFormData({ name: profile?.name || '', companyName: '', rfc: '', taxAddress: '' });
     }
+    setIsEditing(true);
   };
 
   const handleSaveProfile = async () => {
     setIsLoading(true);
     const token = localStorage.getItem('token');
     try {
+      const isSupplier = profile?.role === 'SUPPLIER' && profile?.supplierProfile;
+      const payload = isSupplier
+        ? { companyName: editFormData.companyName, rfc: editFormData.rfc, taxAddress: editFormData.taxAddress }
+        : { name: editFormData.name };
       const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editFormData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -606,10 +613,36 @@ const ProfilePage = () => {
               {profile.supplierProfile.subsidiary && (
                 <div><label className="block text-sm font-medium text-gray-500">Subsidiaria Asignada</label><p className="text-gray-800">{profile.supplierProfile.subsidiary.name}</p></div>
               )}
-              <div><label className="block text-sm font-medium text-gray-500">Estado de la Cuenta</label><p className={`font-semibold ${profile.supplierProfile.status === 'ACTIVE' ? 'text-green-600' : 'text-yellow-600'}`}>{profile.supplierProfile.status}</p></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500">Estado de la Cuenta</label>
+                <p className={`font-semibold ${
+                  profile.supplierProfile.status === 'ACTIVE' ? 'text-green-600' :
+                  profile.supplierProfile.status === 'REJECTED' ? 'text-red-600' : 'text-yellow-600'
+                }`}>
+                  {{ ACTIVE: 'Activo', PENDING: 'Pendiente de aprobación', REJECTED: 'Rechazado' }[profile.supplierProfile.status] ?? profile.supplierProfile.status}
+                </p>
+              </div>
             </>
           ) : (
-            <div><label className="block text-sm font-medium text-gray-500">Rol</label><p className="text-gray-800">{profile.role}</p></div>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-500">Nombre</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-gray-800"
+                  />
+                ) : (
+                  <p className="text-gray-800">{profile.name}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500">Rol</label>
+                <p className="text-gray-800">{{ CARGADOR: 'Cargador', ADMIN: 'Administrador', TENANT_ADMIN: 'Administrador', SUPERADMIN: 'Super Administrador' }[profile.role as string] ?? profile.role}</p>
+              </div>
+            </>
           )}
         </div>
         <div className="mt-8 flex gap-4">

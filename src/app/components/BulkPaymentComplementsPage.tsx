@@ -313,7 +313,10 @@ export default function BulkPaymentComplementsPage({ user: _user }: { user: any 
   }, [success]);
 
   const handleUpload = async () => {
-    if (!zipFile) return;
+    if (!zipFile) {
+      setError('Debes seleccionar un archivo ZIP antes de continuar.');
+      return;
+    }
     if (isCargador && !supplierUserId) {
       setError('Debes seleccionar un proveedor antes de subir el ZIP.');
       return;

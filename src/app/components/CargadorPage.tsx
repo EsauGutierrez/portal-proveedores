@@ -48,7 +48,7 @@ const SupplierSelector = ({ onSelect }) => {
               <Building2 className="w-6 h-6 text-gray-400 group-hover:text-blue-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">{s.companyName}</p>
+              <p className="text-sm font-semibold text-gray-800 truncate" title={s.companyName}>{s.companyName}</p>
               <p className="text-xs text-gray-500">{s.rfc}</p>
               <p className="text-xs text-gray-400">{s.subsidiary?.name}</p>
             </div>

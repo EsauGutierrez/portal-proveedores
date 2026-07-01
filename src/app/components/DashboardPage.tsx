@@ -28,7 +28,13 @@ const DashboardPage = ({ user, onLogout }) => {
     // La vista inicial depende del rol del usuario.
     // CARGADOR inicia directamente en su vista de selección de proveedor.
     const [activeView, setActiveView] = useState(user?.role === 'CARGADOR' ? 'cargador_home' : 'resumen');
+    const [viewFilter, setViewFilter] = useState<string | undefined>(undefined);
     const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    const handleNavigate = (view: string, filter?: string) => {
+        setViewFilter(filter);
+        setActiveView(view);
+    };
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -130,7 +136,7 @@ const DashboardPage = ({ user, onLogout }) => {
         }
 
         switch (activeView) {
-            case 'resumen': return <OverviewPage user={user} onNavigate={setActiveView} />;
+            case 'resumen': return <OverviewPage user={user} onNavigate={handleNavigate} />;
             case 'ordenes': return <DataTable title="Órdenes de Compra" data={data} />;
             case 'facturas': return <DataTable title="Facturas" data={data} />;
             case 'pagos': return <PaymentComplementsPage user={user} />;
@@ -138,7 +144,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'mis_documentos': return <SupplierDocumentsPage user={user} />;
             case 'perfil': return <ProfilePage />;
             case 'documentacion': return <DocumentationPage />;
-            case 'proveedores': return <SupplierApprovalPage />;
+            case 'proveedores': return <SupplierApprovalPage initialFilter={viewFilter} />;
             case 'subsidiarias': return <SubsidiariesPage />;
             case 'empresas': return <SuperAdminTenantsPage />;
             case 'facturas_admin': return <AdminInvoicesPage />;
@@ -164,10 +170,10 @@ const DashboardPage = ({ user, onLogout }) => {
     );
 
     return (
-        <div className="min-h-screen bg-gray-100 flex">
+        <div className="h-screen bg-gray-100 flex overflow-hidden">
             {/* Sidebar */}
             <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-white shadow-lg flex flex-col overflow-hidden transition-all duration-300`}>
-                <div className="w-64 flex flex-col h-full p-4">
+                <div className={`w-64 flex flex-col h-full p-4 transition-opacity duration-150 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                     {/* Header: logo */}
                     <div className="flex items-center justify-center mb-8 min-h-[56px]">
                         {subsidiaryLogo ? (
@@ -178,7 +184,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                         ) : (
-                            <h1 className="text-lg font-bold text-gray-800">Portal de proveedores</h1>
+                            <h1 className="text-lg font-bold text-gray-800">Portal de Proveedores</h1>
                         )}
                     </div>
                     <nav className="flex-grow space-y-2">
@@ -188,7 +194,7 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
                                 <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
-                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Complementos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
                         )}
@@ -200,8 +206,8 @@ const DashboardPage = ({ user, onLogout }) => {
                                 {user.bulkUploadForSuppliers && (
                                     <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
                                 )}
-                                <NavLink view="pagos" icon={FileText} label="Complemento de Pagos" />
-                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Pagos" />
+                                <NavLink view="pagos" icon={FileText} label="Complementos de Pago" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Complementos" />
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
