@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, Building2, Loader2, AlertCircle, Users } from 'lucide-react';
+import { ChevronLeft, Building2, Loader2, AlertCircle, Users, ShoppingCart, FileText } from 'lucide-react';
 import DataTable from './DataTable';
+import SupplierDocumentsPage from './SupplierDocumentsPage';
 
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 const authFetch = (url: string) => fetch(url, { headers: { 'Authorization': `Bearer ${getToken()}` } });
@@ -69,8 +70,10 @@ const SupplierContext = ({ supplier, onBack, cargadorUserId }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'ordenes' | 'documentos'>('ordenes');
 
   useEffect(() => {
+    setLoading(true);
     authFetch(`/api/purchase-orders?supplierUserId=${supplier.userId}`)
       .then(r => r.json())
       .then(data => setOrders(Array.isArray(data) ? data : (data.data ?? [])))
@@ -100,20 +103,53 @@ const SupplierContext = ({ supplier, onBack, cargadorUserId }) => {
         </span>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-        </div>
-      ) : error ? (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 p-4 rounded-lg">
-          <AlertCircle className="w-5 h-5" /> {error}
-        </div>
-      ) : (
-        <DataTable
-          title="Órdenes de Compra"
-          data={orders}
-          uploadedBy={cargadorUserId}
-          supplierUserId={supplier.userId}
+      {/* Pestañas */}
+      <div className="flex gap-1 border-b border-gray-200 mb-6">
+        <button
+          onClick={() => setActiveTab('ordenes')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+            activeTab === 'ordenes'
+              ? 'border-blue-600 text-blue-600 bg-blue-50'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <ShoppingCart className="w-4 h-4" /> Órdenes de Compra
+        </button>
+        <button
+          onClick={() => setActiveTab('documentos')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+            activeTab === 'documentos'
+              ? 'border-blue-600 text-blue-600 bg-blue-50'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <FileText className="w-4 h-4" /> Documentos
+        </button>
+      </div>
+
+      {activeTab === 'ordenes' && (
+        loading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 p-4 rounded-lg">
+            <AlertCircle className="w-5 h-5" /> {error}
+          </div>
+        ) : (
+          <DataTable
+            title="Órdenes de Compra"
+            data={orders}
+            uploadedBy={cargadorUserId}
+            supplierUserId={supplier.userId}
+          />
+        )
+      )}
+
+      {activeTab === 'documentos' && (
+        <SupplierDocumentsPage
+          user={null}
+          supplierProfileId={supplier.id}
         />
       )}
     </div>
