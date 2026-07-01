@@ -3,8 +3,66 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
-import { uploadFileToS3 } from '../../lib/s3';
+import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 const prisma = new PrismaClient();
+
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+
+async function validateUploadedFile(file: File): Promise<string | null> {
+  if (file.size > MAX_FILE_SIZE) {
+    return `El archivo no puede superar los ${MAX_FILE_SIZE_MB} MB.`;
+  }
+  if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    return 'Tipo de archivo no permitido. Solo se aceptan PDF, JPG y PNG.';
+  }
+  const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '');
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return 'Extensión no permitida. Solo se aceptan .pdf, .jpg, .jpeg y .png.';
+  }
+  // Verificación de magic bytes para evitar spoofing de MIME type
+  const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  const isPDF  = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46;
+  const isJPEG = header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF;
+  const isPNG  = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
+  if (!isPDF && !isJPEG && !isPNG) {
+    return 'El contenido del archivo no corresponde a un formato válido (PDF, JPG o PNG).';
+  }
+  return null;
+}
+
+export async function GET(request: Request) {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
+    }
+    const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as { userId: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: { supplierProfile: { include: { documents: true } } },
+    });
+
+    if (!user?.supplierProfile) {
+      return NextResponse.json({ message: 'Perfil de proveedor no encontrado.' }, { status: 404 });
+    }
+
+    const docs = await Promise.all(
+      user.supplierProfile.documents.map(async (doc) => ({
+        ...doc,
+        fileUrl: doc.fileUrl ? await getPresignedUrl(doc.fileUrl) : null,
+      }))
+    );
+
+    return NextResponse.json(docs);
+  } catch (error) {
+    console.error('Error al obtener documentos del proveedor:', error);
+    return NextResponse.json({ message: 'Error interno del servidor.' }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -24,6 +82,11 @@ export async function POST(request: Request) {
 
     if (!file || !documentType) {
       return NextResponse.json({ message: 'Faltan datos requeridos (archivo y tipo de documento).' }, { status: 400 });
+    }
+
+    const fileError = await validateUploadedFile(file);
+    if (fileError) {
+      return NextResponse.json({ message: fileError }, { status: 400 });
     }
 
     // 3. Obtener el perfil del proveedor del usuario logueado

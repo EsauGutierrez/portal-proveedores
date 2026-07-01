@@ -9,6 +9,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval, onForgotPas
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [failedAttempts, setFailedAttempts] = useState(0);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,9 +29,11 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval, onForgotPas
                 if (data.errorCode === 'PENDING_APPROVAL') {
                     onPendingApproval(data.supplierProfileId);
                 } else {
+                    setFailedAttempts(prev => prev + 1);
                     throw new Error(data.message || 'Ocurrió un error.');
                 }
             } else {
+                setFailedAttempts(0);
                 onLogin(data);
             }
 
@@ -57,6 +60,11 @@ const LoginPage = ({ onLogin, onSwitchToRegister, onPendingApproval, onForgotPas
                     <p className="text-gray-500 text-sm mt-1">Bienvenido a tu portal de proveedor</p>
                 </div>
                 {error && <p className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">{error}</p>}
+                {failedAttempts >= 3 && (
+                    <p className="bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm p-3 rounded-lg text-center mb-4">
+                        Demasiados intentos fallidos. Por seguridad, tu cuenta puede bloquearse tras varios intentos más.
+                    </p>
+                )}
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700">Correo Electrónico</label>

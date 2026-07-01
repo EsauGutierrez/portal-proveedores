@@ -26,7 +26,7 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, borderClass, subtitl
 );
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
-const AlertBanner = ({ count, label, href, color }) => {
+const AlertBanner = ({ count, label, color, onClick }: { count: number, label: string, color: string, onClick?: () => void }) => {
     if (!count) return null;
     const colors = {
         amber: 'bg-amber-50 border-amber-300 text-amber-800',
@@ -34,7 +34,10 @@ const AlertBanner = ({ count, label, href, color }) => {
         blue: 'bg-blue-50 border-blue-300 text-blue-800',
     };
     return (
-        <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${colors[color]} text-sm font-medium`}>
+        <div
+            onClick={onClick}
+            className={`flex items-center justify-between px-4 py-3 rounded-lg border ${colors[color]} text-sm font-medium ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        >
             <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4" />
                 <span><strong>{count}</strong> {label}</span>
@@ -47,7 +50,7 @@ const AlertBanner = ({ count, label, href, color }) => {
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
     const map = {
-        SYNCED: { label: 'Aprobada', cls: 'bg-green-100 text-green-700' },
+        SYNCED: { label: 'Sincronizada', cls: 'bg-green-100 text-green-700' },
         PENDING_SYNC: { label: 'Pendiente', cls: 'bg-yellow-100 text-yellow-700' },
         FAILED: { label: 'Fallida', cls: 'bg-red-100 text-red-700' },
         ACTIVE: { label: 'Activo', cls: 'bg-green-100 text-green-700' },
@@ -74,7 +77,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const OverviewPage = ({ user }) => {
+const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: string, filter?: string) => void }) => {
     const [metrics, setMetrics] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -117,7 +122,7 @@ const OverviewPage = ({ user }) => {
         return (
             <div className="space-y-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Hola, {user?.name} 👋</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">Hola, {capitalize(user?.name)} 👋</h2>
                     <p className="text-gray-500 mt-1 text-sm">Aquí tienes un resumen de tu actividad en el portal.</p>
                 </div>
 
@@ -195,7 +200,7 @@ const OverviewPage = ({ user }) => {
         return (
             <div className="space-y-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Hola, {user?.name} 👋</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">Hola, {capitalize(user?.name)} 👋</h2>
                     <p className="text-gray-500 mt-1 text-sm">Aquí tienes un resumen de tu actividad en el portal.</p>
                 </div>
 
@@ -270,11 +275,14 @@ const OverviewPage = ({ user }) => {
                 )}
 
                 {/* Alertas */}
-                {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0) && (
+                {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0 || alertas.proveedoresEnLista69b > 0) && (
                     <div className="space-y-2">
-                        <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" href="#" color="amber" />
-                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" href="#" color="red" />
-                        <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" href="#" color="blue" />
+                        {alertas.proveedoresEnLista69b > 0 && (
+                            <AlertBanner count={alertas.proveedoresEnLista69b} label="proveedores detectados en Lista 69B del SAT" color="red" onClick={onNavigate ? () => onNavigate('proveedores', 'lista69b') : undefined} />
+                        )}
+                        <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" color="amber" onClick={onNavigate ? () => onNavigate('proveedores', 'pendiente') : undefined} />
+                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" color="red" />
+                        <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" color="blue" />
                     </div>
                 )}
 
@@ -296,7 +304,7 @@ const OverviewPage = ({ user }) => {
                         <MetricCard title="Facturas Recibidas" value={metrics.facturasRecibidas} icon={FileText} colorClass="text-blue-600" borderClass="border-blue-500" />
                         <MetricCard title="Aprobadas" value={metrics.facturasAprobadas} icon={CheckCircle} colorClass="text-green-600" borderClass="border-green-500" />
                         <MetricCard title="Pendientes" value={metrics.facturasPendientes} icon={Clock} colorClass="text-yellow-600" borderClass="border-yellow-500" />
-                        <MetricCard title="Monto Aprobado" value={metrics.montoTotalAprobado} icon={DollarSign} colorClass="text-purple-600" borderClass="border-purple-500" />
+                        <MetricCard title="Monto Aprobado" value={metrics.montoTotalAprobado} icon={TrendingUp} colorClass="text-purple-600" borderClass="border-purple-500" />
                     </div>
                 </div>
 
@@ -372,7 +380,7 @@ const OverviewPage = ({ user }) => {
         return (
             <div className="space-y-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Hola, {user?.name} 👋</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">Hola, {capitalize(user?.name)} 👋</h2>
                     <p className="text-gray-500 mt-1 text-sm">Vista global del sistema.</p>
                 </div>
 

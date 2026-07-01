@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Configuración del cliente S3 con las variables de entorno
@@ -74,4 +74,50 @@ export async function getPresignedUrl(fileKey: string): Promise<string> {
         console.error("Error generando presigned URL para", cleanKey, error);
         return '';
     }
+}
+
+/**
+ * Descarga un archivo de S3 y lo retorna como Buffer.
+ */
+export async function downloadFileFromS3(fileKey: string): Promise<Buffer> {
+  const command = new GetObjectCommand({
+    Bucket: (process.env.APP_AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME)!,
+    Key: fileKey,
+  });
+  const response = await s3Client.send(command);
+  const stream = response.Body as any;
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk instanceof Buffer ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Sube un Buffer directamente a S3 con la key especificada.
+ */
+export async function uploadBufferToS3(buffer: Buffer, key: string, contentType: string): Promise<string> {
+  const params = {
+    Bucket: (process.env.APP_AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME)!,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  };
+  await s3Client.send(new PutObjectCommand(params));
+  return key;
+}
+
+/**
+ * Elimina un archivo de S3 dado su key interno.
+ * @param fileKey La clave interna del archivo en S3 (guardada en base de datos).
+ */
+export async function deleteFromS3(fileKey: string): Promise<void> {
+    if (!fileKey || fileKey.startsWith('http')) return;
+
+    const command = new DeleteObjectCommand({
+        Bucket: (process.env.APP_AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME)!,
+        Key: fileKey,
+    });
+
+    await s3Client.send(command);
 }

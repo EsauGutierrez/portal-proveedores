@@ -1,27 +1,41 @@
 // app/api/suppliers/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SupplierType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 import { sendEmail } from '../../lib/mailer';
+import { getPresignedUrl } from '../../lib/s3';
 
 const prisma = new PrismaClient();
 
-// Función para obtener proveedores, filtrando por estado
+// Función para obtener proveedores, filtrando por estado y tenant
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status'); // Permite filtrar por ej: /api/suppliers?status=PENDING
+    const status = searchParams.get('status');
 
     const { searchParams: sp } = new URL(request.url);
     const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
     const limit = Math.min(200, Math.max(1, parseInt(sp.get('limit') || '100', 10)));
 
-    const where = { status: status ? { equals: status as any } : undefined };
+    // Extraer tenantId del JWT si está presente
+    let tenantId: string | undefined;
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as any;
+        tenantId = decoded.tenantId ?? undefined;
+      } catch { /* token inválido, continuar sin filtro */ }
+    }
 
-    const [suppliers, total] = await Promise.all([
+    const where = {
+      ...(tenantId ? { tenantId } : {}),
+      ...(status ? { status: { equals: status as any } } : {}),
+    };
+
+    const [rawSuppliers, total] = await Promise.all([
       prisma.supplierProfile.findMany({
         where,
         include: {
@@ -34,6 +48,19 @@ export async function GET(request: Request) {
       }),
       prisma.supplierProfile.count({ where }),
     ]);
+
+    // Generar presigned URLs para cada documento de cada proveedor
+    const suppliers = await Promise.all(
+      rawSuppliers.map(async (supplier) => ({
+        ...supplier,
+        documents: await Promise.all(
+          supplier.documents.map(async (doc) => ({
+            ...doc,
+            fileUrl: doc.fileUrl ? await getPresignedUrl(doc.fileUrl) : null,
+          }))
+        ),
+      }))
+    );
 
     return NextResponse.json(
       { data: suppliers, total, page, limit, totalPages: Math.ceil(total / limit) },
@@ -69,7 +96,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, name, subsidiaryId, requireDocuments = false } = body;
+    const { email, name, subsidiaryId, requireDocuments = false, supplierType = 'NATIONAL' } = body;
 
     if (!email || !name) {
       return NextResponse.json({ message: 'Email y Nombre son requeridos' }, { status: 400 });
@@ -127,6 +154,7 @@ export async function POST(request: Request) {
           taxAddress: 'Pendiente de completar',
           status: 'PENDING',
           requireDocuments: Boolean(requireDocuments),
+          supplierType: supplierType === SupplierType.FOREIGN ? SupplierType.FOREIGN : SupplierType.NATIONAL,
           user: { connect: { id: user.id } },
           subsidiary: { connect: { id: subsidiary.id } },
           tenant: { connect: { id: decodedToken.tenantId } }
@@ -178,6 +206,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: 'Proveedor invitado exitosamente.',
       userId: newUser.id,
+      tempPassword,
       ...(supplierLimitWarning && { warning: supplierLimitWarning }),
     }, { status: 201 });
 

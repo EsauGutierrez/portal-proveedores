@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 
 const SYNC_STATUS_MAP: Record<string, { label: string; color: string; bg: string; Icon: any }> = {
   SYNCED:       { label: 'Registrado en NetSuite', color: 'text-green-700',  bg: 'bg-green-50',  Icon: CheckCircle },
@@ -58,6 +58,8 @@ const FileInput = ({ label, accept, file, onChange }: {
   </div>
 );
 
+const fmt = (iso: string) => (iso ? iso.substring(0, 10) : '—');
+
 const PaymentComplementsPage = ({ user }: { user: any }) => {
   const [complements, setComplements] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -66,9 +68,57 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const [formData, setFormData] = useState({ invoiceId: '' });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [xmlValidationError, setXmlValidationError] = useState<string | null>(null);
+
+  const toggleInvoice = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  };
+
+  const getXmlUuids = async (file: File): Promise<Set<string>> => {
+    const text = await file.text();
+    // Regex directo al texto — funciona con cualquier namespace (pago20:, pago:, sin prefijo)
+    const uuids = new Set<string>();
+    const matches = text.matchAll(/IdDocumento="([^"]+)"/g);
+    for (const m of matches) uuids.add(m[1].toUpperCase());
+    return uuids;
+  };
+
+  const runXmlValidation = async (file: File | null, ids: Set<string>) => {
+    if (!file || ids.size === 0) { setXmlValidationError(null); return; }
+    try {
+      const xmlUuids = await getXmlUuids(file);
+      const selected = invoices.filter((inv: any) => ids.has(inv.id));
+      const missing = selected.filter((inv: any) => !xmlUuids.has((inv.folio || '').toUpperCase()));
+      if (missing.length > 0) {
+        const folios = missing.map((inv: any) => {
+          const f = inv.folio || '';
+          return f.length > 16 ? f.substring(0, 8) + '…' + f.slice(-4) : f;
+        });
+        setXmlValidationError(
+          `El XML no referencia ${missing.length === 1 ? 'la factura' : 'las facturas'}: ${folios.join(', ')}`
+        );
+      } else {
+        setXmlValidationError(null);
+      }
+    } catch { setXmlValidationError(null); }
+  };
+
+  const handleXmlChange = (file: File | null) => {
+    setXmlFile(file);
+    runXmlValidation(file, selectedIds);
+  };
+
+  useEffect(() => {
+    runXmlValidation(xmlFile, selectedIds);
+  }, [selectedIds]);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const headers = { Authorization: `Bearer ${token}` };
@@ -88,39 +138,57 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
 
   useEffect(() => { load(); }, []);
 
+  const resetForm = () => {
+    setShowForm(false);
+    setSelectedIds(new Set());
+    setXmlFile(null);
+    setPdfFile(null);
+    setDropdownOpen(false);
+    setXmlValidationError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.invoiceId || !xmlFile) {
-      setNotification({ type: 'error', message: 'La factura y el archivo XML son obligatorios.' });
+    if (selectedIds.size === 0) {
+      setNotification({ type: 'error', message: 'Selecciona al menos una factura.' });
+      return;
+    }
+    if (!xmlFile) {
+      setNotification({ type: 'error', message: 'El archivo XML es requerido.' });
+      return;
+    }
+    if (xmlValidationError) {
+      setNotification({ type: 'error', message: xmlValidationError });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const fd = new FormData();
-      fd.append('invoiceId', formData.invoiceId);
-      fd.append('xmlFile', xmlFile);
-      if (pdfFile) fd.append('pdfFile', pdfFile);
+      const results = await Promise.all(Array.from(selectedIds).map(async (invoiceId) => {
+        const fd = new FormData();
+        fd.append('invoiceId', invoiceId);
+        fd.append('xmlFile', xmlFile);
+        if (pdfFile) fd.append('pdfFile', pdfFile);
+        const res = await fetch('/api/payment-complements', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Error al subir el complemento.');
+        return data;
+      }));
 
-      const res = await fetch('/api/payment-complements', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      const data = await res.json();
+      const allSynced = results.every(d => d.netsuiteSyncStatus === 'SYNCED');
+      const anyFailed = results.some(d => d.netsuiteSyncStatus === 'FAILED');
+      const syncMsg = allSynced
+        ? `${results.length} complemento(s) registrado(s) y sincronizado(s) correctamente con NetSuite.`
+        : anyFailed
+        ? `Algunos complementos fallaron al sincronizar con NetSuite.`
+        : `${results.length} complemento(s) registrado(s) correctamente.`;
 
-      if (!res.ok) throw new Error(data.message || 'Error al subir el complemento.');
-
-      const syncMsg = data.netsuiteSyncStatus === 'SYNCED'
-        ? 'Complemento registrado y sincronizado correctamente con NetSuite.'
-        : data.netsuiteSyncStatus === 'FAILED'
-        ? `Complemento registrado, pero falló la sincronización con NetSuite. ${data.message || ''}`
-        : 'Complemento registrado correctamente.';
-      setNotification({ type: data.netsuiteSyncStatus === 'FAILED' ? 'error' : 'success', message: syncMsg });
-      setShowForm(false);
-      setFormData({ invoiceId: '' });
-      setXmlFile(null);
-      setPdfFile(null);
+      setNotification({ type: anyFailed ? 'error' : 'success', message: syncMsg });
+      resetForm();
       load();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
@@ -140,7 +208,7 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
         </div>
         {isSupplierActive && (
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => showForm ? resetForm() : setShowForm(true)}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -162,49 +230,116 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
       {showForm && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Subir nuevo complemento de pago</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Factura relacionada *</label>
-              <select
-                required
-                value={formData.invoiceId}
-                onChange={(e) => setFormData({ ...formData, invoiceId: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white text-sm"
+          <form onSubmit={handleSubmit} className="space-y-5">
+
+            {/* Selector de facturas (dropdown con checkboxes) */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Factura(s) relacionada(s) *
+              </label>
+              <button
+                type="button"
+                onClick={() => setDropdownOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Selecciona una factura</option>
-                {invoices.map((inv: any) => (
-                  <option key={inv.id || inv.folio} value={inv.id || inv.folio}>
-                    {inv.folio} — {inv.fecha} — ${Number(inv.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </option>
-                ))}
-              </select>
+                <span className={selectedIds.size === 0 ? 'text-gray-400' : 'text-gray-900'}>
+                  {selectedIds.size === 0
+                    ? 'Selecciona una o varias facturas'
+                    : `${selectedIds.size} factura${selectedIds.size > 1 ? 's' : ''} seleccionada${selectedIds.size > 1 ? 's' : ''}`}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {dropdownOpen && (
+                <>
+                  {/* Capa para cerrar al hacer clic fuera */}
+                  <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} />
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {invoices.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-gray-400 italic">No tienes facturas registradas.</p>
+                    ) : (
+                      invoices.map((inv: any) => {
+                        const folio = inv.folio || '';
+                        const shortFolio = folio.length > 20 ? folio.substring(0, 8) + '…' + folio.slice(-4) : folio;
+                        const fecha = fmt(inv.fecha || '');
+                        const total = Number(inv.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+                        const checked = selectedIds.has(inv.id);
+                        return (
+                          <label
+                            key={inv.id}
+                            className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleInvoice(inv.id)}
+                              className="w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                            />
+                            <span className="text-sm text-gray-800">
+                              <span className="font-mono">{shortFolio}</span>
+                              <span className="text-gray-400 mx-2">—</span>
+                              <span className="text-gray-500">{fecha}</span>
+                              <span className="text-gray-400 mx-2">—</span>
+                              <span>${total}</span>
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+              {selectedIds.size > 0 && (
+                <p className="text-xs text-blue-600 mt-1.5 font-medium">
+                  {selectedIds.size} factura{selectedIds.size > 1 ? 's' : ''} seleccionada{selectedIds.size > 1 ? 's' : ''}
+                </p>
+              )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FileInput
-                label="Archivo XML *"
-                accept=".xml,text/xml,application/xml"
-                file={xmlFile}
-                onChange={setXmlFile}
-              />
-              <FileInput
-                label="Archivo PDF (opcional)"
-                accept="application/pdf"
-                file={pdfFile}
-                onChange={setPdfFile}
-              />
+
+            {/* Un solo bloque de archivos para todas las facturas seleccionadas */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FileInput
+                  label="Archivo XML *"
+                  accept=".xml,text/xml,application/xml"
+                  file={xmlFile}
+                  onChange={handleXmlChange}
+                />
+                <FileInput
+                  label="Archivo PDF (opcional)"
+                  accept="application/pdf"
+                  file={pdfFile}
+                  onChange={setPdfFile}
+                />
+              </div>
+              {xmlValidationError && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">{xmlValidationError}</p>
+                </div>
+              )}
+              {xmlFile && !xmlValidationError && selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <p className="text-xs text-green-700">
+                    El XML referencia correctamente {selectedIds.size === 1 ? 'la factura seleccionada' : `las ${selectedIds.size} facturas seleccionadas`}.
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="flex gap-3 pt-2">
+
+            <div className="flex gap-3 pt-1">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || selectedIds.size === 0 || !!xmlValidationError}
                 className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 transition-colors"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                Enviar complemento
+                {selectedIds.size > 1 ? `Enviar complemento (${selectedIds.size} facturas)` : 'Enviar complemento'}
               </button>
               <button
                 type="button"
-                onClick={() => { setShowForm(false); setXmlFile(null); setPdfFile(null); }}
+                onClick={resetForm}
                 className="px-5 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Cancelar
@@ -232,7 +367,6 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Folio/UUID</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Factura</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
@@ -244,9 +378,6 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
               {complements.map((c) => (
                 <React.Fragment key={c.id}>
                   <tr className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[180px] truncate" title={c.folio}>
-                      {c.folio.length > 20 ? c.folio.substring(0, 8) + '...' + c.folio.slice(-4) : c.folio}
-                    </td>
                     <td className="px-4 py-3 text-gray-600">{c.invoiceFolio || '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{c.fecha}</td>
                     <td className="px-4 py-3 text-right font-medium text-gray-800">
@@ -257,6 +388,11 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                       {c.netsuiteSyncStatus === 'FAILED' && c.netsuiteSyncError && (
                         <p className="text-xs text-red-600 mt-1 max-w-[200px] truncate" title={c.netsuiteSyncError}>
                           {c.netsuiteSyncError}
+                        </p>
+                      )}
+                      {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
+                        <p className="text-xs text-green-700 mt-1">
+                          <span className="font-semibold">ID: </span>{c.netsuitePaymentId}
                         </p>
                       )}
                     </td>
@@ -281,7 +417,7 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                   </tr>
                   {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
                     <tr className="bg-green-50/50">
-                      <td colSpan={6} className="px-4 py-1.5">
+                      <td colSpan={5} className="px-4 py-1.5">
                         <p className="text-xs text-green-700">
                           <span className="font-semibold">ID NetSuite: </span>{c.netsuitePaymentId}
                         </p>

@@ -136,7 +136,7 @@ const ConfirmToggleModal = ({ supplier, isOpen, onClose, onConfirm }) => {
 
 // --- Componente Modal para Invitar Proveedor ---
 const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', subsidiaryId: '', requireDocuments: false });
+  const [formData, setFormData] = useState({ name: '', email: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
   const [isSaving, setIsSaving] = useState(false);
   const [subsidiaries, setSubsidiaries] = useState<any[]>([]);
   const [loadingSubsidiaries, setLoadingSubsidiaries] = useState(false);
@@ -169,7 +169,7 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
     setIsSaving(true);
     await onInvite(formData);
     setIsSaving(false);
-    setFormData({ name: '', email: '', subsidiaryId: '', requireDocuments: false });
+    setFormData({ name: '', email: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
   };
 
   return (
@@ -207,6 +207,31 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
             )}
           </div>
 
+          {/* Tipo de proveedor */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Proveedor</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'NATIONAL', label: 'Nacional', desc: 'Proveedor con RFC mexicano' },
+                { value: 'FOREIGN', label: 'Extranjero', desc: 'Proveedor de otro país' },
+              ].map(opt => (
+                <div
+                  key={opt.value}
+                  onClick={() => setFormData({ ...formData, supplierType: opt.value })}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${formData.supplierType === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${formData.supplierType === opt.value ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>
+                      {formData.supplierType === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800">{opt.label}</p>
+                  </div>
+                  <p className="text-xs text-gray-500 ml-6">{opt.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Checkbox: Solicitar documentación */}
           <div
             onClick={() => setFormData({ ...formData, requireDocuments: !formData.requireDocuments })}
@@ -238,23 +263,36 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
   const [rejectingDocId, setRejectingDocId] = React.useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [isSubmittingReject, setIsSubmittingReject] = React.useState(false);
+  const [docRequirements, setDocRequirements] = React.useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isOpen || !supplier) return;
+    const fetchDocs = async () => {
+      setLoadingDocs(true);
+      try {
+        const token = localStorage.getItem('token');
+        const supplierType = supplier.supplierType || 'NATIONAL';
+        const res = await fetch(`/api/settings/documents?forSupplierType=${supplierType}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) setDocRequirements(await res.json());
+      } finally {
+        setLoadingDocs(false);
+      }
+    };
+    fetchDocs();
+  }, [isOpen, supplier]);
 
   if (!isOpen) return null;
 
-  const documentTypes = [
-    { type: 'CONSTANCIA_SITUACION_FISCAL', displayName: 'Constancia de Situación Fiscal' },
-    { type: 'OPINION_CUMPLIMIENTO_SAT', displayName: 'Opinión de Cumplimiento (SAT)' },
-    { type: 'IDENTIFICACION_OFICIAL', displayName: 'Identificación Oficial del Representante' },
-    { type: 'COMPROBANTE_DOMICILIO', displayName: 'Comprobante de Domicilio' },
-    { type: 'ACTA_CONSTITUTIVA', displayName: 'Acta Constitutiva' },
-  ];
-
-  const documentsToShow = documentTypes.map(reqDoc => {
-    const uploadedDoc = supplier.documents?.find(doc => doc.documentType === reqDoc.type);
+  const documentsToShow = docRequirements.map(reqDoc => {
+    const uploadedDoc = supplier.documents?.find((doc: any) => doc.documentType === reqDoc.documentType);
     return {
       id: uploadedDoc?.id,
-      displayName: reqDoc.displayName,
-      type: reqDoc.type,
+      displayName: reqDoc.name || reqDoc.documentType,
+      type: reqDoc.documentType,
+      isRequired: reqDoc.isRequired,
       fileName: uploadedDoc?.fileName,
       fileUrl: uploadedDoc?.fileUrl,
       status: uploadedDoc?.status || 'PENDING',
@@ -295,12 +333,26 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
           </div>
           <p className="text-gray-600 mb-6">RFC: {supplier.rfc} | Contacto: {supplier.user.name}</p>
 
-          <h4 className="text-lg font-semibold text-gray-700 mb-4">Validación de Documentos</h4>
+          <h4 className="text-lg font-semibold text-gray-700 mb-4">
+            Validación de Documentos
+            {supplier.supplierType && (
+              <span className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full ${supplier.supplierType === 'FOREIGN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                {supplier.supplierType === 'FOREIGN' ? 'Extranjero' : 'Nacional'}
+              </span>
+            )}
+          </h4>
           <div className="space-y-3 border rounded-lg p-4 max-h-72 overflow-y-auto">
-            {documentsToShow.map((doc) => (
+            {loadingDocs ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>
+            ) : documentsToShow.map((doc) => (
               <div key={doc.type} className="flex items-start justify-between p-3 rounded-md hover:bg-gray-50 gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800">{doc.displayName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-800">{doc.displayName}</p>
+                    {!doc.isRequired && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">Opcional</span>
+                    )}
+                  </div>
                   {doc.fileName && <p className="text-xs text-gray-500 truncate">{doc.fileName}</p>}
                   {doc.status === 'REJECTED' && doc.rejectionReason && (
                     <p className="text-xs text-red-600 mt-1 bg-red-50 px-2 py-1 rounded">
@@ -414,7 +466,10 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
 };
 
 // --- Componente Principal de la Página ---
-const SupplierApprovalPage = () => {
+const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Activo', PENDING: 'Pendiente', REJECTED: 'Inactivo' };
+
+const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => {
+  const [activeFilter, setActiveFilter] = useState<string | undefined>(initialFilter);
   const [suppliers, setSuppliers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -426,6 +481,9 @@ const SupplierApprovalPage = () => {
   const [supplierToToggle, setSupplierToToggle] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string; tempPassword?: string } | null>(null);
+  const [rejectingSupplier, setRejectingSupplier] = useState<{ id: string; name: string } | null>(null);
+  const [supplierRejectionReason, setSupplierRejectionReason] = useState('');
+  const [isSubmittingSupplierReject, setIsSubmittingSupplierReject] = useState(false);
 
   // Estados para búsqueda, ordenamiento y paginación
   const [searchTerm, setSearchTerm] = useState('');
@@ -457,7 +515,14 @@ const SupplierApprovalPage = () => {
   const filteredAndSortedSuppliers = React.useMemo(() => {
     let result = [...suppliers];
 
-    // Filtrado
+    // Filtro rápido desde alertas del dashboard
+    if (activeFilter === 'pendiente') {
+      result = result.filter((s: any) => s.status === 'PENDING');
+    } else if (activeFilter === 'lista69b') {
+      result = result.filter((s: any) => !['NOT_CHECKED', 'NO_LISTADO', null, undefined].includes(s.lista69bStatus));
+    }
+
+    // Filtrado por búsqueda
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(supplier =>
@@ -485,7 +550,7 @@ const SupplierApprovalPage = () => {
     }
 
     return result;
-  }, [suppliers, searchTerm, sortConfig]);
+  }, [suppliers, searchTerm, sortConfig, activeFilter]);
 
   // Resetear página cuando cambia la búsqueda o el orden
   useEffect(() => {
@@ -527,8 +592,35 @@ const SupplierApprovalPage = () => {
   };
 
   const handleReject = (supplierId: string) => {
+    const supplier = suppliers.find((s: any) => s.id === supplierId);
     setIsModalOpen(false);
-    setNotification({ type: 'info', title: 'No implementado', message: 'La lógica para rechazar proveedores aún no está implementada.' });
+    setRejectingSupplier({ id: supplierId, name: (supplier as any)?.companyName || 'Proveedor' });
+    setSupplierRejectionReason('');
+  };
+
+  const handleConfirmSupplierReject = async () => {
+    if (!rejectingSupplier || !supplierRejectionReason.trim()) return;
+    const token = localStorage.getItem('token');
+    setIsSubmittingSupplierReject(true);
+    try {
+      const response = await fetch(`/api/suppliers/${rejectingSupplier.id}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ rejectionReason: supplierRejectionReason.trim() }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Error al rechazar el proveedor.');
+      }
+      fetchSuppliers();
+      setRejectingSupplier(null);
+      setSupplierRejectionReason('');
+      setNotification({ type: 'info', title: 'Proveedor rechazado', message: 'El proveedor ha sido notificado con el motivo del rechazo.' });
+    } catch (err: any) {
+      setNotification({ type: 'error', title: 'Error', message: err.message });
+    } finally {
+      setIsSubmittingSupplierReject(false);
+    }
   };
 
   const handleValidateDocument = async (documentId: string, status: 'APPROVED' | 'REJECTED') => {
@@ -639,6 +731,15 @@ const SupplierApprovalPage = () => {
       }
       await fetchSuppliers();
       setIsEditModalOpen(false);
+
+      // Si cambió el RFC, mostrar "Sin verificar" y re-consultar tras 4s para capturar resultado de Zentax
+      const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+      if (formData.rfc && !GENERIC_RFCS.includes(formData.rfc.toUpperCase())) {
+        setSuppliers((prev: any[]) =>
+          prev.map((s: any) => s.id === supplierId ? { ...s, lista69bStatus: 'NOT_CHECKED' } : s)
+        );
+        setTimeout(() => fetchSuppliers(), 4000);
+      }
     } catch (err: any) {
       setNotification({ type: 'error', title: 'Error', message: err.message });
     }
@@ -699,6 +800,16 @@ const SupplierApprovalPage = () => {
   return (
     <>
     <div className="bg-white rounded-lg shadow-md p-6">
+
+        {activeFilter && (
+          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <span className="font-semibold">Filtro activo:</span>
+            <span>{activeFilter === 'pendiente' ? 'Proveedores pendientes de aprobación' : 'Proveedores en Lista 69B'}</span>
+            <button onClick={() => setActiveFilter(undefined)} className="ml-auto text-blue-500 hover:text-blue-700 font-bold text-xs px-2 py-0.5 rounded border border-blue-300 hover:bg-blue-100">
+              Quitar filtro ✕
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-4">
@@ -762,6 +873,7 @@ const SupplierApprovalPage = () => {
                     Estado <SortIcon columnKey="status" />
                   </div>
                 </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Lista 69B</th>
                 <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">Acciones</th>
               </tr>
             </thead>
@@ -770,15 +882,31 @@ const SupplierApprovalPage = () => {
                 paginatedSuppliers.map((supplier: any) => (
                   <tr key={supplier.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-4 text-sm font-medium text-gray-800">{supplier.companyName}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700 font-mono">{supplier.rfc}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{supplier.user?.name || '---'}</td>
+                    <td className="px-4 py-4 text-sm text-gray-700 font-mono">
+                      {supplier.rfc?.startsWith('INVITE-') ? <span className="text-gray-400 italic">Pendiente</span> : supplier.rfc}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-700">
+                      {supplier.user?.name && supplier.user.name !== supplier.companyName ? supplier.user.name : <span className="text-gray-400">—</span>}
+                    </td>
                     <td className="px-4 py-4 text-sm">
                       <span className={`inline-flex px-2.5 py-1 text-xs rounded-full font-semibold ${supplier.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border border-green-100' :
                         supplier.status === 'PENDING' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
                           'bg-red-50 text-red-700 border border-red-100'
                         }`}>
-                        {supplier.status === 'REJECTED' ? 'INACTIVO' : supplier.status}
+                        {STATUS_LABELS[supplier.status] ?? supplier.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      {(() => {
+                        const s = supplier.lista69bStatus;
+                        if (!s || s === 'NOT_CHECKED') return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500 font-medium">Sin verificar</span>;
+                        if (s === 'NO_LISTADO')          return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-green-50 text-green-700 border border-green-100 font-medium">No listado</span>;
+                        if (s === 'PRESUNTO')            return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 border border-orange-200 font-semibold">Presunto</span>;
+                        if (s === 'DEFINITIVO')          return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 border border-red-200 font-semibold">Definitivo</span>;
+                        if (s === 'DESVIRTUADO')         return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-medium">Desvirtuado</span>;
+                        if (s === 'SENTENCIA_FAVORABLE') return <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-medium">Sentencia favor.</span>;
+                        return null;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center space-x-2">
@@ -797,7 +925,7 @@ const SupplierApprovalPage = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
                     No se encontraron proveedores que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -883,6 +1011,47 @@ const SupplierApprovalPage = () => {
         onClose={() => setIsInviteModalOpen(false)}
         onInvite={handleInvite}
       />
+
+      {/* Modal: Motivo de rechazo de proveedor */}
+      {rejectingSupplier && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-800">Motivo del Rechazo</h3>
+                <p className="text-xs text-gray-500">Se notificará al proveedor por email</p>
+              </div>
+            </div>
+            <textarea
+              value={supplierRejectionReason}
+              onChange={(e) => setSupplierRejectionReason(e.target.value)}
+              placeholder="Explica claramente por qué se rechaza al proveedor..."
+              className="w-full border border-gray-300 rounded-lg p-3 mb-4 h-28 text-sm text-gray-900 focus:ring-2 focus:ring-red-400 focus:border-red-400 resize-none"
+              autoFocus
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setRejectingSupplier(null); setSupplierRejectionReason(''); }}
+                disabled={isSubmittingSupplierReject}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmSupplierReject}
+                disabled={isSubmittingSupplierReject || !supplierRejectionReason.trim()}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSubmittingSupplierReject && <Loader2 className="w-4 h-4 animate-spin" />}
+                Rechazar y Notificar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Notificación (reemplaza todos los alert()) */}
       {notification && (

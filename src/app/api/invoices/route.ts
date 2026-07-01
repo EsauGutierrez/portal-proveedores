@@ -131,6 +131,7 @@ export async function POST(request: Request) {
     const receptionIds: string[] = receptionIdsRaw ? JSON.parse(receptionIdsRaw) : [];
     const purchaseOrderId = formData.get('purchaseOrderId') as string | null;
     const userId = formData.get('userId') as string;
+    const uploadedBy = formData.get('uploadedBy') as string | null;
     const xmlFile = formData.get('xmlFile') as File;
     const pdfFile = formData.get('pdfFile') as File;
 
@@ -333,6 +334,7 @@ export async function POST(request: Request) {
         user: { connect: { id: userId } },
         ...(purchaseOrderId ? { purchaseOrder: { connect: { id: purchaseOrderId } } } : {}),
         ...(receptionIds.length ? { receptions: { connect: receptionIds.map(id => ({ id })) } } : {}),
+        ...(uploadedBy ? { uploadedByUser: { connect: { id: uploadedBy } } } : {}),
       } as any,
     });
 
@@ -347,7 +349,7 @@ export async function POST(request: Request) {
 
     try {
       await sqsClient.send(new SendMessageCommand({
-        QueueUrl: process.env.SQS_INVOICES_URL,
+        QueueUrl: (process.env.SQS_INVOICES_URL || process.env.AWS_SQS_INVOICES_URL)?.trim(),
         MessageBody: JSON.stringify({
           invoiceId: newInvoice.id,
           userId: userId,

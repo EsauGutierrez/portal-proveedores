@@ -60,7 +60,7 @@ const ReceptionDetailsModal = ({ isOpen, onClose, reception }) => {
 };
 
 // --- Componente: Modal para Subir Factura ---
-const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = [], isConsignment = false }: { isOpen: boolean, onClose: () => void, reception?: any, order?: any, receptionIds?: string[], isConsignment?: boolean }) => {
+const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = [], isConsignment = false, uploadedBy = null, supplierUserId = null }: { isOpen: boolean, onClose: () => void, reception?: any, order?: any, receptionIds?: string[], isConsignment?: boolean, uploadedBy?: string | null, supplierUserId?: string | null }) => {
   if (!isOpen) return null;
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -92,7 +92,9 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
     } else if (order?.id) {
       formData.append('purchaseOrderId', order.id);
     }
-    formData.append('userId', order.userId);
+    // Si es CARGADOR: userId = proveedor (para RFC), uploadedBy = cargador (auditoría)
+    formData.append('userId', supplierUserId || order.userId);
+    if (uploadedBy) formData.append('uploadedBy', uploadedBy);
     formData.append('xmlFile', xmlFile);
     formData.append('pdfFile', pdfFile);
 
@@ -191,7 +193,7 @@ const UploadPaymentProofModal = ({ isOpen, onClose, payment }) => {
 
 
 // --- Componente DataTable Principal ---
-export const DataTable = ({ title, data }) => {
+export const DataTable = ({ title, data, uploadedBy = null, supplierUserId = null }: { title: string, data: any[], uploadedBy?: string | null, supplierUserId?: string | null }) => {
   const [expandedRows, setExpandedRows] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
@@ -382,7 +384,7 @@ export const DataTable = ({ title, data }) => {
                           )}
                         </td>
                       )}
-                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Validada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex flex-col items-center gap-1"><span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span><button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button></span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En validación</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
+                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Sincronizada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex flex-col items-center gap-1"><span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span><button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button></span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En proceso</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
                       {isPaymentTable && (<td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); handleOpenPaymentModal(item); }} className="bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Subir Comprobante</button></td>)}
                     </tr>
                     {canExpand && isExpanded && (
@@ -517,6 +519,8 @@ export const DataTable = ({ title, data }) => {
         order={currentOrder}
         receptionIds={currentOrder?.selectedReceptionIds || []}
         isConsignment={isConsignmentUpload}
+        uploadedBy={uploadedBy}
+        supplierUserId={supplierUserId}
       />
       <ReceptionDetailsModal isOpen={isDetailsModalOpen} onClose={handleCloseDetailsModal} reception={selectedItem} />
       <UploadPaymentProofModal isOpen={isPaymentModalOpen} onClose={handleClosePaymentModal} payment={selectedItem} />
