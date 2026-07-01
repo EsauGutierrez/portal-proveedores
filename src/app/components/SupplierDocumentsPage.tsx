@@ -57,14 +57,15 @@ const StatusBadge = ({ status, isRequired }: { status: DocStatus; isRequired: bo
   );
 };
 
-const SupplierDocumentsPage = ({ user }: { user: any }) => {
+const SupplierDocumentsPage = ({ user, supplierProfileId: supplierProfileIdProp }: { user: any; supplierProfileId?: string }) => {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const isApproved = user?.supplierStatus === 'ACTIVE';
+  // Si se pasa supplierProfileId (modo CARGADOR), la página no depende de 'ACTIVE' status del proveedor propio
+  const isApproved = supplierProfileIdProp ? true : user?.supplierStatus === 'ACTIVE';
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -77,10 +78,15 @@ const SupplierDocumentsPage = ({ user }: { user: any }) => {
     try {
       const token = localStorage.getItem('token');
 
+      // Si es CARGADOR, pasar el supplierProfileId como query param
+      const docsUrl = supplierProfileIdProp
+        ? `/api/documents?supplierProfileId=${supplierProfileIdProp}`
+        : '/api/documents';
+
       // Cargar requerimientos y documentos subidos en paralelo
       const [reqRes, uploadedRes] = await Promise.all([
         fetch('/api/settings/documents', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/documents', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(docsUrl, { headers: { 'Authorization': `Bearer ${token}` } }),
       ]);
 
       if (!reqRes.ok) throw new Error('No se pudieron cargar los documentos requeridos.');
@@ -130,6 +136,10 @@ const SupplierDocumentsPage = ({ user }: { user: any }) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('documentType', documentType);
+      // Si es contexto CARGADOR, enviar el supplierProfileId del proveedor asignado
+      if (supplierProfileIdProp) {
+        formData.append('supplierProfileId', supplierProfileIdProp);
+      }
 
       const res = await fetch('/api/documents', {
         method: 'POST',
