@@ -89,7 +89,12 @@ function SetPasswordForm() {
                         {error && (
                             <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4">
                                 <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                                <p className="text-sm">{error}</p>
+                                <div className="text-sm">
+                                    <p>{error}</p>
+                                    <a href="/?view=forgotPassword" className="font-medium underline hover:text-red-800">
+                                        Solicitar nuevo enlace
+                                    </a>
+                                </div>
                             </div>
                         )}
 
