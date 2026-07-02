@@ -8,8 +8,16 @@ import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 
 const prisma = new PrismaClient();
 
+// Umbrales de bloqueo por cuenta (escalonado)
+function getLockoutDuration(failedAttempts: number): number | null {
+  if (failedAttempts >= 20) return 24 * 60 * 60 * 1000; // 24 horas
+  if (failedAttempts >= 10) return 60 * 60 * 1000;       // 1 hora
+  if (failedAttempts >= 5)  return 15 * 60 * 1000;       // 15 minutos
+  return null;
+}
+
 export async function POST(request: Request) {
-  // Rate limit: 10 intentos por IP cada 15 minutos
+  // Capa 1: Rate limit por IP (frena scraping masivo desde una sola IP)
   const ip = getClientIP(request);
   const rl = rateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
   if (!rl.success) return rateLimitResponse(rl.retryAfterSec);
@@ -42,7 +50,17 @@ export async function POST(request: Request) {
     if (!user || !user.password) {
       return NextResponse.json(
         { message: 'Credenciales inválidas.' },
-        { status: 401 } // Unauthorized
+        { status: 401 }
+      );
+    }
+
+    // Capa 2: Lockout por cuenta — inmune a rotación de IPs
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const retryAfterSec = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+      const minutes = Math.ceil(retryAfterSec / 60);
+      return NextResponse.json(
+        { message: `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta de nuevo en ${minutes} minuto(s).` },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } }
       );
     }
 
@@ -106,10 +124,36 @@ export async function POST(request: Request) {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
+      const newCount = user.failedLoginAttempts + 1;
+      const lockMs = getLockoutDuration(newCount);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: newCount,
+          lockedUntil: lockMs ? new Date(Date.now() + lockMs) : undefined,
+        },
+      });
+
+      if (lockMs) {
+        const minutes = Math.ceil(lockMs / 60000);
+        return NextResponse.json(
+          { message: `Demasiados intentos fallidos. Cuenta bloqueada por ${minutes} minuto(s).` },
+          { status: 429 }
+        );
+      }
+
       return NextResponse.json(
         { message: 'Credenciales inválidas.' },
         { status: 401 }
       );
+    }
+
+    // Contraseña correcta: limpiar contador de intentos fallidos
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
     }
 
     // 6. Generar un JSON Web Token (JWT)
