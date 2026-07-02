@@ -67,6 +67,8 @@ model User {
   firstLogin           Boolean             @default(true)
   passwordResetToken   String?
   passwordResetExpires DateTime?
+  failedLoginAttempts  Int                 @default(0)
+  lockedUntil          DateTime?
   invoices             Invoice[]
   paymentComplements   PaymentComplement[]
   purchaseOrders       PurchaseOrder[]
