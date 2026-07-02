@@ -480,7 +480,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [supplierToToggle, setSupplierToToggle] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string; tempPassword?: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
   const [rejectingSupplier, setRejectingSupplier] = useState<{ id: string; name: string } | null>(null);
   const [supplierRejectionReason, setSupplierRejectionReason] = useState('');
   const [isSubmittingSupplierReject, setIsSubmittingSupplierReject] = useState(false);
@@ -787,8 +787,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
       setNotification({
         type: 'success',
         title: '¡Invitación creada!',
-        message: `El proveedor "${inviteData.name}" fue registrado. Comparte estas credenciales con el proveedor para su primer acceso. El proveedor tendrá que cambiar su contraseña al iniciar sesión.`,
-        tempPassword: result.tempPassword,
+        message: `El proveedor "${inviteData.name}" fue registrado y se le envió un correo con un enlace para que establezca su propia contraseña.`,
       });
     } catch (err: any) {
       setNotification({ type: 'error', title: 'Error al invitar', message: err.message });
@@ -1075,29 +1074,6 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
             )}
             <h3 className="text-lg font-bold text-gray-800 mb-2">{notification.title}</h3>
             <p className="text-sm text-gray-600 mb-4">{notification.message}</p>
-            {notification.tempPassword && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5 text-left">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Credenciales de primer acceso</p>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-xs text-gray-500">Contraseña temporal</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <code className="flex-1 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm font-mono text-gray-900 select-all">{notification.tempPassword}</code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(notification.tempPassword!)}
-                        className="text-xs px-2 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-gray-700 transition-colors font-medium"
-                      >
-                        Copiar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-amber-600 mt-3 flex items-start gap-1">
-                  <span>⚠</span>
-                  <span>Guarda esta contraseña ahora, no se volverá a mostrar.</span>
-                </p>
-              </div>
-            )}
             <button
               onClick={() => setNotification(null)}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"

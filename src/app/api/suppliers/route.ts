@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient, SupplierType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 import { sendEmail } from '../../lib/mailer';
 import { getPresignedUrl } from '../../lib/s3';
@@ -130,9 +131,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Subsidiaria no encontrada. Verifica la configuración.' }, { status: 400 });
     }
 
-    // Crear usuario con password temporal aleatoria
-    const tempPassword = Math.random().toString(36).slice(-10);
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    // Password de marcador de posición: el proveedor establece la suya real vía el link de invitación.
+    // Nunca se expone ni se envía; solo existe para satisfacer el campo NOT NULL hasta el primer login.
+    const placeholderPassword = crypto.randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
 
     const newUser = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -205,7 +207,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: 'Proveedor invitado exitosamente.',
       userId: newUser.id,
-      tempPassword,
       ...(supplierLimitWarning && { warning: supplierLimitWarning }),
     }, { status: 201 });
 
