@@ -162,7 +162,7 @@ const DashboardPage = ({ user, onLogout }) => {
     const NavLink = ({ view, icon: Icon, label }) => (
         <button
             onClick={() => setActiveView(view)}
-            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${activeView === view ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-800'}`}
+            className={`w-full flex items-center text-left px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${activeView === view ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-800'}`}
         >
             <Icon className="w-5 h-5 mr-3" />
             {label}
@@ -194,7 +194,7 @@ const DashboardPage = ({ user, onLogout }) => {
                             <>
                                 <NavLink view="cargador_home" icon={Users} label="Mis Proveedores" />
                                 <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
-                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Complementos" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Complementos Masivos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
                         )}
@@ -207,7 +207,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                     <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
                                 )}
                                 <NavLink view="pagos" icon={FileText} label="Complementos de Pago" />
-                                <NavLink view="pagos_masivos" icon={FileText} label="Carga Masiva de Complementos" />
+                                <NavLink view="pagos_masivos" icon={FileText} label="Complementos Masivos" />
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>

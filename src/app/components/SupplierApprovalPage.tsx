@@ -496,7 +496,8 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/suppliers');
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } });
       if (!response.ok) throw new Error('No se pudieron cargar los proveedores.');
       const data = await response.json();
       setSuppliers(Array.isArray(data) ? data : (data.data ?? []));
@@ -641,7 +642,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
         setNotification({ type: 'success', title: 'Documento aprobado', message: 'El proveedor ha sido notificado por email.' });
       }
 
-      const raw = await (await fetch('/api/suppliers')).json();
+      const raw = await (await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })).json();
       const updatedSuppliers = Array.isArray(raw) ? raw : (raw.data ?? []);
       const updatedSelectedSupplier = updatedSuppliers.find(s => s.id === selectedSupplier.id);
       setSelectedSupplier(updatedSelectedSupplier);
@@ -671,7 +672,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
 
       setNotification({ type: 'info', title: 'Documento rechazado', message: 'El proveedor ha sido notificado con el motivo del rechazo.' });
 
-      const raw = await (await fetch('/api/suppliers')).json();
+      const raw = await (await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })).json();
       const updatedSuppliers = Array.isArray(raw) ? raw : (raw.data ?? []);
       const updatedSelectedSupplier = updatedSuppliers.find(s => s.id === selectedSupplier.id);
       setSelectedSupplier(updatedSelectedSupplier);
@@ -696,7 +697,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
 
       if (!response.ok) throw new Error('No se pudo aprobar el documento.');
 
-      const raw = await (await fetch('/api/suppliers')).json();
+      const raw = await (await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })).json();
       const updatedSuppliers = Array.isArray(raw) ? raw : (raw.data ?? []);
       const updatedSelectedSupplier = updatedSuppliers.find(s => s.id === selectedSupplier.id);
       setSelectedSupplier(updatedSelectedSupplier);
