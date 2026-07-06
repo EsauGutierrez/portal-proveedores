@@ -6,6 +6,8 @@ import bcrypt from 'bcrypt';
 import { checkLista69bBulk } from '../../../lib/zentax';
 import { sendEmail } from '../../../lib/mailer';
 import { buildLista69bAlertEmail } from '../../../lib/emails';
+import { requireAuth, requireTenantMatch } from '../../../lib/auth';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
@@ -15,6 +17,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Sin allowedRoles: el acceso depende de la relación con el recurso (dueño, cargador asignado, tenant, superadmin)
+    const auth = requireAuth(request);
+    if (auth.error) return auth.error;
+    const { decoded } = auth;
+
     const { id } = await params;
 
     const supplierProfile = await prisma.supplierProfile.findUnique({
@@ -34,6 +41,15 @@ export async function GET(
       return NextResponse.json({ message: 'Proveedor no encontrado.' }, { status: 404 });
     }
 
+    const isOwnProfile = decoded.role === 'SUPPLIER' && decoded.supplierProfileId === id;
+    const isAssignedCargador = decoded.role === 'CARGADOR' && (decoded.assignedSupplierIds ?? []).includes(id);
+    const isTenantAdmin = (decoded.role === 'ADMIN' || decoded.role === 'TENANT_ADMIN') && decoded.tenantId === supplierProfile.tenantId;
+    const isSuperAdmin = decoded.role === 'SUPERADMIN';
+
+    if (!isOwnProfile && !isAssignedCargador && !isTenantAdmin && !isSuperAdmin) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
+    }
+
     return NextResponse.json(supplierProfile);
   } catch (error) {
     console.error('Error fetching supplier profile:', error);
@@ -47,6 +63,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(request, ['ADMIN', 'TENANT_ADMIN', 'SUPERADMIN']);
+    if (auth.error) return auth.error;
+    const { decoded } = auth;
+
     const { id } = await params;
     const body = await request.json();
     const { status, companyName, rfc, contactName, email, password, netsuiteId } = body;
@@ -60,6 +80,9 @@ export async function PATCH(
     if (!currentProfile || !currentProfile.userId) {
       return NextResponse.json({ message: 'Proveedor o usuario no encontrado.' }, { status: 404 });
     }
+
+    const tenantError = requireTenantMatch(decoded, currentProfile.tenantId);
+    if (tenantError) return tenantError;
 
     let userDataToUpdate: any = {};
     if (contactName) userDataToUpdate.name = contactName;
@@ -82,6 +105,9 @@ export async function PATCH(
     }
 
     if (password && password.trim() !== '') {
+      if (!isValidPassword(password)) {
+        return NextResponse.json({ message: PASSWORD_POLICY_MESSAGE }, { status: 400 });
+      }
       userDataToUpdate.password = await bcrypt.hash(password, 10);
     }
 

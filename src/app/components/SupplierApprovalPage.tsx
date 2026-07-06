@@ -4,10 +4,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Loader2, Check, X, Eye, Download, AlertTriangle, Clock, CheckCircle, XCircle, Edit, Power, PowerOff, Search, ChevronUp, ChevronDown, Mail } from 'lucide-react';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
+import PasswordInput from './PasswordInput';
+import PasswordRequirementChecklist from './PasswordRequirementChecklist';
 
 const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState({ companyName: '', rfc: '', contactName: '', email: '', password: '', netsuiteId: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (supplier) {
@@ -19,6 +23,7 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
         password: '',
         netsuiteId: supplier.netsuiteId || '',
       });
+      setError('');
     }
   }, [supplier]);
 
@@ -26,12 +31,18 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSaving(true);
+    setError('');
+
     // Eliminar password del payload si está vacío
     const payload = { ...formData };
     if (!payload.password || payload.password.trim() === '') {
       delete payload.password;
+    } else if (!isValidPassword(payload.password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
+      return;
     }
+
+    setIsSaving(true);
     await onSave(supplier.id, payload);
     setIsSaving(false);
   };
@@ -68,7 +79,12 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
             <label className="block text-sm font-medium text-gray-700">
               Nueva Contraseña <span className="text-gray-400 font-normal text-xs">(Dejar en blanco para no cambiar)</span>
             </label>
-            <input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="••••••••" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" />
+            <PasswordInput value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Mayúsculas, números y símbolos" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" />
+            {formData.password && (
+              <div className="mt-2">
+                <PasswordRequirementChecklist password={formData.password} />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -76,6 +92,12 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
             </label>
             <input type="text" value={formData.netsuiteId} onChange={e => setFormData({ ...formData, netsuiteId: e.target.value })} placeholder="Ej. 1234" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 font-mono bg-white" />
           </div>
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-3 flex items-start">
+              <AlertTriangle className="w-4 h-4 text-red-500 mr-2 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
           <div className="flex justify-end pt-5 space-x-3 border-t mt-4 border-gray-100">
             <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 font-medium">Cancelar</button>
             <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center font-medium">
@@ -480,7 +502,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [supplierToToggle, setSupplierToToggle] = useState(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string; tempPassword?: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
   const [rejectingSupplier, setRejectingSupplier] = useState<{ id: string; name: string } | null>(null);
   const [supplierRejectionReason, setSupplierRejectionReason] = useState('');
   const [isSubmittingSupplierReject, setIsSubmittingSupplierReject] = useState(false);
@@ -496,7 +518,8 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/suppliers');
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } });
       if (!response.ok) throw new Error('No se pudieron cargar los proveedores.');
       const data = await response.json();
       setSuppliers(Array.isArray(data) ? data : (data.data ?? []));
@@ -641,7 +664,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
         setNotification({ type: 'success', title: 'Documento aprobado', message: 'El proveedor ha sido notificado por email.' });
       }
 
-      const raw = await (await fetch('/api/suppliers')).json();
+      const raw = await (await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })).json();
       const updatedSuppliers = Array.isArray(raw) ? raw : (raw.data ?? []);
       const updatedSelectedSupplier = updatedSuppliers.find(s => s.id === selectedSupplier.id);
       setSelectedSupplier(updatedSelectedSupplier);
@@ -671,7 +694,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
 
       setNotification({ type: 'info', title: 'Documento rechazado', message: 'El proveedor ha sido notificado con el motivo del rechazo.' });
 
-      const raw = await (await fetch('/api/suppliers')).json();
+      const raw = await (await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })).json();
       const updatedSuppliers = Array.isArray(raw) ? raw : (raw.data ?? []);
       const updatedSelectedSupplier = updatedSuppliers.find(s => s.id === selectedSupplier.id);
       setSelectedSupplier(updatedSelectedSupplier);
@@ -696,7 +719,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
 
       if (!response.ok) throw new Error('No se pudo aprobar el documento.');
 
-      const raw = await (await fetch('/api/suppliers')).json();
+      const raw = await (await fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })).json();
       const updatedSuppliers = Array.isArray(raw) ? raw : (raw.data ?? []);
       const updatedSelectedSupplier = updatedSuppliers.find(s => s.id === selectedSupplier.id);
       setSelectedSupplier(updatedSelectedSupplier);
@@ -786,8 +809,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
       setNotification({
         type: 'success',
         title: '¡Invitación creada!',
-        message: `El proveedor "${inviteData.name}" fue registrado. Comparte estas credenciales con el proveedor para su primer acceso. El proveedor tendrá que cambiar su contraseña al iniciar sesión.`,
-        tempPassword: result.tempPassword,
+        message: `El proveedor "${inviteData.name}" fue registrado y se le envió un correo con un enlace para que establezca su propia contraseña.`,
       });
     } catch (err: any) {
       setNotification({ type: 'error', title: 'Error al invitar', message: err.message });
@@ -1074,29 +1096,6 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
             )}
             <h3 className="text-lg font-bold text-gray-800 mb-2">{notification.title}</h3>
             <p className="text-sm text-gray-600 mb-4">{notification.message}</p>
-            {notification.tempPassword && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5 text-left">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Credenciales de primer acceso</p>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-xs text-gray-500">Contraseña temporal</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <code className="flex-1 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm font-mono text-gray-900 select-all">{notification.tempPassword}</code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(notification.tempPassword!)}
-                        className="text-xs px-2 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-gray-700 transition-colors font-medium"
-                      >
-                        Copiar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-amber-600 mt-3 flex items-start gap-1">
-                  <span>⚠</span>
-                  <span>Guarda esta contraseña ahora, no se volverá a mostrar.</span>
-                </p>
-              </div>
-            )}
             <button
               onClick={() => setNotification(null)}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"

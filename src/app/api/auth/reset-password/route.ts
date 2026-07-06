@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../../lib/rateLimit';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
@@ -20,8 +21,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Token y nueva contraseña son requeridos.' }, { status: 400 });
     }
 
-    if (newPassword.length < 8) {
-      return NextResponse.json({ message: 'La contraseña debe tener al menos 8 caracteres.' }, { status: 400 });
+    if (!isValidPassword(newPassword)) {
+      return NextResponse.json({ message: PASSWORD_POLICY_MESSAGE }, { status: 400 });
     }
 
     // Buscar usuario con este token que no haya expirado
