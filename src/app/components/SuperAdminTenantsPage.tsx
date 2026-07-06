@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Loader2, Plus, Power, Users, Building2, Server, Edit, ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Calendar, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
+import PasswordInput from './PasswordInput';
+import PasswordRequirementChecklist from './PasswordRequirementChecklist';
 
 const REGIMENES_FISCALES = [
     { code: '601', name: 'General de Ley Personas Morales' },
@@ -347,6 +350,10 @@ WHERE
 
     const handleSaveAdmin = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isValidPassword(creatingAdminFor.password || '')) {
+            setErrorMessage(PASSWORD_POLICY_MESSAGE);
+            return;
+        }
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('/api/tenants/admins', {
@@ -804,7 +811,10 @@ WHERE
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Contraseña Local</label>
-                                <input required type="password" value={creatingAdminFor.password || ''} onChange={(e) => setCreatingAdminFor({ ...creatingAdminFor, password: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white" placeholder="***" />
+                                <PasswordInput required value={creatingAdminFor.password || ''} onChange={(e) => setCreatingAdminFor({ ...creatingAdminFor, password: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white" placeholder="Mayúsculas, números y símbolos" />
+                                <div className="mt-2">
+                                    <PasswordRequirementChecklist password={creatingAdminFor.password || ''} />
+                                </div>
                             </div>
 
                             <div className="flex justify-end space-x-3 pt-4 border-t mt-4">

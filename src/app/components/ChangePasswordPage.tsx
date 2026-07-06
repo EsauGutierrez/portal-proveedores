@@ -3,6 +3,9 @@
 
 import React, { useState } from 'react';
 import { Lock, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
+import PasswordInput from './PasswordInput';
+import PasswordRequirementChecklist from './PasswordRequirementChecklist';
 
 const ChangePasswordPage = ({ user, onPasswordChanged }) => {
     const [password, setPassword] = useState('');
@@ -15,8 +18,8 @@ const ChangePasswordPage = ({ user, onPasswordChanged }) => {
         e.preventDefault();
         setError('');
 
-        if (password.length < 8) {
-            setError('La contraseña debe tener al menos 8 caracteres.');
+        if (!isValidPassword(password)) {
+            setError(PASSWORD_POLICY_MESSAGE);
             return;
         }
 
@@ -102,19 +105,17 @@ const ChangePasswordPage = ({ user, onPasswordChanged }) => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nueva Contraseña</label>
-                        <input
-                            type="password"
+                        <PasswordInput
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                            placeholder="Mínimo 8 caracteres"
+                            placeholder="Mayúsculas, números y símbolos"
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Contraseña</label>
-                        <input
-                            type="password"
+                        <PasswordInput
                             required
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
@@ -122,6 +123,12 @@ const ChangePasswordPage = ({ user, onPasswordChanged }) => {
                             placeholder="Repite tu contraseña"
                         />
                     </div>
+                    <PasswordRequirementChecklist
+                        password={password}
+                        extra={[
+                            { label: 'Las contraseñas coinciden', met: password.length > 0 && password === confirmPassword },
+                        ]}
+                    />
 
                     <button
                         type="submit"

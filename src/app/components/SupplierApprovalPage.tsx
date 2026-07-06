@@ -4,10 +4,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Loader2, Check, X, Eye, Download, AlertTriangle, Clock, CheckCircle, XCircle, Edit, Power, PowerOff, Search, ChevronUp, ChevronDown, Mail } from 'lucide-react';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
+import PasswordInput from './PasswordInput';
+import PasswordRequirementChecklist from './PasswordRequirementChecklist';
 
 const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState({ companyName: '', rfc: '', contactName: '', email: '', password: '', netsuiteId: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (supplier) {
@@ -19,6 +23,7 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
         password: '',
         netsuiteId: supplier.netsuiteId || '',
       });
+      setError('');
     }
   }, [supplier]);
 
@@ -26,12 +31,18 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSaving(true);
+    setError('');
+
     // Eliminar password del payload si está vacío
     const payload = { ...formData };
     if (!payload.password || payload.password.trim() === '') {
       delete payload.password;
+    } else if (!isValidPassword(payload.password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
+      return;
     }
+
+    setIsSaving(true);
     await onSave(supplier.id, payload);
     setIsSaving(false);
   };
@@ -68,7 +79,12 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
             <label className="block text-sm font-medium text-gray-700">
               Nueva Contraseña <span className="text-gray-400 font-normal text-xs">(Dejar en blanco para no cambiar)</span>
             </label>
-            <input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="••••••••" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" />
+            <PasswordInput value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Mayúsculas, números y símbolos" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" />
+            {formData.password && (
+              <div className="mt-2">
+                <PasswordRequirementChecklist password={formData.password} />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -76,6 +92,12 @@ const EditSupplierModal = ({ supplier, isOpen, onClose, onSave }) => {
             </label>
             <input type="text" value={formData.netsuiteId} onChange={e => setFormData({ ...formData, netsuiteId: e.target.value })} placeholder="Ej. 1234" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 font-mono bg-white" />
           </div>
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-3 flex items-start">
+              <AlertTriangle className="w-4 h-4 text-red-500 mr-2 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
           <div className="flex justify-end pt-5 space-x-3 border-t mt-4 border-gray-100">
             <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 font-medium">Cancelar</button>
             <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center font-medium">
