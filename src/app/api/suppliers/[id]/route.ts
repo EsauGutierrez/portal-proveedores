@@ -7,6 +7,7 @@ import { checkLista69bBulk } from '../../../lib/zentax';
 import { sendEmail } from '../../../lib/mailer';
 import { buildLista69bAlertEmail } from '../../../lib/emails';
 import { requireAuth, requireTenantMatch } from '../../../lib/auth';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
@@ -104,6 +105,9 @@ export async function PATCH(
     }
 
     if (password && password.trim() !== '') {
+      if (!isValidPassword(password)) {
+        return NextResponse.json({ message: PASSWORD_POLICY_MESSAGE }, { status: 400 });
+      }
       userDataToUpdate.password = await bcrypt.hash(password, 10);
     }
 

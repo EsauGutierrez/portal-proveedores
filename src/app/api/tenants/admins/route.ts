@@ -1,34 +1,26 @@
 // app/api/tenants/admins/route.ts
 import { NextResponse } from 'next/server';
 import { PrismaClient, Prisma } from '@prisma/client';
-import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
+import { requireAuth } from '../../../lib/auth';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
+    const { error } = requireAuth(request, ['SUPERADMIN']);
+    if (error) return error;
+
     try {
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
-        }
-        const token = authHeader.split(' ')[1];
-        let decodedToken: any;
-        try {
-            decodedToken = jwt.verify(token, process.env.JWT_SECRET!);
-        } catch (err) {
-            return NextResponse.json({ message: 'Token inválido' }, { status: 401 });
-        }
-
-        if (decodedToken.role !== 'SUPERADMIN') {
-            return NextResponse.json({ message: 'Solo un SuperAdmin puede crear administradores de cliente.' }, { status: 403 });
-        }
-
         const body = await request.json();
         const { name, email: rawEmail, password, tenantId } = body;
 
         if (!name || !rawEmail || !password || !tenantId) {
             return NextResponse.json({ message: 'Todos los campos son obligatorios.' }, { status: 400 });
+        }
+
+        if (!isValidPassword(password)) {
+            return NextResponse.json({ message: PASSWORD_POLICY_MESSAGE }, { status: 400 });
         }
 
         // Normalizar email a minúsculas para evitar duplicados por capitalización
