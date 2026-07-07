@@ -3,25 +3,22 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import { requireAuth } from '../../../lib/auth';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
-  try {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
-    }
-    const token = authHeader.split(' ')[1];
-    const decodedToken = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-    const { userId } = decodedToken;
+  const { decoded, error } = requireAuth(request);
+  if (error) return error;
+  const { userId } = decoded;
 
+  try {
     const body = await request.json();
     const { password } = body;
 
-    if (!password || password.length < 8) {
-      return NextResponse.json({ message: 'La contraseña debe tener al menos 8 caracteres.' }, { status: 400 });
+    if (!password || !isValidPassword(password)) {
+      return NextResponse.json({ message: PASSWORD_POLICY_MESSAGE }, { status: 400 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

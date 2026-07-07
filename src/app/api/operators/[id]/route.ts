@@ -1,32 +1,20 @@
 // app/api/operators/[id]/route.ts
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken';
+import { requireAuth } from '../../../lib/auth';
 
 const prisma = new PrismaClient();
 
-function requireAdmin(request: Request): { userId: string; tenantId: string } | null {
-  const auth = request.headers.get('Authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  try {
-    const decoded = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET!) as any;
-    if (!['TENANT_ADMIN', 'SUPERADMIN'].includes(decoded.role)) return null;
-    return { userId: decoded.userId, tenantId: decoded.tenantId };
-  } catch {
-    return null;
-  }
-}
-
 // PATCH /api/operators/[id] — actualizar nombre y/o email
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = requireAdmin(request);
-  if (!admin) return NextResponse.json({ message: 'No autorizado.' }, { status: 401 });
+  const { decoded, error } = requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
+  if (error) return error;
 
   const { id } = await params;
   const { name, email } = await request.json();
 
   const operator = await prisma.user.findFirst({
-    where: { id, tenantId: admin.tenantId, role: 'CARGADOR' },
+    where: { id, tenantId: decoded.tenantId, role: 'CARGADOR' },
   });
   if (!operator) return NextResponse.json({ message: 'Cargador no encontrado.' }, { status: 404 });
 
@@ -50,13 +38,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 // DELETE /api/operators/[id] — eliminar cargador y sus asignaciones
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = requireAdmin(request);
-  if (!admin) return NextResponse.json({ message: 'No autorizado.' }, { status: 401 });
+  const { decoded, error } = requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
+  if (error) return error;
 
   const { id } = await params;
 
   const operator = await prisma.user.findFirst({
-    where: { id, tenantId: admin.tenantId, role: 'CARGADOR' },
+    where: { id, tenantId: decoded.tenantId, role: 'CARGADOR' },
   });
   if (!operator) return NextResponse.json({ message: 'Cargador no encontrado.' }, { status: 404 });
 

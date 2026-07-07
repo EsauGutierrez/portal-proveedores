@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, UserPlus, X, Search, ChevronDown, ChevronRight, Loader2, Pencil } from 'lucide-react';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
+import PasswordInput from './PasswordInput';
+import PasswordRequirementChecklist from './PasswordRequirementChecklist';
 
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
@@ -17,6 +20,7 @@ const CreateOperatorModal = ({ isOpen, onClose, onCreated }) => {
 
   const handleSubmit = async () => {
     if (!form.name || !form.email || !form.password) { setError('Todos los campos son requeridos.'); return; }
+    if (!isValidPassword(form.password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     setLoading(true); setError('');
     try {
       const res = await fetch('/api/operators', { method: 'POST', headers: authHeaders(), body: JSON.stringify(form) });
@@ -37,19 +41,34 @@ const CreateOperatorModal = ({ isOpen, onClose, onCreated }) => {
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
         </div>
         <div className="space-y-4">
-          {['name', 'email', 'password'].map(field => (
-            <div key={field}>
-              <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
-                {field === 'name' ? 'Nombre' : field === 'email' ? 'Email' : 'Contraseña temporal'}
-              </label>
-              <input
-                type={field === 'password' ? 'password' : field === 'email' ? 'email' : 'text'}
-                value={form[field]}
-                onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          ))}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña temporal</label>
+            <PasswordInput
+              value={form.password}
+              onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+              placeholder="Mayúsculas, números y símbolos"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <PasswordRequirementChecklist password={form.password} />
           {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
         </div>
         <div className="mt-6 flex justify-end gap-3">

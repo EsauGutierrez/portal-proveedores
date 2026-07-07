@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
@@ -28,9 +29,9 @@ export async function POST(request: Request) {
     }
 
     // Validación de la fortaleza de la contraseña
-    if (password.length < 8) {
+    if (!isValidPassword(password)) {
       return NextResponse.json(
-        { message: 'La contraseña debe tener al menos 8 caracteres.' },
+        { message: PASSWORD_POLICY_MESSAGE },
         { status: 400 }
       );
     }

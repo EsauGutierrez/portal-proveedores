@@ -43,7 +43,10 @@ export async function GET(request: Request) {
   })));
 }
 
-// PATCH /api/invoices/pending-assignment — asignar OC manualmente y encolar
+// PATCH /api/invoices/pending-assignment — resolver una factura pendiente:
+//   { invoiceId, purchaseOrderId }  -> asignar OC manualmente (matchMethod MANUAL)
+//   { invoiceId, standalone: true } -> enviar sin OC como Vendor Bill standalone (matchMethod STANDALONE)
+// En ambos casos se encola a SQS para sincronizar a NetSuite.
 export async function PATCH(request: Request) {
   const decoded = getDecoded(request);
   if (!decoded) return NextResponse.json({ message: 'No autorizado.' }, { status: 401 });
@@ -51,9 +54,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ message: 'Sin permiso.' }, { status: 403 });
   }
 
-  const { invoiceId, purchaseOrderId } = await request.json();
-  if (!invoiceId || !purchaseOrderId) {
-    return NextResponse.json({ message: 'invoiceId y purchaseOrderId son requeridos.' }, { status: 400 });
+  const { invoiceId, purchaseOrderId, standalone } = await request.json();
+  if (!invoiceId) {
+    return NextResponse.json({ message: 'invoiceId es requerido.' }, { status: 400 });
+  }
+  if (!standalone && !purchaseOrderId) {
+    return NextResponse.json({ message: 'Debes asignar una OC o marcar la factura como sin OC (standalone).' }, { status: 400 });
   }
 
   const invoice = await prisma.invoice.findFirst({
@@ -61,22 +67,35 @@ export async function PATCH(request: Request) {
   });
   if (!invoice) return NextResponse.json({ message: 'Factura no encontrada o ya asignada.' }, { status: 404 });
 
-  const po = await prisma.purchaseOrder.findFirst({
-    where: { id: purchaseOrderId, tenantId: decoded.tenantId },
-    select: { id: true },
-  });
-  if (!po) return NextResponse.json({ message: 'Orden de compra no encontrada.' }, { status: 404 });
+  if (standalone) {
+    // Sin OC: se registrará en NetSuite como Vendor Bill standalone (desde los datos del proveedor)
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        pendingAssignment: false,
+        matchMethod: 'STANDALONE',
+        syncStatus: 'PENDING_SYNC',
+        syncError: null,
+      },
+    });
+  } else {
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, tenantId: decoded.tenantId },
+      select: { id: true },
+    });
+    if (!po) return NextResponse.json({ message: 'Orden de compra no encontrada.' }, { status: 404 });
 
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      purchaseOrderId,
-      pendingAssignment: false,
-      matchMethod: 'MANUAL',
-      syncStatus: 'PENDING_SYNC',
-      syncError: null,
-    },
-  });
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        purchaseOrderId,
+        pendingAssignment: false,
+        matchMethod: 'MANUAL',
+        syncStatus: 'PENDING_SYNC',
+        syncError: null,
+      },
+    });
+  }
 
   // Encolar en SQS para sincronizar a NetSuite
   const sqsClient = new SQSClient({
@@ -89,8 +108,12 @@ export async function PATCH(request: Request) {
 
   await sqsClient.send(new SendMessageCommand({
     QueueUrl: process.env.SQS_INVOICES_URL,
-    MessageBody: JSON.stringify({ invoiceId, userId: invoice.userId, purchaseOrderId }),
+    MessageBody: JSON.stringify({ invoiceId, userId: invoice.userId, purchaseOrderId: standalone ? null : purchaseOrderId }),
   })).catch(e => console.error('[PendingAssignment] SQS error:', e));
 
-  return NextResponse.json({ message: 'OC asignada. La factura será sincronizada en breve.' });
+  return NextResponse.json({
+    message: standalone
+      ? 'Factura enviada sin OC (standalone). Se sincronizará a NetSuite en breve.'
+      : 'OC asignada. La factura será sincronizada en breve.',
+  });
 }

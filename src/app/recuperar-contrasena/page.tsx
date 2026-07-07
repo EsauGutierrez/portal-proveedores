@@ -3,6 +3,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, KeyRound } from 'lucide-react';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
+import PasswordRequirementChecklist from '../components/PasswordRequirementChecklist';
+import PasswordInput from '../components/PasswordInput';
 
 function ResetPasswordForm() {
     const searchParams = useSearchParams();
@@ -24,8 +27,8 @@ function ResetPasswordForm() {
         e.preventDefault();
         setError('');
 
-        if (newPassword.length < 8) {
-            setError('La contraseña debe tener al menos 8 caracteres.');
+        if (!isValidPassword(newPassword)) {
+            setError(PASSWORD_POLICY_MESSAGE);
             return;
         }
         if (newPassword !== confirmPassword) {
@@ -97,12 +100,11 @@ function ResetPasswordForm() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Nueva contraseña
                                 </label>
-                                <input
-                                    type="password"
+                                <PasswordInput
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                                    placeholder="Mínimo 8 caracteres"
+                                    placeholder="Mayúsculas, números y símbolos"
                                     required
                                     disabled={!token}
                                 />
@@ -111,8 +113,7 @@ function ResetPasswordForm() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Confirmar contraseña
                                 </label>
-                                <input
-                                    type="password"
+                                <PasswordInput
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
@@ -121,6 +122,12 @@ function ResetPasswordForm() {
                                     disabled={!token}
                                 />
                             </div>
+                            <PasswordRequirementChecklist
+                                password={newPassword}
+                                extra={[
+                                    { label: 'Las contraseñas coinciden', met: newPassword.length > 0 && newPassword === confirmPassword },
+                                ]}
+                            />
                             <button
                                 type="submit"
                                 disabled={isLoading || !token}

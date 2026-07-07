@@ -57,6 +57,22 @@ const PendingAssignmentPanel = () => {
     setAssigning(null);
   };
 
+  const sendStandalone = async (invoiceId: string) => {
+    if (!window.confirm('¿Enviar esta factura a NetSuite SIN orden de compra? Se registrará como Vendor Bill standalone. Úsalo solo si la factura realmente no corresponde a ninguna OC.')) return;
+    setAssigning(invoiceId);
+    const res = await authFetch('/api/invoices/pending-assignment', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId, standalone: true }),
+    });
+    if (res.ok) {
+      setInvoices(p => p.filter(inv => inv.id !== invoiceId));
+      setPoSearch(p => { const n = { ...p }; delete n[invoiceId]; return n; });
+      setPoResults(p => { const n = { ...p }; delete n[invoiceId]; return n; });
+    }
+    setAssigning(null);
+  };
+
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>;
 
   if (invoices.length === 0) return (
@@ -76,31 +92,42 @@ const PendingAssignmentPanel = () => {
               <p className="text-xs text-gray-500">{inv.supplierName} · {inv.supplierRfc} · ${Number(inv.total).toFixed(2)}</p>
               <p className="text-xs text-gray-400">Subida por: {inv.uploadedBy}</p>
             </div>
-            <div className="flex-1 max-w-sm relative">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <input
-                  value={poSearch[inv.id] || ''}
-                  onChange={e => searchPO(inv.id, e.target.value)}
-                  placeholder="Buscar OC por folio..."
-                  className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              {(poResults[inv.id] || []).length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                  {poResults[inv.id].map((po: any) => (
-                    <button
-                      key={po.id}
-                      onClick={() => assignPO(inv.id, po.id)}
-                      disabled={assigning === inv.id}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-0"
-                    >
-                      <span className="font-medium">{po.folio}</span>
-                      <span className="text-gray-400 ml-2">${Number(po.total).toFixed(2)}</span>
-                    </button>
-                  ))}
+            <div className="flex items-start gap-2">
+              <div className="flex-1 max-w-sm relative">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    value={poSearch[inv.id] || ''}
+                    onChange={e => searchPO(inv.id, e.target.value)}
+                    placeholder="Buscar OC por folio..."
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-              )}
+                {(poResults[inv.id] || []).length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    {poResults[inv.id].map((po: any) => (
+                      <button
+                        key={po.id}
+                        onClick={() => assignPO(inv.id, po.id)}
+                        disabled={assigning === inv.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                      >
+                        <span className="font-medium">{po.folio}</span>
+                        <span className="text-gray-400 ml-2">${Number(po.total).toFixed(2)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => sendStandalone(inv.id)}
+                disabled={assigning === inv.id}
+                title="Enviar a NetSuite sin orden de compra (Vendor Bill standalone)"
+                className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50"
+              >
+                {assigning === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Enviar sin OC
+              </button>
             </div>
           </div>
         </div>

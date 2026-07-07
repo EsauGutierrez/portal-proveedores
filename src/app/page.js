@@ -22,6 +22,11 @@ export default function HomePage() {
         if (loggedInUser) {
             setCurrentUser(JSON.parse(loggedInUser));
         }
+
+        const requestedView = new URLSearchParams(window.location.search).get('view');
+        if (requestedView === 'forgotPassword') {
+            setAuthView('forgotPassword');
+        }
     }, []);
 
     const handleLogin = (data) => {
