@@ -4,31 +4,28 @@ import { NextResponse } from 'next/server';
 import { PrismaClient, SupplierType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 import { sendEmail } from '../../lib/mailer';
 import { getPresignedUrl } from '../../lib/s3';
+import { requireAuth } from '../../lib/auth';
 
 const prisma = new PrismaClient();
 
 // Función para obtener proveedores, filtrando por estado y tenant
 export async function GET(request: Request) {
   try {
+    const auth = requireAuth(request, ['ADMIN', 'TENANT_ADMIN', 'SUPERADMIN']);
+    if (auth.error) return auth.error;
+    const { decoded } = auth;
+
+    // SUPERADMIN puede ver todos los tenants; el resto se limita al propio
+    const tenantId = decoded.role === 'SUPERADMIN' ? undefined : decoded.tenantId;
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-
-    const { searchParams: sp } = new URL(request.url);
-    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const limit = Math.min(200, Math.max(1, parseInt(sp.get('limit') || '100', 10)));
-
-    // Extraer tenantId del JWT si está presente
-    let tenantId: string | undefined;
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      try {
-        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as any;
-        tenantId = decoded.tenantId ?? undefined;
-      } catch { /* token inválido, continuar sin filtro */ }
-    }
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '100', 10)));
 
     const where = {
       ...(tenantId ? { tenantId } : {}),
@@ -131,9 +128,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Subsidiaria no encontrada. Verifica la configuración.' }, { status: 400 });
     }
 
-    // Crear usuario con password temporal aleatoria
-    const tempPassword = Math.random().toString(36).slice(-10);
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    // Password de marcador de posición: el proveedor establece la suya real vía el link de invitación.
+    // Nunca se expone ni se envía; solo existe para satisfacer el campo NOT NULL hasta el primer login.
+    const placeholderPassword = crypto.randomBytes(32).toString('hex');
+    const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
 
     const newUser = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -206,7 +204,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: 'Proveedor invitado exitosamente.',
       userId: newUser.id,
-      tempPassword,
       ...(supplierLimitWarning && { warning: supplierLimitWarning }),
     }, { status: 201 });
 
