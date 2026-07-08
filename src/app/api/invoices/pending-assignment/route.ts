@@ -1,10 +1,8 @@
 // app/api/invoices/pending-assignment/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
-
-const prisma = new PrismaClient();
 
 function getDecoded(request: Request): any | null {
   const auth = request.headers.get('Authorization');

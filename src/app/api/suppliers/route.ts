@@ -1,7 +1,8 @@
 // app/api/suppliers/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient, SupplierType } from '@prisma/client';
+import { SupplierType } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -9,8 +10,6 @@ import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 import { sendEmail } from '../../lib/mailer';
 import { getPresignedUrl } from '../../lib/s3';
 import { requireAuth } from '../../lib/auth';
-
-const prisma = new PrismaClient();
 
 // Función para obtener proveedores, filtrando por estado y tenant
 export async function GET(request: Request) {

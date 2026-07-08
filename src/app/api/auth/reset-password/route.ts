@@ -1,12 +1,10 @@
 // app/api/auth/reset-password/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import bcrypt from 'bcrypt';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../../lib/rateLimit';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   // Rate limit: 10 intentos por IP cada 15 minutos

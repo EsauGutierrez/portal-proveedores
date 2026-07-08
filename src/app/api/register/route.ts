@@ -1,13 +1,11 @@
 // app/api/register/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 import { checkLista69bBulk } from '../../lib/zentax';
 import { sendEmail } from '../../lib/mailer';
 import { buildLista69bAlertEmail } from '../../lib/emails';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   // Rate limit: 5 registros por IP cada hora

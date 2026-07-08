@@ -1,14 +1,13 @@
 // app/api/invoices/bulk/route.ts
 // Carga masiva de facturas desde un ZIP o múltiples archivos XML+PDF
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import JSZip from 'jszip';
 import { parseStringPromise } from 'xml2js';
 import { uploadFileToS3 } from '../../../lib/s3';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
-
-const prisma = new PrismaClient();
 
 // Extrae pares XML+PDF de un ZIP, respetando cualquier estructura de carpetas
 async function extractPairsFromZip(zipBuffer: Buffer): Promise<{ xmlContent: string; pdfBuffer: Buffer | null; xmlName: string; folderPath: string }[]> {

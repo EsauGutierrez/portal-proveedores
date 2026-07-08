@@ -1,13 +1,11 @@
 // app/api/payment-complements/[id]/approve/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { invokeRestlet } from '../../../../lib/netsuite';
 import { getPresignedUrl } from '../../../../lib/s3';
 import { sendEmail } from '../../../../lib/mailer';
-
-const prisma = new PrismaClient();
 
 const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
 const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';

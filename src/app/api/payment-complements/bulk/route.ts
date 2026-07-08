@@ -1,11 +1,9 @@
 // api/payment-complements/bulk/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import jwt from 'jsonwebtoken';
 import { uploadFileToS3 } from '../../../lib/s3';
-
-const prisma = new PrismaClient();
 
 // POST: Iniciar carga masiva de complementos de pago (sube ZIP y encola en SQS)
 export async function POST(request: Request) {

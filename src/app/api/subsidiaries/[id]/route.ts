@@ -1,10 +1,8 @@
 // app/api/subsidiaries/[id]/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { uploadFileToS3 } from '../../../lib/s3';
-
-const prisma = new PrismaClient();
 
 // PATCH: Actualizar campos específicos de una subsidiaria, como su estado.
 export async function PATCH(

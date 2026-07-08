@@ -1,12 +1,10 @@
 // app/api/set-password/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../lib/passwordPolicy';
-
-const prisma = new PrismaClient();
 
 // Definimos una interfaz para el contenido del token decodificado
 interface DecodedToken {

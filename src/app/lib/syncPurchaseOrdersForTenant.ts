@@ -4,10 +4,8 @@
 // el endpoint de todos los tenants (/api/sync/all-tenants),
 // y el sync manual del admin (/api/admin/sync/purchase-orders).
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './prisma';
 import { querySuiteQL } from './netsuite';
-
-const prisma = new PrismaClient();
 
 // RFC genéricos del SAT — pueden compartirse entre varios proveedores
 const GENERIC_RFCS = new Set(['XAXX010101000', 'XEXX010101000']);

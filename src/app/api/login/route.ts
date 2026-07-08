@@ -1,12 +1,10 @@
 // app/api/login/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
-
-const prisma = new PrismaClient();
 
 // Umbrales de bloqueo por cuenta (escalonado)
 function getLockoutDuration(failedAttempts: number): number | null {

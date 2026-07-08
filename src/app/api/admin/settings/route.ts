@@ -2,10 +2,8 @@
 // Configuración del tenant: tolerancia de importe en facturas, etc.
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import jwt from 'jsonwebtoken';
-
-const prisma = new PrismaClient();
 
 function decodeTenantAdmin(request: Request) {
     const authHeader = request.headers.get('Authorization');
