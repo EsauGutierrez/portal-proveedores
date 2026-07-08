@@ -261,7 +261,7 @@ export async function POST(request: Request) {
           syncStatus: pendingAssignment ? 'PENDING_ASSIGNMENT' : 'PENDING_SYNC',
           pendingAssignment,
           matchMethod: matchMethod ?? undefined,
-          bulkJobId: job.id,
+          bulkJob: { connect: { id: job.id } },
           tenant: { connect: { id: decoded.tenantId } },
           user: { connect: { id: invoiceUserId } },
           ...(decoded.userId !== invoiceUserId ? { uploadedByUser: { connect: { id: decoded.userId } } } : {}),
