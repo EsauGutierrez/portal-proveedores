@@ -1,11 +1,9 @@
 // app/api/workers/sqs-consumer/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { invokeRestlet } from '../../../lib/netsuite';
 import { getPresignedUrl } from '../../../lib/s3';
 import { processBulkPaymentComplements } from '../../../lib/processBulkPaymentComplements';
-
-const prisma = new PrismaClient();
 
 // This endpoint matches the SQS Event Payload signature
 export async function POST(request: Request) {

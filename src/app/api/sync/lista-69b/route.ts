@@ -3,12 +3,10 @@
 // Llamado por EventBridge el primer día de cada mes. Protegido con x-sync-key.
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { checkLista69bBulk, Lista69bStatusValue } from '../../../lib/zentax';
 import { sendEmail } from '../../../lib/mailer';
 import { buildLista69bAlertEmail } from '../../../lib/emails';
-
-const prisma = new PrismaClient();
 
 const ALERT_STATUSES: Lista69bStatusValue[] = ['PRESUNTO', 'DEFINITIVO', 'DESVIRTUADO', 'SENTENCIA_FAVORABLE'];
 const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];

@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import jwt from 'jsonwebtoken';
-
-const prisma = new PrismaClient();
 
 // PATCH /api/admin/unlock-user — desbloquea una cuenta bloqueada por intentos fallidos
 // Solo accesible por TENANT_ADMIN y SUPERADMIN

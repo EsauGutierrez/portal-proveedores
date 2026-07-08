@@ -1,12 +1,10 @@
 // app/api/auth/forgot-password/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import crypto from 'crypto';
 import { rateLimit, getClientIP, rateLimitResponse } from '../../../lib/rateLimit';
 import { sendEmail } from '../../../lib/mailer';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   // Rate limit: 5 solicitudes por IP cada hora (anti-spam de emails)

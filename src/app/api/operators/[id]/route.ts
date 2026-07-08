@@ -1,9 +1,7 @@
 // app/api/operators/[id]/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { requireAuth } from '../../../lib/auth';
-
-const prisma = new PrismaClient();
 
 // PATCH /api/operators/[id] — actualizar nombre y/o email
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

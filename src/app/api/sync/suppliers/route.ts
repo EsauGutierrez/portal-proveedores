@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { querySuiteQL } from '../../../lib/netsuite';
 import { checkLista69bBulk } from '../../../lib/zentax';
-
-const prisma = new PrismaClient();
 
 // Función para validar la estructura del RFC (Persona Física o Moral)
 function isValidRFC(rfc: string) {

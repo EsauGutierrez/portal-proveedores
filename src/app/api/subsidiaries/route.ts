@@ -1,10 +1,8 @@
 // app/api/subsidiaries/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
-
-const prisma = new PrismaClient();
 
 // Expresión regular para validar formato RFC de Personas Morales (12 caracteres) o Físicas (13 caracteres)
 const RFC_REGEX = /^([A-ZÑ&]{3,4})\d{6}([A-Z0-9]{3})$/i;

@@ -1,11 +1,9 @@
 // lib/processBulkPaymentComplements.ts
 import AdmZip from 'adm-zip';
 import { parseStringPromise } from 'xml2js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './prisma';
 import { downloadFileFromS3, uploadBufferToS3, getPresignedUrl } from './s3';
 import { querySuiteQL, invokeRestlet, NetSuiteCredentials } from './netsuite';
-
-const prisma = new PrismaClient();
 
 const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
 const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
