@@ -1,10 +1,8 @@
 // app/api/invoices/retry/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   try {

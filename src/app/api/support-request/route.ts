@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { sendEmail } from '../../lib/mailer';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   try {

@@ -1,13 +1,12 @@
 // app/api/invoices/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js'; // Se añade la importación para leer XML
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
-
-const prisma = new PrismaClient();
 
 // Helper para formatear moneda
 const formatCurrency = (number: number | string) => {

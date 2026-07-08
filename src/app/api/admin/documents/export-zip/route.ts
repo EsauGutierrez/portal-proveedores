@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import AdmZip from 'adm-zip';
 import { getPresignedUrl } from '../../../../lib/s3';
-
-const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
     try {

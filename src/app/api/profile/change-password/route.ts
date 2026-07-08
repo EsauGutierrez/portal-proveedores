@@ -1,12 +1,10 @@
 // app/api/profile/change-password/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import bcrypt from 'bcrypt';
 import { requireAuth } from '../../../lib/auth';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   const { decoded, error } = requireAuth(request);

@@ -1,15 +1,13 @@
 // app/api/suppliers/[id]/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import bcrypt from 'bcrypt';
 import { checkLista69bBulk } from '../../../lib/zentax';
 import { sendEmail } from '../../../lib/mailer';
 import { buildLista69bAlertEmail } from '../../../lib/emails';
 import { requireAuth, requireTenantMatch } from '../../../lib/auth';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
-
-const prisma = new PrismaClient();
 
 // GET: Obtener los datos de un perfil de proveedor específico por su ID
 export async function GET(

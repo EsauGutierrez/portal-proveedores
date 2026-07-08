@@ -2,12 +2,10 @@
 // Reintenta la sincronización a NetSuite para complementos con estado FAILED.
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { invokeRestlet } from '../../../../lib/netsuite';
 import { getPresignedUrl } from '../../../../lib/s3';
-
-const prisma = new PrismaClient();
 
 const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
 const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';

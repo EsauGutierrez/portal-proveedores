@@ -1,9 +1,7 @@
 // app/api/operators/[id]/assignments/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
-
-const prisma = new PrismaClient();
 
 function requireAdmin(request: Request): { userId: string; tenantId: string } | null {
   const auth = request.headers.get('Authorization');

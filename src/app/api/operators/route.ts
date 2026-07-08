@@ -1,11 +1,9 @@
 // app/api/operators/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import bcrypt from 'bcrypt';
 import { requireAuth } from '../../lib/auth';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../lib/passwordPolicy';
-
-const prisma = new PrismaClient();
 
 // GET /api/operators — listar cargadores del tenant
 export async function GET(request: Request) {
