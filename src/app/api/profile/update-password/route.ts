@@ -3,14 +3,12 @@
 // Distinto de /api/profile/change-password, que es exclusivo del flujo de primer login forzado.
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import bcrypt from 'bcrypt';
 import { requireAuth } from '../../../lib/auth';
 import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
 import { sendEmail } from '../../../lib/mailer';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   const { decoded, error } = requireAuth(request);

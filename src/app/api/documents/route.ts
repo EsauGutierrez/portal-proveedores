@@ -1,11 +1,9 @@
 // app/api/documents/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
-const prisma = new PrismaClient();
-
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);

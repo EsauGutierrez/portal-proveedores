@@ -1,10 +1,8 @@
 // app/api/documents/approve-pending/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import jwt from 'jsonwebtoken';
-
-const prisma = new PrismaClient();
 
 // Esta API crea un registro de documento con estado 'APPROVED' sin necesidad de un archivo.
 export async function POST(request: Request) {

@@ -1,7 +1,7 @@
 // app/api/payment-complements/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
@@ -9,8 +9,6 @@ import { invokeRestlet } from '../../lib/netsuite';
 
 const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
 const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
-
-const prisma = new PrismaClient();
 
 // GET: Listar complementos de pago del proveedor autenticado
 export async function GET(request: Request) {

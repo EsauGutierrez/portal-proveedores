@@ -3,11 +3,9 @@
 // Usa syncPurchaseOrdersForTenant (lógica centralizada con lookup por netsuiteId).
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { syncPurchaseOrdersForTenant } from '../../../../lib/syncPurchaseOrdersForTenant';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
     try {

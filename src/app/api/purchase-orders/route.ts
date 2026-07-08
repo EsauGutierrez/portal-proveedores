@@ -1,11 +1,9 @@
 // app/api/purchase-orders/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { getPresignedUrl } from '../../lib/s3';
-
-const prisma = new PrismaClient();
 
 // --- Función GET para obtener las órdenes de compra ---
 export async function GET(request: Request) {

@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { deleteFromS3 } from '../../../../lib/s3';
-
-const prisma = new PrismaClient();
 
 type DecodedToken = { userId: string; role: string; tenantId: string };
 
