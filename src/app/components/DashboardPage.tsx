@@ -209,7 +209,9 @@ const DashboardPage = ({ user, onLogout }) => {
                                     <NavLink view="carga_masiva" icon={FileText} label="Carga Masiva" />
                                 )}
                                 <NavLink view="pagos" icon={FileText} label="Complementos de Pago" />
-                                <NavLink view="pagos_masivos" icon={FileText} label="Complementos Masivos" />
+                                {user.bulkPaymentForSuppliers && (
+                                    <NavLink view="pagos_masivos" icon={FileText} label="Complementos Masivos" />
+                                )}
                                 <NavLink view="mis_documentos" icon={FileText} label="Mis Documentos" />
                                 <NavLink view="soporte" icon={HelpCircle} label="Solicitar Ayuda" />
                             </>
@@ -222,7 +224,7 @@ const DashboardPage = ({ user, onLogout }) => {
                                 <NavLink view="cargadores" icon={Users} label="Cargadores" />
                                 <NavLink view="subsidiarias" icon={Building2} label="Gestionar Subsidiarias" />
                                 <NavLink view="ajustes_documentos" icon={Settings} label="Config. de Documentos" />
-                                <NavLink view="ajustes_facturas" icon={Settings} label="Config. de Facturas" />
+                                <NavLink view="ajustes_facturas" icon={Settings} label="Preferencias Generales" />
                                 <NavLink view="sync_logs" icon={DatabaseZap} label="Log de Sincronización" />
                             </>
                         )}
