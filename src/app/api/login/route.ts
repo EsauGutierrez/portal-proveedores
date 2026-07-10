@@ -170,6 +170,7 @@ export async function POST(request: Request) {
         supplierStatus: user.supplierProfile?.status || null,
         requireDocuments: user.supplierProfile?.requireDocuments || false,
         bulkUploadForSuppliers: user.tenant?.bulkUploadForSuppliers || false,
+        bulkPaymentForSuppliers: user.tenant?.bulkPaymentForSuppliers || false,
         firstLogin: user.firstLogin,
         subscriptionWarning: isInGrace,
         assignedSupplierIds,

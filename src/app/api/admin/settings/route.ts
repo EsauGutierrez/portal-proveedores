@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     try {
         const tenant = await prisma.tenant.findUnique({
             where: { id: decoded.tenantId },
-            select: { invoiceTolerance: true, bulkUploadForSuppliers: true },
+            select: { invoiceTolerance: true, bulkUploadForSuppliers: true, bulkPaymentForSuppliers: true },
         });
 
         if (!tenant) return NextResponse.json({ message: 'Empresa no encontrada' }, { status: 404 });
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             invoiceTolerance: tenant.invoiceTolerance,
             bulkUploadForSuppliers: tenant.bulkUploadForSuppliers,
+            bulkPaymentForSuppliers: tenant.bulkPaymentForSuppliers,
         });
     } catch (error: any) {
         return NextResponse.json({ message: 'Error al obtener configuración.', error: error.message }, { status: 500 });
@@ -46,7 +47,7 @@ export async function PATCH(request: Request) {
 
     try {
         const body = await request.json();
-        const { invoiceTolerance, bulkUploadForSuppliers } = body;
+        const { invoiceTolerance, bulkUploadForSuppliers, bulkPaymentForSuppliers } = body;
 
         if (invoiceTolerance !== undefined && (typeof invoiceTolerance !== 'number' || invoiceTolerance < 0)) {
             return NextResponse.json({ message: 'El valor de tolerancia debe ser un número mayor o igual a 0.' }, { status: 400 });
@@ -57,14 +58,16 @@ export async function PATCH(request: Request) {
             data: {
                 ...(invoiceTolerance !== undefined ? { invoiceTolerance } : {}),
                 ...(bulkUploadForSuppliers !== undefined ? { bulkUploadForSuppliers } : {}),
+                ...(bulkPaymentForSuppliers !== undefined ? { bulkPaymentForSuppliers } : {}),
             },
-            select: { invoiceTolerance: true, bulkUploadForSuppliers: true },
+            select: { invoiceTolerance: true, bulkUploadForSuppliers: true, bulkPaymentForSuppliers: true },
         });
 
         return NextResponse.json({
             message: 'Configuración guardada correctamente.',
             invoiceTolerance: updated.invoiceTolerance,
             bulkUploadForSuppliers: updated.bulkUploadForSuppliers,
+            bulkPaymentForSuppliers: updated.bulkPaymentForSuppliers,
         });
     } catch (error: any) {
         return NextResponse.json({ message: 'Error al guardar configuración.', error: error.message }, { status: 500 });
