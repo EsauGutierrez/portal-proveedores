@@ -193,6 +193,7 @@ const SuperAdminTenantsPage = () => {
     const [creatingAdminFor, setCreatingAdminFor] = useState<any>(null);
     const [showQueryWarning, setShowQueryWarning] = useState(false);
     const [pendingSubsidiarySave, setPendingSubsidiarySave] = useState(false);
+    const [isSavingSubsidiary, setIsSavingSubsidiary] = useState(false);
 
     // --- Paginación ---
     const [currentPage, setCurrentPage] = useState(1);
@@ -315,6 +316,7 @@ WHERE
   AND v.vatregnumber IN ({rfcClause})`;
 
     const doSaveSubsidiary = async () => {
+        setIsSavingSubsidiary(true);
         try {
             const token = localStorage.getItem('token');
             const isNew = !editingSubsidiary.id;
@@ -331,10 +333,8 @@ WHERE
 
             const res = await fetch('/api/subsidiaries', {
                 method: isNew ? 'POST' : 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData,
             });
 
             if (!res.ok) {
@@ -348,6 +348,8 @@ WHERE
             fetchTenants();
         } catch (err: any) {
             setErrorMessage(err.message);
+        } finally {
+            setIsSavingSubsidiary(false);
         }
     };
 
@@ -769,8 +771,9 @@ WHERE
                                 </div>
                             </div>
                             <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
-                                <button type="button" onClick={() => setEditingSubsidiary(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm">
+                                <button type="button" onClick={() => setEditingSubsidiary(null)} disabled={isSavingSubsidiary} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded">Cancelar</button>
+                                <button type="submit" disabled={isSavingSubsidiary} className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded shadow-sm">
+                                    {isSavingSubsidiary && <Loader2 className="w-4 h-4 animate-spin" />}
                                     {editingSubsidiary.id ? 'Actualizar Subsidiaria' : 'Guardar Subsidiaria'}
                                 </button>
                             </div>
@@ -799,8 +802,10 @@ WHERE
                             </button>
                             <button
                                 onClick={doSaveSubsidiary}
-                                className="px-5 py-2 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded font-medium shadow-sm"
+                                disabled={isSavingSubsidiary}
+                                className="flex items-center gap-2 px-5 py-2 text-sm text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed rounded font-medium shadow-sm"
                             >
+                                {isSavingSubsidiary && <Loader2 className="w-4 h-4 animate-spin" />}
                                 Sí, guardar cambios
                             </button>
                         </div>
