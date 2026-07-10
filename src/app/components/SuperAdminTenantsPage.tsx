@@ -29,7 +29,7 @@ const REGIMENES_FISCALES = [
 ];
 
 // Componente individual para la fila con Desplegable
-const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteSubsidiary, onAddAdmin }: any) => {
+const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteSubsidiary, onAddAdmin, onDelete }: any) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
@@ -109,6 +109,13 @@ const TenantRow = ({ tenant, onToggleStatus, onEdit, onEditSubsidiary, onDeleteS
                     >
                         <Power className="w-5 h-5" />
                     </button>
+                    <button
+                        onClick={() => onDelete(tenant)}
+                        className="text-gray-400 hover:text-red-700 hover:bg-red-50 p-2 transition-colors rounded"
+                        title="Eliminar Empresa"
+                    >
+                        <Trash2 className="w-5 h-5" />
+                    </button>
                 </td>
             </tr>
 
@@ -177,6 +184,10 @@ const SuperAdminTenantsPage = () => {
     const [error, setError] = useState<string | null>(null);
     const [suspendingTenant, setSuspendingTenant] = useState<any>(null);
     const [editingTenant, setEditingTenant] = useState<any>(null);
+    const [isSavingTenant, setIsSavingTenant] = useState(false);
+    const [deletingTenant, setDeletingTenant] = useState<any>(null);
+    const [deleteConfirmName, setDeleteConfirmName] = useState('');
+    const [isDeletingTenant, setIsDeletingTenant] = useState(false);
     const [editingSubsidiary, setEditingSubsidiary] = useState<any>(null);
     const [deletingSubsidiary, setDeletingSubsidiary] = useState<any>(null);
     const [creatingAdminFor, setCreatingAdminFor] = useState<any>(null);
@@ -212,6 +223,7 @@ const SuperAdminTenantsPage = () => {
 
     const handleSaveTenant = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSavingTenant(true);
         try {
             const token = localStorage.getItem('token');
             const isNew = !editingTenant.id;
@@ -230,9 +242,35 @@ const SuperAdminTenantsPage = () => {
             }
 
             setEditingTenant(null);
-            fetchTenants(); // Recargar la lista
+            fetchTenants();
         } catch (err: any) {
             setErrorMessage(err.message);
+        } finally {
+            setIsSavingTenant(false);
+        }
+    };
+
+    const confirmDeleteTenant = async () => {
+        if (!deletingTenant) return;
+        setIsDeletingTenant(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/tenants', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ id: deletingTenant.id }),
+            });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => null);
+                throw new Error(errorData?.message || 'Error al eliminar la empresa');
+            }
+            setDeletingTenant(null);
+            setDeleteConfirmName('');
+            fetchTenants();
+        } catch (err: any) {
+            setErrorMessage(err.message);
+        } finally {
+            setIsDeletingTenant(false);
         }
     };
 
@@ -435,6 +473,7 @@ WHERE
                                 onEditSubsidiary={(sub: any) => setEditingSubsidiary({ ...sub, _originalPoSuiteqlQuery: sub.poSuiteqlQuery ?? null })}
                                 onDeleteSubsidiary={setDeletingSubsidiary}
                                 onAddAdmin={setCreatingAdminFor}
+                                onDelete={(t: any) => { setDeletingTenant(t); setDeleteConfirmName(''); }}
                             />
                         ))}
 
@@ -631,8 +670,9 @@ WHERE
                                 const isBlocked = deactivateNeeded > 0 && selected.length < deactivateNeeded;
                                 return (
                                     <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
-                                        <button type="button" onClick={() => setEditingTenant(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded">Cancelar</button>
-                                        <button type="submit" disabled={isBlocked} className="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded shadow-sm">
+                                        <button type="button" onClick={() => setEditingTenant(null)} disabled={isSavingTenant} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded">Cancelar</button>
+                                        <button type="submit" disabled={isBlocked || isSavingTenant} className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded shadow-sm">
+                                            {isSavingTenant && <Loader2 className="w-4 h-4 animate-spin" />}
                                             {editingTenant.id ? 'Actualizar Empresa' : 'Guardar Empresa'}
                                         </button>
                                     </div>
@@ -824,6 +864,54 @@ WHERE
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal para Confirmar Eliminar Tenant */}
+            {deletingTenant && (
+                <div className="fixed inset-0 overflow-y-auto h-full w-full flex items-center justify-center z-50 pointer-events-none">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl border border-red-200 w-full max-w-md text-center pointer-events-auto relative">
+                        <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Trash2 className="w-7 h-7 text-red-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">Eliminar Empresa</h3>
+                        <p className="text-gray-600 text-sm mb-2">
+                            Esta acción eliminará permanentemente <strong>{deletingTenant.name}</strong> y todos sus datos asociados:
+                        </p>
+                        <ul className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-left mb-4 space-y-1">
+                            <li>• Subsidiarias, proveedores y usuarios</li>
+                            <li>• Órdenes de compra y facturas</li>
+                            <li>• Complementos de pago y documentos</li>
+                            <li>• Logs de sincronización y toda la configuración</li>
+                        </ul>
+                        <p className="text-sm text-gray-700 mb-2">
+                            Escribe <strong className="font-mono">{deletingTenant.name}</strong> para confirmar:
+                        </p>
+                        <input
+                            type="text"
+                            value={deleteConfirmName}
+                            onChange={(e) => setDeleteConfirmName(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 mb-5 focus:outline-none focus:ring-2 focus:ring-red-400"
+                            placeholder="Nombre exacto de la empresa"
+                        />
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={() => { setDeletingTenant(null); setDeleteConfirmName(''); }}
+                                disabled={isDeletingTenant}
+                                className="px-5 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 rounded font-medium disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmDeleteTenant}
+                                disabled={deleteConfirmName !== deletingTenant.name || isDeletingTenant}
+                                className="flex items-center gap-2 px-5 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {isDeletingTenant && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Eliminar Definitivamente
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
