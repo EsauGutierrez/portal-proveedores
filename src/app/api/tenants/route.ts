@@ -118,7 +118,42 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ message: 'El ID de la empresa es obligatorio.' }, { status: 400 });
         }
 
-        await prisma.tenant.delete({ where: { id } });
+        await prisma.$transaction(async (tx) => {
+            // 1. Documentos de proveedores (FK → SupplierProfile, sin cascade)
+            await tx.supplierDocument.deleteMany({
+                where: { supplierProfile: { tenantId: id } },
+            });
+            // 2. Artículos de recepciones (FK → Reception, sin cascade a nivel tenant)
+            await tx.receptionArticle.deleteMany({
+                where: { reception: { tenantId: id } },
+            });
+            // 3. Complementos de pago (FK → Invoice y User)
+            await tx.paymentComplement.deleteMany({ where: { tenantId: id } });
+            // 4. Recepciones (FK → PurchaseOrder; invoiceId es opcional)
+            await tx.reception.deleteMany({ where: { tenantId: id } });
+            // 5. Facturas (FK → PurchaseOrder, User, BulkUploadJob)
+            await tx.invoice.deleteMany({ where: { tenantId: id } });
+            // 6. Órdenes de compra (FK → Subsidiary)
+            await tx.purchaseOrder.deleteMany({ where: { tenantId: id } });
+            // 7. Asignaciones de operadores (FK → SupplierProfile y User)
+            await tx.operatorAssignment.deleteMany({ where: { tenantId: id } });
+            // 8. Logs de carga masiva de complementos
+            await tx.bulkPaymentComplementLog.deleteMany({ where: { tenantId: id } });
+            // 9. Jobs de carga masiva de facturas (FK → User)
+            await tx.bulkUploadJob.deleteMany({ where: { tenantId: id } });
+            // 10. Perfiles de proveedor (FK → User y Subsidiary)
+            await tx.supplierProfile.deleteMany({ where: { tenantId: id } });
+            // 11. Subsidiarias
+            await tx.subsidiary.deleteMany({ where: { tenantId: id } });
+            // 12. Logs de sincronización
+            await tx.syncLog.deleteMany({ where: { tenantId: id } });
+            // 13. Requisitos de documentos
+            await tx.documentRequirement.deleteMany({ where: { tenantId: id } });
+            // 14. Usuarios del tenant
+            await tx.user.deleteMany({ where: { tenantId: id } });
+            // 15. El tenant
+            await tx.tenant.delete({ where: { id } });
+        });
 
         return NextResponse.json({ message: 'Empresa eliminada correctamente.' }, { status: 200 });
     } catch (error) {
