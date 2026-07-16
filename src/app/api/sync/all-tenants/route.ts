@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/prisma';
 import { syncPurchaseOrdersForTenant } from '../../../lib/syncPurchaseOrdersForTenant';
+import { syncSuppliersForTenant } from '../../../lib/syncSuppliersForTenant';
 
 export async function GET(request: Request) {
   const apiKey = request.headers.get('x-sync-key');
@@ -33,24 +34,24 @@ export async function GET(request: Request) {
 
   const results = [];
   for (const tenant of tenants) {
+    console.log(`[SYNC ALL] → Tenant: ${tenant.name} (${tenant.id})`);
+
+    // 1. Sincronizar proveedores primero (para que existan antes de buscar sus OC)
     try {
-      console.log(`[SYNC ALL] → Tenant: ${tenant.name} (${tenant.id})`);
-      const result = await syncPurchaseOrdersForTenant(
-        tenant.id,
-        tenant as any,
-        'sistema',
-        'SCHEDULED'
-      );
-      results.push(result);
-      console.log(`[SYNC ALL] ✓ ${tenant.name}: ${result.createdCount} creadas, ${result.updatedCount} actualizadas`);
+      const suppResult = await syncSuppliersForTenant(tenant.id, tenant as any);
+      console.log(`[SYNC ALL] ✓ Proveedores ${tenant.name}: ${suppResult.createdCount} nuevos, ${suppResult.updatedCount} actualizados`);
     } catch (err: any) {
-      console.error(`[SYNC ALL] ✗ Error en tenant ${tenant.name}: ${err.message}`);
-      results.push({
-        tenantId: tenant.id,
-        tenantName: tenant.name,
-        status: 'FAILED',
-        error: err.message,
-      });
+      console.error(`[SYNC ALL] ✗ Error sync proveedores ${tenant.name}: ${err.message}`);
+    }
+
+    // 2. Sincronizar órdenes de compra
+    try {
+      const result = await syncPurchaseOrdersForTenant(tenant.id, tenant as any, 'sistema', 'SCHEDULED');
+      results.push(result);
+      console.log(`[SYNC ALL] ✓ OC ${tenant.name}: ${result.createdCount} creadas, ${result.updatedCount} actualizadas`);
+    } catch (err: any) {
+      console.error(`[SYNC ALL] ✗ Error sync OC ${tenant.name}: ${err.message}`);
+      results.push({ tenantId: tenant.id, tenantName: tenant.name, status: 'FAILED', error: err.message });
     }
   }
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
   const failed = results.filter((r: any) => r.status === 'FAILED').length;
 
   return NextResponse.json({
-    message: `Sync completado: ${tenants.length} tenants procesados.`,
+    message: `Sync completado: ${tenants.length} tenants procesados (proveedores + OC).`,
     summary: { tenants: tenants.length, totalCreated, totalUpdated, failed },
     results,
   });
