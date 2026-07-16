@@ -243,6 +243,8 @@ export default function SyncLogsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isSyncingSuppliers, setIsSyncingSuppliers] = useState(false);
+    const [supplierSyncResult, setSupplierSyncResult] = useState<{ success: boolean; message: string } | null>(null);
     const [filterType, setFilterType] = useState<string>('');
     const [filterStatus, setFilterStatus] = useState<string>('');
     const [page, setPage] = useState(1);
@@ -295,6 +297,25 @@ export default function SyncLogsPage() {
         }
     };
 
+    const handleSyncSuppliers = async () => {
+        if (isSyncingSuppliers) return;
+        setIsSyncingSuppliers(true);
+        setSupplierSyncResult(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/admin/sync/suppliers', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            setSupplierSyncResult({ success: res.ok, message: data.message ?? (res.ok ? 'Sincronización completada.' : 'Error al sincronizar.') });
+        } catch {
+            setSupplierSyncResult({ success: false, message: 'Error de red al conectar con el servidor.' });
+        } finally {
+            setIsSyncingSuppliers(false);
+        }
+    };
+
     // ─── Render ───────────────────────────────────────────────────────────────
 
     const lastStatusColor =
@@ -311,19 +332,50 @@ export default function SyncLogsPage() {
                     <h2 className="text-2xl font-bold text-gray-800">Log de Sincronización</h2>
                     <p className="text-sm text-gray-500 mt-0.5">Historial de sincronizaciones automáticas y manuales de Órdenes de Compra con NetSuite.</p>
                 </div>
-                <button
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl shadow-sm transition-all"
-                >
-                    {isSyncing
-                        ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sincronizando…</>
-                        : <><Play className="w-4 h-4" /> Sincronizar Ahora</>
-                    }
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                        onClick={handleSyncSuppliers}
+                        disabled={isSyncingSuppliers || isSyncing}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl shadow-sm transition-all"
+                    >
+                        {isSyncingSuppliers
+                            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sincronizando…</>
+                            : <><Play className="w-4 h-4" /> Sincronizar Proveedores</>
+                        }
+                    </button>
+                    <button
+                        onClick={handleSync}
+                        disabled={isSyncing || isSyncingSuppliers}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl shadow-sm transition-all"
+                    >
+                        {isSyncing
+                            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sincronizando…</>
+                            : <><Play className="w-4 h-4" /> Sincronizar OC</>
+                        }
+                    </button>
+                </div>
             </div>
 
-            {/* Resultado de sync manual */}
+            {/* Resultado sync proveedores */}
+            {supplierSyncResult && (
+                <div className={`flex items-start gap-3 p-4 rounded-xl border text-sm ${
+                    supplierSyncResult.success
+                        ? 'bg-violet-50 border-violet-200 text-violet-800'
+                        : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                    {supplierSyncResult.success
+                        ? <CheckCircle2 className="w-5 h-5 shrink-0 text-violet-500 mt-0.5" />
+                        : <XCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
+                    }
+                    <div>
+                        <p className="font-semibold">{supplierSyncResult.success ? 'Proveedores sincronizados' : 'Error al sincronizar proveedores'}</p>
+                        <p className="mt-0.5 opacity-80">{supplierSyncResult.message}</p>
+                    </div>
+                    <button onClick={() => setSupplierSyncResult(null)} className="ml-auto text-current opacity-50 hover:opacity-80">✕</button>
+                </div>
+            )}
+
+            {/* Resultado de sync manual OC */}
             {syncResult && (
                 <div className={`flex items-start gap-3 p-4 rounded-xl border text-sm ${
                     syncResult.success
@@ -335,7 +387,7 @@ export default function SyncLogsPage() {
                         : <XCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
                     }
                     <div>
-                        <p className="font-semibold">{syncResult.success ? 'Sincronización completada' : 'Error en la sincronización'}</p>
+                        <p className="font-semibold">{syncResult.success ? 'OC sincronizadas' : 'Error en la sincronización'}</p>
                         <p className="mt-0.5 opacity-80">{syncResult.message}</p>
                     </div>
                     <button onClick={() => setSyncResult(null)} className="ml-auto text-current opacity-50 hover:opacity-80">✕</button>
