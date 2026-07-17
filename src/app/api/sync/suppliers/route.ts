@@ -67,7 +67,13 @@ export async function GET(request: Request) {
       results = await querySuiteQL(suiteqlQuery, creds);
     } catch (vatErr: any) {
       if (vatErr.message?.includes("Unknown identifier 'vatregnumber'")) {
-        results = await querySuiteQL(suiteqlQuery.replace('vatregnumber', 'defaulttaxreg'), creds);
+        results = await querySuiteQL(
+          `SELECT v.id, v.entityid as name, v.companyname, v.email, tr.taxregistrationnumber as rfc
+           FROM Vendor v
+           LEFT JOIN taxregistration tr ON tr.id = v.defaulttaxreg
+           WHERE v.isInactive = 'F'`,
+          creds
+        );
       } else {
         throw vatErr;
       }

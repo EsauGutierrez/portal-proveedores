@@ -45,7 +45,8 @@ export async function syncSuppliersForTenant(
     tokenSecret: tenant.netsuiteTokenSecret,
   };
 
-  // Cuentas con SuiteTax usan 'defaulttaxreg' en lugar de 'vatregnumber'
+  // vatregnumber = RFC directo (cuentas sin SuiteTax)
+  // SuiteTax: defaulttaxreg es un ID interno; el RFC real está en taxregistration.taxregistrationnumber
   let vendors: any[];
   try {
     vendors = await querySuiteQL(
@@ -55,7 +56,10 @@ export async function syncSuppliersForTenant(
   } catch (err: any) {
     if (err.message?.includes("Unknown identifier 'vatregnumber'")) {
       vendors = await querySuiteQL(
-        `SELECT id, entityid as name, companyname, email, defaulttaxreg as rfc FROM Vendor WHERE isInactive = 'F'`,
+        `SELECT v.id, v.entityid as name, v.companyname, v.email, tr.taxregistrationnumber as rfc
+         FROM Vendor v
+         LEFT JOIN taxregistration tr ON tr.id = v.defaulttaxreg
+         WHERE v.isInactive = 'F'`,
         creds
       );
     } else {
