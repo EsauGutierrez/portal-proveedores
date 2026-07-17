@@ -62,7 +62,16 @@ export async function GET(request: Request) {
         isInactive = 'F'
     `;
 
-    const results = await querySuiteQL(suiteqlQuery, creds);
+    let results: any[];
+    try {
+      results = await querySuiteQL(suiteqlQuery, creds);
+    } catch (vatErr: any) {
+      if (vatErr.message?.includes("Unknown identifier 'vatregnumber'")) {
+        results = await querySuiteQL(suiteqlQuery.replace('vatregnumber', 'defaulttaxreg'), creds);
+      } else {
+        throw vatErr;
+      }
+    }
     console.log(`Se encontraron ${results.length} proveedores en NetSuite.`);
 
     if (results.length === 0) {
