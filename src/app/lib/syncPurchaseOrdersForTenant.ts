@@ -10,6 +10,22 @@ import { querySuiteQL } from './netsuite';
 // RFC genéricos del SAT — pueden compartirse entre varios proveedores
 const GENERIC_RFCS = new Set(['XAXX010101000', 'XEXX010101000']);
 
+// Cuentas con SuiteTax usan 'defaulttaxreg' en lugar de 'vatregnumber'.
+// Esta función reintenta automáticamente si detecta el error de campo desconocido.
+async function querySuiteQLWithVatFallback(query: string, creds: SyncCreds): Promise<any[]> {
+  try {
+    return await querySuiteQL(query, creds);
+  } catch (err: any) {
+    if (err.message?.includes("Unknown identifier 'vatregnumber'")) {
+      const fallback = query
+        .replace(/\bv\.vatregnumber\b/g, 'v.defaulttaxreg')
+        .replace(/\bvatregnumber\b/g, 'defaulttaxreg');
+      return await querySuiteQL(fallback, creds);
+    }
+    throw err;
+  }
+}
+
 export interface SyncCreds {
   accountId: string;
   consumerKey: string;
@@ -167,14 +183,14 @@ export async function syncPurchaseOrdersForTenant(
         .replace(/\{rfcClause\}/g, rfcClause ?? "'NONE'")
         .replace(/\{entityClause\}/g, entityClause ?? "'NONE'")
         .replace(/\{whereCondition\}/g, whereCondition);
-      const subResults = await querySuiteQL(customQuery, creds);
+      const subResults = await querySuiteQLWithVatFallback(customQuery, creds);
       results.push(...subResults);
     }
     const customSubNames = new Set(subsidiariesWithCustomQuery.map((s: any) => s.name));
-    const defaultResults = await querySuiteQL(defaultQuery, creds);
+    const defaultResults = await querySuiteQLWithVatFallback(defaultQuery, creds);
     results.push(...defaultResults.filter((po: any) => !customSubNames.has(po.subsidiaria)));
   } else {
-    results = await querySuiteQL(defaultQuery, creds);
+    results = await querySuiteQLWithVatFallback(defaultQuery, creds);
   }
 
   // Deduplicar por po_netsuite_id (puede haber solapamiento si el vendor estaba en ambas cláusulas)

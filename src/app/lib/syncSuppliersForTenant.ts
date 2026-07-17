@@ -45,11 +45,23 @@ export async function syncSuppliersForTenant(
     tokenSecret: tenant.netsuiteTokenSecret,
   };
 
-  const vendors = await querySuiteQL(
-    `SELECT id, entityid as name, companyname, email, vatregnumber as rfc
-     FROM Vendor WHERE isInactive = 'F'`,
-    creds
-  );
+  // Cuentas con SuiteTax usan 'defaulttaxreg' en lugar de 'vatregnumber'
+  let vendors: any[];
+  try {
+    vendors = await querySuiteQL(
+      `SELECT id, entityid as name, companyname, email, vatregnumber as rfc FROM Vendor WHERE isInactive = 'F'`,
+      creds
+    );
+  } catch (err: any) {
+    if (err.message?.includes("Unknown identifier 'vatregnumber'")) {
+      vendors = await querySuiteQL(
+        `SELECT id, entityid as name, companyname, email, defaulttaxreg as rfc FROM Vendor WHERE isInactive = 'F'`,
+        creds
+      );
+    } else {
+      throw err;
+    }
+  }
 
   if (vendors.length === 0) {
     return { ...base, totalFound: 0, createdCount: 0, updatedCount: 0, skippedCount: 0, status: 'SUCCESS' };
