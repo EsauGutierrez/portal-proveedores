@@ -53,6 +53,9 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error('[SYNC SUPPLIERS MANUAL]', error);
-        return NextResponse.json({ message: 'Error durante la sincronización de proveedores.', error: error.message }, { status: 500 });
+        return NextResponse.json({
+            message: `Error durante la sincronización: ${error.message}`,
+            error: error.message,
+        }, { status: 500 });
     }
 }
