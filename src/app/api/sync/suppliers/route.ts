@@ -86,6 +86,7 @@ export async function GET(request: Request) {
     let createdCount = 0;
     let updatedCount = 0;
     let skippedCount = 0;
+    let conflictCount = 0;
 
     for (const vendor of results) {
       // Validar RFC antes de procesar
@@ -96,7 +97,10 @@ export async function GET(request: Request) {
       }
 
       const rfcValue = vendor.rfc.toUpperCase().replace(/\s/g, '').replace(/-/g, '');
-      const emailValue = vendor.email || `${vendor.id}@netsuite.com`; // Mantenemos email por defecto para evitar errores en User
+      // Email sintético único por tenant: los IDs internos de NetSuite reinician por
+      // cuenta, así que sin el netsuiteAccountId dos tenants generarían el mismo email
+      // y colisionarían en el índice único global de User.
+      const emailValue = vendor.email || `${vendor.id}@${tenant.netsuiteAccountId}.netsuite.local`;
       const companyNameValue = vendor.companyname || vendor.name || 'Proveedor Sin Nombre';
 
       // 1. Upsert del Usuario
@@ -136,6 +140,15 @@ export async function GET(request: Request) {
         });
       }
 
+      // userId es único GLOBAL: si el usuario resuelto ya tiene un perfil en OTRO tenant
+      // (típicamente por compartir email real entre empresas), no podemos crear otro
+      // perfil para él. Omitimos ese proveedor y seguimos con el resto.
+      if (existing && existing.tenantId !== tenantId) {
+        console.warn(`[SYNC SUPPLIERS] Proveedor omitido por conflicto de usuario entre tenants: vendor=${vendor.id} (${companyNameValue}), usuario ligado al tenant ${existing.tenantId}.`);
+        conflictCount++;
+        continue;
+      }
+
       if (existing) {
         await prisma.supplierProfile.update({
           where: { id: existing.id },
@@ -143,10 +156,21 @@ export async function GET(request: Request) {
         });
         updatedCount++;
       } else {
-        await prisma.supplierProfile.create({
-          data: { ...supplierData, rfc: rfcValue, tenantId },
-        });
-        createdCount++;
+        try {
+          await prisma.supplierProfile.create({
+            data: { ...supplierData, rfc: rfcValue, tenantId },
+          });
+          createdCount++;
+        } catch (err: any) {
+          // Red de seguridad ante colisión de unicidad no anticipada (p. ej. carrera
+          // entre dos syncs). No abortamos todo el proceso.
+          if (err?.code === 'P2002') {
+            console.warn(`[SYNC SUPPLIERS] Proveedor omitido por violación de unicidad (${(err.meta?.target ?? []).toString()}): vendor=${vendor.id} (${companyNameValue}).`);
+            conflictCount++;
+            continue;
+          }
+          throw err;
+        }
       }
     }
 
@@ -182,7 +206,8 @@ export async function GET(request: Request) {
       totalFound: results.length,
       createdCount,
       updatedCount,
-      skippedCount
+      skippedCount,
+      conflictCount
     }, { status: 200 });
 
   } catch (error) {

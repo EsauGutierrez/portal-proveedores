@@ -15,6 +15,7 @@ export interface SupplierSyncResult {
   createdCount: number;
   updatedCount: number;
   skippedCount: number;
+  conflictCount: number;
   status: 'SUCCESS' | 'FAILED';
   error?: string;
 }
@@ -34,7 +35,7 @@ export async function syncSuppliersForTenant(
   const base = { tenantId, tenantName: tenant.name };
 
   if (tenant.subsidiaries.length === 0) {
-    return { ...base, totalFound: 0, createdCount: 0, updatedCount: 0, skippedCount: 0, status: 'FAILED', error: 'Sin subsidiarias registradas.' };
+    return { ...base, totalFound: 0, createdCount: 0, updatedCount: 0, skippedCount: 0, conflictCount: 0, status: 'FAILED', error: 'Sin subsidiarias registradas.' };
   }
 
   const creds = {
@@ -65,19 +66,23 @@ export async function syncSuppliersForTenant(
   }
 
   if (vendors.length === 0) {
-    return { ...base, totalFound: 0, createdCount: 0, updatedCount: 0, skippedCount: 0, status: 'SUCCESS' };
+    return { ...base, totalFound: 0, createdCount: 0, updatedCount: 0, skippedCount: 0, conflictCount: 0, status: 'SUCCESS' };
   }
 
   const defaultSubsidiary = tenant.subsidiaries[0];
   let createdCount = 0;
   let updatedCount = 0;
   let skippedCount = 0;
+  let conflictCount = 0;
 
   for (const vendor of vendors) {
     if (!isValidRFC(vendor.rfc)) { skippedCount++; continue; }
 
     const rfc = vendor.rfc.toUpperCase().replace(/\s/g, '').replace(/-/g, '');
-    const email = vendor.email || `${vendor.id}@netsuite.com`;
+    // Email sintético único por tenant: los IDs internos de NetSuite reinician por
+    // cuenta, así que sin el netsuiteAccountId dos tenants generarían el mismo email
+    // (p. ej. 123@netsuite.com) y colisionarían en el índice único global de User.
+    const email = vendor.email || `${vendor.id}@${tenant.netsuiteAccountId}.netsuite.local`;
     const companyName = vendor.companyname || vendor.name || 'Proveedor Sin Nombre';
 
     const user = await prisma.user.upsert({
@@ -108,12 +113,42 @@ export async function syncSuppliersForTenant(
       }
     }
 
+    // userId es único GLOBAL: si el usuario resuelto ya tiene un perfil en OTRO tenant
+    // (típicamente por compartir un email real entre empresas), no podemos crear otro
+    // perfil para él. Omitimos ese proveedor y seguimos con el resto en lugar de abortar.
+    if (!existing) {
+      const foreignProfile = await prisma.supplierProfile.findUnique({ where: { userId: user.id } });
+      if (foreignProfile && foreignProfile.tenantId !== tenantId) {
+        console.warn(
+          `[SYNC SUPPLIERS] Proveedor omitido por conflicto de usuario entre tenants: ` +
+          `vendor=${vendor.id} (${companyName}), email=${email}, ` +
+          `usuario ya ligado al tenant ${foreignProfile.tenantId}.`
+        );
+        conflictCount++;
+        continue;
+      }
+    }
+
     if (existing) {
       await prisma.supplierProfile.update({ where: { id: existing.id }, data: supplierData });
       updatedCount++;
     } else {
-      await prisma.supplierProfile.create({ data: { ...supplierData, rfc, tenantId } });
-      createdCount++;
+      try {
+        await prisma.supplierProfile.create({ data: { ...supplierData, rfc, tenantId } });
+        createdCount++;
+      } catch (err: any) {
+        // Red de seguridad ante una colisión de unicidad no anticipada (p. ej. carrera
+        // entre dos syncs). No tumbamos todo el proceso: registramos y continuamos.
+        if (err?.code === 'P2002') {
+          console.warn(
+            `[SYNC SUPPLIERS] Proveedor omitido por violación de unicidad (${(err.meta?.target ?? []).toString()}): ` +
+            `vendor=${vendor.id} (${companyName}), email=${email}.`
+          );
+          conflictCount++;
+          continue;
+        }
+        throw err;
+      }
     }
   }
 
@@ -143,5 +178,5 @@ export async function syncSuppliersForTenant(
       .catch((err: any) => console.error('[LISTA69B] Error en sync proveedores:', err.message));
   }
 
-  return { ...base, totalFound: vendors.length, createdCount, updatedCount, skippedCount, status: 'SUCCESS' };
+  return { ...base, totalFound: vendors.length, createdCount, updatedCount, skippedCount, conflictCount, status: 'SUCCESS' };
 }
