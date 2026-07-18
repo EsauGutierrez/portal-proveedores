@@ -43,12 +43,14 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
             message: result.status === 'SUCCESS'
-                ? `Sincronización completada: ${result.createdCount} nuevos, ${result.updatedCount} actualizados, ${result.skippedCount} omitidos.`
+                ? `Sincronización completada: ${result.createdCount} nuevos, ${result.updatedCount} actualizados, ${result.skippedCount} omitidos (RFC inválido)` +
+                  (result.conflictCount > 0 ? `, ${result.conflictCount} en conflicto con otra empresa.` : '.')
                 : `Error: ${result.error}`,
             totalFound: result.totalFound,
             createdCount: result.createdCount,
             updatedCount: result.updatedCount,
             skippedCount: result.skippedCount,
+            conflictCount: result.conflictCount,
         }, { status: result.status === 'SUCCESS' ? 200 : 500 });
 
     } catch (error: any) {
