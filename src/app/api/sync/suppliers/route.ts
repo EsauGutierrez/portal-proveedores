@@ -68,10 +68,7 @@ export async function GET(request: Request) {
     } catch (vatErr: any) {
       if (vatErr.message?.includes("Unknown identifier 'vatregnumber'")) {
         results = await querySuiteQL(
-          `SELECT v.id, v.entityid as name, v.companyname, v.email, tr.taxregistrationnumber as rfc
-           FROM Vendor v
-           LEFT JOIN taxregistration tr ON tr.id = v.defaulttaxreg
-           WHERE v.isInactive = 'F'`,
+          `SELECT id, entityid as name, companyname, email, custentity_mx_rfc as rfc FROM Vendor WHERE isInactive = 'F'`,
           creds
         );
       } else {
