@@ -56,10 +56,7 @@ export async function syncSuppliersForTenant(
   } catch (err: any) {
     if (err.message?.includes("Unknown identifier 'vatregnumber'")) {
       vendors = await querySuiteQL(
-        `SELECT v.id, v.entityid as name, v.companyname, v.email, tr.taxregistrationnumber as rfc
-         FROM Vendor v
-         LEFT JOIN taxregistration tr ON tr.id = v.defaulttaxreg
-         WHERE v.isInactive = 'F'`,
+        `SELECT id, entityid as name, companyname, email, custentity_mx_rfc as rfc FROM Vendor WHERE isInactive = 'F'`,
         creds
       );
     } else {
