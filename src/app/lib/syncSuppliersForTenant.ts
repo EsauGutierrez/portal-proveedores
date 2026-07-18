@@ -97,7 +97,16 @@ export async function syncSuppliersForTenant(
 
     let existing = await prisma.supplierProfile.findFirst({ where: { tenantId, netsuiteId: String(vendor.id) } });
     if (!existing) existing = await prisma.supplierProfile.findFirst({ where: { tenantId, rfc } });
-    if (!existing) existing = await prisma.supplierProfile.findUnique({ where: { userId: user.id } });
+    if (!existing) existing = await prisma.supplierProfile.findFirst({ where: { tenantId, userId: user.id } });
+
+    // Si encontramos perfil por netsuiteId/rfc pero el userId ya está en OTRO perfil del mismo tenant,
+    // usar ese perfil para evitar violación de unique constraint en userId.
+    if (existing) {
+      const userProfile = await prisma.supplierProfile.findFirst({ where: { tenantId, userId: user.id } });
+      if (userProfile && userProfile.id !== existing.id) {
+        existing = userProfile;
+      }
+    }
 
     if (existing) {
       await prisma.supplierProfile.update({ where: { id: existing.id }, data: supplierData });
