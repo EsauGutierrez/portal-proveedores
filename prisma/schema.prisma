@@ -149,9 +149,9 @@ model PurchaseOrder {
   id           String      @id @default(cuid())
   folio        String
   fecha        DateTime
-  subtotal     Decimal     @db.Decimal(10, 2)
-  total        Decimal     @db.Decimal(10, 2)
-  tax          Decimal     @db.Decimal(10, 2) @default(0)
+  subtotal     Decimal     @db.Decimal(18, 2)
+  total        Decimal     @db.Decimal(18, 2)
+  tax          Decimal     @db.Decimal(18, 2) @default(0)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   userId       String
@@ -189,10 +189,10 @@ model Reception {
 model ReceptionArticle {
   id          String    @id @default(cuid())
   quantity    Int
-  unitPrice   Decimal   @db.Decimal(10, 2)
-  subtotal    Decimal   @db.Decimal(10, 2)
-  tax         Decimal   @db.Decimal(10, 2)
-  total       Decimal   @db.Decimal(10, 2)
+  unitPrice   Decimal   @db.Decimal(18, 2)
+  subtotal    Decimal   @db.Decimal(18, 2)
+  tax         Decimal   @db.Decimal(18, 2)
+  total       Decimal   @db.Decimal(18, 2)
   receptionId String
   articleName String
   reception   Reception @relation(fields: [receptionId], references: [id], onDelete: Cascade)
@@ -202,9 +202,9 @@ model Invoice {
   id                 String              @id @default(cuid())
   folio              String
   fecha              DateTime
-  subtotal           Decimal             @db.Decimal(10, 2)
-  tax                Decimal             @db.Decimal(10, 2) @default(0)
-  total              Decimal             @db.Decimal(10, 2)
+  subtotal           Decimal             @db.Decimal(18, 2)
+  tax                Decimal             @db.Decimal(18, 2) @default(0)
+  total              Decimal             @db.Decimal(18, 2)
   pdfUrl             String?
   xmlUrl             String?
   createdAt          DateTime            @default(now())
@@ -234,7 +234,7 @@ model PaymentComplement {
   id                  String                   @id @default(cuid())
   folio               String
   fecha               DateTime
-  total               Decimal                  @db.Decimal(10, 2)
+  total               Decimal                  @db.Decimal(18, 2)
   pdfUrl              String?
   xmlUrl              String?
   status              PaymentComplementStatus  @default(PENDING)
