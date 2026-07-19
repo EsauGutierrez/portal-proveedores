@@ -77,6 +77,7 @@ export async function POST(request: Request) {
     const taxRegime = formData.get('taxRegime') as string;
     const taxAddress = formData.get('taxAddress') as string;
     const tenantId = formData.get('tenantId') as string; // <-- Nuevo campo necesario para Multitenancy
+    const netsuiteSubsidiaryId = (formData.get('netsuiteSubsidiaryId') as string | null)?.trim() || null;
     const logo = formData.get('logo') as File | null;
 
     if (!name || !rfc || !businessName || !taxRegime || !taxAddress || !tenantId) {
@@ -131,6 +132,7 @@ export async function POST(request: Request) {
         taxRegime,
         taxAddress,
         logoUrl,
+        netsuiteSubsidiaryId,
         tenant: {
           connect: { id: tenantId }
         }
@@ -190,6 +192,7 @@ export async function PUT(request: Request) {
     }
 
     const poSuiteqlQuery = formData.get('poSuiteqlQuery') as string | null;
+    const netsuiteSubsidiaryId = formData.get('netsuiteSubsidiaryId') as string | null;
 
     const updatedSubsidiary = await prisma.subsidiary.update({
       where: { id },
@@ -201,6 +204,7 @@ export async function PUT(request: Request) {
         taxAddress,
         ...(newLogoUrl && { logoUrl: newLogoUrl }),
         ...(poSuiteqlQuery !== null && { poSuiteqlQuery: poSuiteqlQuery.trim() || null }),
+        ...(netsuiteSubsidiaryId !== null && { netsuiteSubsidiaryId: netsuiteSubsidiaryId.trim() || null }),
       },
     });
 

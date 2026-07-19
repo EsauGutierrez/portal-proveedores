@@ -13,6 +13,12 @@ function isValidRFC(rfc: string) {
   return rfcRegex.test(cleanRFC);
 }
 
+// Valida que el proveedor tenga un email real en NetSuite (ya no se generan sintéticos).
+function isValidEmail(email: unknown): email is string {
+  if (typeof email !== 'string') return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 export async function GET(request: Request) {
   const apiKey = request.headers.get('x-sync-key');
   const tenantId = request.headers.get('x-tenant-id');
@@ -89,19 +95,34 @@ export async function GET(request: Request) {
     let conflictCount = 0;
 
     for (const vendor of results) {
-      // Validar RFC antes de procesar
+      // Filtro de calidad de datos: el proveedor entra al portal SOLO si su ficha en
+      // NetSuite está completa (email válido, RFC válido, razón social y netsuiteId).
+      // Sin email real ya no se genera usuario sintético; se omite hasta completarlo.
+      const companyNameValue = (vendor.companyname || vendor.name || '').trim();
+
       if (!isValidRFC(vendor.rfc)) {
-        console.log(`Saltando proveedor ${vendor.companyname || vendor.name} por RFC inválido: ${vendor.rfc}`);
+        console.warn(`[SYNC SUPPLIERS] Omitido: RFC inválido o ausente. vendor=${vendor.id}, rfc=${vendor.rfc ?? '(vacío)'}.`);
+        skippedCount++;
+        continue;
+      }
+      if (!isValidEmail(vendor.email)) {
+        console.warn(`[SYNC SUPPLIERS] Omitido: sin email válido en NetSuite. vendor=${vendor.id} (${companyNameValue || 'sin nombre'}).`);
+        skippedCount++;
+        continue;
+      }
+      if (!companyNameValue) {
+        console.warn(`[SYNC SUPPLIERS] Omitido: sin razón social/nombre en NetSuite. vendor=${vendor.id}.`);
+        skippedCount++;
+        continue;
+      }
+      if (!vendor.id) {
+        console.warn(`[SYNC SUPPLIERS] Omitido: sin netsuiteId. (${companyNameValue}).`);
         skippedCount++;
         continue;
       }
 
       const rfcValue = vendor.rfc.toUpperCase().replace(/\s/g, '').replace(/-/g, '');
-      // Email sintético único por tenant: los IDs internos de NetSuite reinician por
-      // cuenta, así que sin el netsuiteAccountId dos tenants generarían el mismo email
-      // y colisionarían en el índice único global de User.
-      const emailValue = vendor.email || `${vendor.id}@${tenant.netsuiteAccountId}.netsuite.local`;
-      const companyNameValue = vendor.companyname || vendor.name || 'Proveedor Sin Nombre';
+      const emailValue = vendor.email.trim();
 
       // 1. Upsert del Usuario
       const user = await prisma.user.upsert({
@@ -125,59 +146,66 @@ export async function GET(request: Request) {
         netsuiteId: String(vendor.id),
       };
 
-      // Buscar perfil existente: por netsuiteId, luego por RFC, luego por userId
-      let existing = await prisma.supplierProfile.findFirst({
-        where: { tenantId, netsuiteId: String(vendor.id) },
+      // userId es único GLOBAL. Resolvemos primero el perfil ligado a este usuario en
+      // cualquier tenant, porque manda sobre la coincidencia por netsuiteId/RFC: si
+      // actualizáramos otro perfil poniéndole este userId, se violaría el índice único.
+      const userProfileGlobal = await prisma.supplierProfile.findUnique({
+        where: { userId: user.id },
       });
+
+      // Si el usuario ya pertenece a OTRO tenant (típicamente por compartir email real
+      // entre empresas), no podemos representar este proveedor aquí sin violar la
+      // unicidad global. Omitimos ese proveedor y seguimos con el resto.
+      if (userProfileGlobal && userProfileGlobal.tenantId !== tenantId) {
+        console.warn(`[SYNC SUPPLIERS] Proveedor omitido por conflicto de usuario entre tenants: vendor=${vendor.id} (${companyNameValue}), usuario ligado al tenant ${userProfileGlobal.tenantId}.`);
+        conflictCount++;
+        continue;
+      }
+
+      // Perfil existente EN ESTE tenant. Si el usuario ya tiene uno aquí, ese es el
+      // canónico; si no, buscamos por netsuiteId y luego por RFC.
+      let existing = userProfileGlobal; // null o de este tenant
+      if (!existing) {
+        existing = await prisma.supplierProfile.findFirst({
+          where: { tenantId, netsuiteId: String(vendor.id) },
+        });
+      }
       if (!existing) {
         existing = await prisma.supplierProfile.findFirst({
           where: { tenantId, rfc: rfcValue },
         });
       }
-      if (!existing) {
-        existing = await prisma.supplierProfile.findUnique({
-          where: { userId: user.id },
-        });
-      }
 
-      // userId es único GLOBAL: si el usuario resuelto ya tiene un perfil en OTRO tenant
-      // (típicamente por compartir email real entre empresas), no podemos crear otro
-      // perfil para él. Omitimos ese proveedor y seguimos con el resto.
-      if (existing && existing.tenantId !== tenantId) {
-        console.warn(`[SYNC SUPPLIERS] Proveedor omitido por conflicto de usuario entre tenants: vendor=${vendor.id} (${companyNameValue}), usuario ligado al tenant ${existing.tenantId}.`);
-        conflictCount++;
-        continue;
-      }
-
-      if (existing) {
-        await prisma.supplierProfile.update({
-          where: { id: existing.id },
-          data: supplierData,
-        });
-        updatedCount++;
-      } else {
-        try {
+      try {
+        if (existing) {
+          await prisma.supplierProfile.update({
+            where: { id: existing.id },
+            data: supplierData,
+          });
+          updatedCount++;
+        } else {
           await prisma.supplierProfile.create({
             data: { ...supplierData, rfc: rfcValue, tenantId },
           });
           createdCount++;
-        } catch (err: any) {
-          // Red de seguridad ante colisión de unicidad no anticipada (p. ej. carrera
-          // entre dos syncs). No abortamos todo el proceso.
-          if (err?.code === 'P2002') {
-            console.warn(`[SYNC SUPPLIERS] Proveedor omitido por violación de unicidad (${(err.meta?.target ?? []).toString()}): vendor=${vendor.id} (${companyNameValue}).`);
-            conflictCount++;
-            continue;
-          }
-          throw err;
         }
+      } catch (err: any) {
+        // Red de seguridad ante colisión de unicidad no anticipada (p. ej. carrera
+        // entre dos syncs). No abortamos todo el proceso.
+        if (err?.code === 'P2002') {
+          console.warn(`[SYNC SUPPLIERS] Proveedor omitido por violación de unicidad (${(err.meta?.target ?? []).toString()}): vendor=${vendor.id} (${companyNameValue}).`);
+          conflictCount++;
+          continue;
+        }
+        throw err;
       }
     }
 
-    // Verificar Lista 69B en batch para todos los RFC procesados
+    // Verificar Lista 69B en batch solo para proveedores que califican (mismos
+    // requisitos que la sincronización), para no gastar llamadas a Zentax de más.
     const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
     const rfcsToCheck = results
-      .filter((v: any) => v.rfc && isValidRFC(v.rfc))
+      .filter((v: any) => isValidRFC(v.rfc) && isValidEmail(v.email) && (v.companyname || v.name) && v.id)
       .map((v: any) => v.rfc.toUpperCase().replace(/\s/g, '').replace(/-/g, ''))
       .filter((rfc: string) => !GENERIC_RFCS.includes(rfc));
 

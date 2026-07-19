@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
             message: result.status === 'SUCCESS'
-                ? `Sincronización completada: ${result.createdCount} nuevos, ${result.updatedCount} actualizados, ${result.skippedCount} omitidos (RFC inválido)` +
+                ? `Sincronización completada: ${result.createdCount} nuevos, ${result.updatedCount} actualizados, ${result.skippedCount} omitidos (datos incompletos en NetSuite)` +
                   (result.conflictCount > 0 ? `, ${result.conflictCount} en conflicto con otra empresa.` : '.')
                 : `Error: ${result.error}`,
             totalFound: result.totalFound,

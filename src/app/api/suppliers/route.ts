@@ -10,6 +10,16 @@ import { rateLimit, getClientIP, rateLimitResponse } from '../../lib/rateLimit';
 import { sendEmail } from '../../lib/mailer';
 import { getPresignedUrl } from '../../lib/s3';
 import { requireAuth } from '../../lib/auth';
+import { findVendorByRfc, createVendorInNetSuite, normalizeRfc } from '../../lib/netsuiteVendors';
+
+// RFCs genéricos: se comparten entre proveedores, así que no se pueden usar para
+// identificar/bloquear de forma única (mismo criterio que el índice parcial de unicidad).
+const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+
+function isValidRFC(rfc: string) {
+  const clean = normalizeRfc(rfc);
+  return /^[A-ZÑ&]{3,4}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[A-Z0-9]{3}$/.test(clean);
+}
 
 // Función para obtener proveedores, filtrando por estado y tenant
 export async function GET(request: Request) {
@@ -95,29 +105,74 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, name, subsidiaryId, requireDocuments = false, supplierType = 'NATIONAL' } = body;
+    const { email, name, rfc: rfcRaw, subsidiaryId, requireDocuments = false, supplierType = 'NATIONAL' } = body;
 
-    if (!email || !name) {
-      return NextResponse.json({ message: 'Email y Nombre son requeridos' }, { status: 400 });
+    if (!email || !name || !rfcRaw) {
+      return NextResponse.json({ message: 'Email, Nombre y RFC son requeridos' }, { status: 400 });
     }
+
+    const rfc = normalizeRfc(rfcRaw);
+    if (!isValidRFC(rfc)) {
+      return NextResponse.json({ message: 'El RFC no tiene un formato válido.' }, { status: 400 });
+    }
+    const isGenericRfc = GENERIC_RFCS.includes(rfc);
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json({ message: 'Este correo ya está registrado en el sistema.' }, { status: 409 });
     }
 
+    // Bloqueo por RFC duplicado en el portal (excepto RFC genéricos, que se comparten).
+    if (!isGenericRfc) {
+      const existingProfile = await prisma.supplierProfile.findFirst({
+        where: { tenantId: decodedToken.tenantId, rfc },
+        select: { id: true, companyName: true },
+      });
+      if (existingProfile) {
+        return NextResponse.json(
+          { message: `Ya existe un proveedor en el portal con el RFC ${rfc} (${existingProfile.companyName}).` },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Datos del tenant: límite de proveedores + credenciales de NetSuite para crear el Vendor.
+    const tenantData = await prisma.tenant.findUnique({
+      where: { id: decodedToken.tenantId },
+      select: {
+        maxSuppliers: true,
+        netsuiteAccountId: true, netsuiteConsumerKey: true, netsuiteConsumerSec: true,
+        netsuiteTokenId: true, netsuiteTokenSecret: true,
+        netsuiteScriptId: true, netsuiteDeployId: true,
+      },
+    });
+
+    const hasNsCreds = Boolean(
+      tenantData?.netsuiteAccountId && tenantData.netsuiteConsumerKey && tenantData.netsuiteConsumerSec &&
+      tenantData.netsuiteTokenId && tenantData.netsuiteTokenSecret
+    );
+    if (!hasNsCreds) {
+      return NextResponse.json(
+        { message: 'Credenciales de NetSuite incompletas: no se puede crear el proveedor en NetSuite.' },
+        { status: 400 }
+      );
+    }
+    const nsCreds = {
+      accountId: tenantData!.netsuiteAccountId!,
+      consumerKey: tenantData!.netsuiteConsumerKey!,
+      consumerSecret: tenantData!.netsuiteConsumerSec!,
+      tokenId: tenantData!.netsuiteTokenId!,
+      tokenSecret: tenantData!.netsuiteTokenSecret!,
+    };
+
     // Verificar límite de proveedores activos y preparar aviso
     let supplierLimitWarning: string | null = null;
-    const tenantForLimit = await prisma.tenant.findUnique({
-      where: { id: decodedToken.tenantId },
-      select: { maxSuppliers: true },
-    });
-    if (tenantForLimit?.maxSuppliers !== null && tenantForLimit?.maxSuppliers !== undefined) {
+    if (tenantData?.maxSuppliers !== null && tenantData?.maxSuppliers !== undefined) {
       const activeCount = await prisma.supplierProfile.count({
         where: { tenantId: decodedToken.tenantId, status: 'ACTIVE' },
       });
-      if (activeCount >= tenantForLimit.maxSuppliers) {
-        supplierLimitWarning = `Has alcanzado el límite de ${tenantForLimit.maxSuppliers} proveedores activos. La invitación se enviará, pero el proveedor no podrá acceder hasta que se amplíe el límite de tu suscripción.`;
+      if (activeCount >= tenantData.maxSuppliers) {
+        supplierLimitWarning = `Has alcanzado el límite de ${tenantData.maxSuppliers} proveedores activos. La invitación se enviará, pero el proveedor no podrá acceder hasta que se amplíe el límite de tu suscripción.`;
       }
     }
 
@@ -129,6 +184,61 @@ export async function POST(request: Request) {
     if (!subsidiary) {
       return NextResponse.json({ message: 'Subsidiaria no encontrada. Verifica la configuración.' }, { status: 400 });
     }
+
+    // BLOQUEO: si el RFC ya existe como Vendor en NetSuite, no permitir la invitación.
+    // (Se omite para RFC genéricos, que se comparten entre muchos proveedores.)
+    if (!isGenericRfc) {
+      let netsuiteVendor;
+      try {
+        netsuiteVendor = await findVendorByRfc(rfc, nsCreds);
+      } catch (err: any) {
+        return NextResponse.json(
+          { message: `No se pudo verificar el RFC en NetSuite: ${err?.message || 'error de conexión'}. Intenta de nuevo.` },
+          { status: 502 }
+        );
+      }
+      if (netsuiteVendor) {
+        return NextResponse.json(
+          { message: `Ya existe un proveedor en NetSuite con el RFC ${rfc} (${netsuiteVendor.name}). No se puede duplicar.` },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Crear el Vendor en NetSuite (síncrono) ANTES de crear en el portal, para que el
+    // perfil siempre quede con su netsuiteId y no quedar a medias si NetSuite falla.
+    // RFC de 13 caracteres = persona física; 12 = persona moral.
+    let vendorResult;
+    try {
+      vendorResult = await createVendorInNetSuite(
+        {
+          companyName: name,
+          rfc,
+          email,
+          subsidiaryId: subsidiary.netsuiteSubsidiaryId,
+          isPerson: rfc.length === 13,
+        },
+        nsCreds,
+        tenantData!.netsuiteScriptId,
+        tenantData!.netsuiteDeployId
+      );
+    } catch (err: any) {
+      return NextResponse.json(
+        { message: `No se pudo crear el proveedor en NetSuite: ${err?.message || 'error de conexión'}.` },
+        { status: 502 }
+      );
+    }
+
+    if (!vendorResult?.success) {
+      // El RESTlet detectó un duplicado en NetSuite (carrera) u otro error.
+      const status = vendorResult?.alreadyExists ? 409 : 502;
+      return NextResponse.json(
+        { message: vendorResult?.error || 'NetSuite rechazó la creación del proveedor.' },
+        { status }
+      );
+    }
+
+    const netsuiteVendorId = vendorResult.vendorId ? String(vendorResult.vendorId) : null;
 
     // Password de marcador de posición: el proveedor establece la suya real vía el link de invitación.
     // Nunca se expone ni se envía; solo existe para satisfacer el campo NOT NULL hasta el primer login.
@@ -150,9 +260,10 @@ export async function POST(request: Request) {
       await tx.supplierProfile.create({
         data: {
           companyName: name,
-          rfc: `INVITE-${Date.now()}`,
+          rfc,
           taxAddress: 'Pendiente de completar',
           status: 'PENDING',
+          netsuiteId: netsuiteVendorId,
           requireDocuments: Boolean(requireDocuments),
           supplierType: supplierType === SupplierType.FOREIGN ? SupplierType.FOREIGN : SupplierType.NATIONAL,
           user: { connect: { id: user.id } },
@@ -204,8 +315,9 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      message: 'Proveedor invitado exitosamente.',
+      message: 'Proveedor invitado y creado en NetSuite exitosamente.',
       userId: newUser.id,
+      netsuiteId: netsuiteVendorId,
       ...(supplierLimitWarning && { warning: supplierLimitWarning }),
     }, { status: 201 });
 
