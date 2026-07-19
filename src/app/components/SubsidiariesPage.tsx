@@ -23,7 +23,7 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
   const [formData, setFormData] = useState(
     subsidiary
       ? { ...subsidiary, logo: null }
-      : { name: '', rfc: '', businessName: '', taxRegime: '', taxAddress: '', logo: null }
+      : { name: '', rfc: '', businessName: '', taxRegime: '', taxAddress: '', netsuiteSubsidiaryId: '', logo: null }
   );
   const [logoPreview, setLogoPreview] = useState<string | null>(subsidiary?.logoUrl || null);
   const [isSaving, setIsSaving] = useState(false);
@@ -85,6 +85,22 @@ const SubsidiaryModal = ({ isOpen, onClose, onSave, subsidiary }) => {
           </div>
 
           <input name="taxAddress" value={formData.taxAddress} onChange={handleChange} placeholder="Domicilio Fiscal" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" required />
+
+          {/* ID interno de subsidiaria en NetSuite — solo requerido en cuentas OneWorld */}
+          <div>
+            <label htmlFor="netsuiteSubsidiaryId" className="block text-sm font-medium text-gray-700 mb-1">
+              ID de Subsidiaria en NetSuite <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              id="netsuiteSubsidiaryId"
+              name="netsuiteSubsidiaryId"
+              value={(formData as any).netsuiteSubsidiaryId || ''}
+              onChange={handleChange}
+              placeholder="Ej. 3 (solo cuentas OneWorld)"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+            />
+            <p className="text-xs text-gray-500 mt-1">Necesario para crear proveedores en NetSuite si tu cuenta usa subsidiarias (OneWorld). Déjalo vacío en cuentas simples.</p>
+          </div>
           {/* --- Campo Logo con Preview --- */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Logo de la Subsidiaria</label>

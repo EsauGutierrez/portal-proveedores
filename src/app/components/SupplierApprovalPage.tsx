@@ -158,10 +158,12 @@ const ConfirmToggleModal = ({ supplier, isOpen, onClose, onConfirm }) => {
 
 // --- Componente Modal para Invitar Proveedor ---
 const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
+  const [formData, setFormData] = useState({ name: '', email: '', rfc: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
   const [isSaving, setIsSaving] = useState(false);
   const [subsidiaries, setSubsidiaries] = useState<any[]>([]);
   const [loadingSubsidiaries, setLoadingSubsidiaries] = useState(false);
+  // Verificación de RFC en vivo: idle | checking | ok | blocked | error
+  const [rfcCheck, setRfcCheck] = useState<{ status: string; message: string }>({ status: 'idle', message: '' });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -186,12 +188,51 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
 
   if (!isOpen) return null;
 
+  const resetForm = () => {
+    setFormData({ name: '', email: '', rfc: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
+    setRfcCheck({ status: 'idle', message: '' });
+  };
+
+  // Verifica el RFC contra NetSuite y el portal al salir del campo.
+  const checkRfc = async () => {
+    const rfc = formData.rfc.trim().toUpperCase();
+    if (!rfc) { setRfcCheck({ status: 'idle', message: '' }); return; }
+    setRfcCheck({ status: 'checking', message: 'Verificando RFC en NetSuite...' });
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/suppliers/check-rfc?rfc=${encodeURIComponent(rfc)}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!data.valid) {
+        setRfcCheck({ status: 'error', message: data.message || 'RFC con formato inválido.' });
+        return;
+      }
+      if (data.existsInNetsuite) {
+        setRfcCheck({ status: 'blocked', message: `Ya existe en NetSuite: ${data.netsuiteVendorName || 'proveedor'}. No se puede invitar con este RFC.` });
+        return;
+      }
+      if (data.existsInPortal) {
+        setRfcCheck({ status: 'blocked', message: `Ya existe en el portal: ${data.portalCompanyName || 'proveedor'}.` });
+        return;
+      }
+      if (data.netsuiteCheckError) {
+        setRfcCheck({ status: 'error', message: `No se pudo verificar en NetSuite (${data.netsuiteCheckError}). Se validará al enviar.` });
+        return;
+      }
+      setRfcCheck({ status: 'ok', message: 'RFC disponible. Se creará el proveedor en NetSuite.' });
+    } catch {
+      setRfcCheck({ status: 'error', message: 'No se pudo verificar el RFC. Se validará al enviar.' });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (rfcCheck.status === 'blocked' || rfcCheck.status === 'checking') return;
     setIsSaving(true);
-    await onInvite(formData);
+    const ok = await onInvite({ ...formData, rfc: formData.rfc.trim().toUpperCase() });
     setIsSaving(false);
-    setFormData({ name: '', email: '', subsidiaryId: '', requireDocuments: false, supplierType: 'NATIONAL' });
+    if (ok !== false) resetForm();
   };
 
   return (
@@ -209,6 +250,31 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
             <input required type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm text-gray-900 bg-white" placeholder="proveedor@ejemplo.com" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">RFC</label>
+            <input
+              required
+              type="text"
+              value={formData.rfc}
+              onChange={e => { setFormData({ ...formData, rfc: e.target.value.toUpperCase() }); if (rfcCheck.status !== 'idle') setRfcCheck({ status: 'idle', message: '' }); }}
+              onBlur={checkRfc}
+              maxLength={13}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm uppercase text-gray-900 font-medium bg-white"
+              placeholder="Ej. ABC123456T1A"
+            />
+            {rfcCheck.status === 'checking' && (
+              <p className="text-xs text-gray-500 mt-1 flex items-center"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> {rfcCheck.message}</p>
+            )}
+            {rfcCheck.status === 'ok' && (
+              <p className="text-xs text-green-600 mt-1 flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> {rfcCheck.message}</p>
+            )}
+            {rfcCheck.status === 'blocked' && (
+              <p className="text-xs text-red-600 mt-1 flex items-center font-medium"><AlertTriangle className="w-3 h-3 mr-1 flex-shrink-0" /> {rfcCheck.message}</p>
+            )}
+            {rfcCheck.status === 'error' && (
+              <p className="text-xs text-amber-600 mt-1 flex items-center"><AlertTriangle className="w-3 h-3 mr-1 flex-shrink-0" /> {rfcCheck.message}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Subsidiaria</label>
@@ -270,7 +336,7 @@ const InviteSupplierModal = ({ isOpen, onClose, onInvite }) => {
 
           <div className="flex justify-end pt-4 space-x-3 border-t border-gray-100">
             <button type="button" disabled={isSaving} onClick={onClose} className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 font-medium">Cancelar</button>
-            <button type="submit" disabled={isSaving || subsidiaries.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center font-medium">
+            <button type="submit" disabled={isSaving || subsidiaries.length === 0 || rfcCheck.status === 'blocked' || rfcCheck.status === 'checking'} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center font-medium">
               {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Enviar Invitación
             </button>
           </div>
@@ -793,7 +859,7 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
     }
   };
 
-  const handleInvite = async (inviteData: any) => {
+  const handleInvite = async (inviteData: any): Promise<boolean> => {
     const token = localStorage.getItem('token');
     try {
       const res = await fetch('/api/suppliers', {
@@ -809,10 +875,12 @@ const SupplierApprovalPage = ({ initialFilter }: { initialFilter?: string }) => 
       setNotification({
         type: 'success',
         title: '¡Invitación creada!',
-        message: `El proveedor "${inviteData.name}" fue registrado y se le envió un correo con un enlace para que establezca su propia contraseña.`,
+        message: `El proveedor "${inviteData.name}" fue creado en NetSuite${result.netsuiteId ? ` (ID ${result.netsuiteId})` : ''} y registrado en el portal. Se le envió un correo con un enlace para establecer su contraseña.`,
       });
+      return true;
     } catch (err: any) {
       setNotification({ type: 'error', title: 'Error al invitar', message: err.message });
+      return false;
     }
   };
 

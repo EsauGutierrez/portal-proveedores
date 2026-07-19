@@ -3,7 +3,7 @@
  * @NScriptType Restlet
  * @NModuleScope SameAccount
  */
-define(['N/record', 'N/file', 'N/https'], function (record, file, https) {
+define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, https, query) {
 
     const FOLDER_ID = 135902; // Carpeta destino en el File Cabinet de NetSuite
 
@@ -238,6 +238,79 @@ define(['N/record', 'N/file', 'N/https'], function (record, file, https) {
                     success: true,
                     vendorBillId: newBillId,
                     message: 'Vendor Bill sin OC creado correctamente.'
+                };
+            }
+
+            // ─── Acción 4: Crear Proveedor (Vendor) desde la invitación del portal ───────
+            if (action === 'createVendor') {
+                const {
+                    companyName,        // Razón social / nombre del proveedor
+                    rfc,                // RFC (se guarda en vatregnumber o custentity_mx_rfc)
+                    email,              // Correo del proveedor
+                    subsidiaryId,       // Internal ID de subsidiaria (solo OneWorld; opcional)
+                    isPerson            // true = persona física, false/omitido = compañía
+                } = requestBody;
+
+                if (!companyName || !rfc) {
+                    return { success: false, error: 'Faltan campos requeridos: companyName, rfc' };
+                }
+
+                // Salvaguarda anti-duplicado: si ya existe un Vendor con ese RFC, no crear otro.
+                // Se busca tanto en vatregnumber (no-SuiteTax) como en custentity_mx_rfc (SuiteTax).
+                var existingId = null;
+                try {
+                    var rows = query.runSuiteQL({
+                        query: "SELECT id FROM Vendor WHERE UPPER(vatregnumber) = ? OR UPPER(custentity_mx_rfc) = ?",
+                        params: [String(rfc).toUpperCase(), String(rfc).toUpperCase()]
+                    }).asMappedResults();
+                    if (rows && rows.length > 0) existingId = rows[0].id;
+                } catch (qErr) {
+                    log.error('createVendor: no se pudo verificar RFC existente', qErr.message);
+                }
+
+                if (existingId) {
+                    return {
+                        success: false,
+                        alreadyExists: true,
+                        vendorId: existingId,
+                        error: 'Ya existe un proveedor en NetSuite con el RFC ' + rfc + ' (internalId ' + existingId + ').'
+                    };
+                }
+
+                var vendor = record.create({ type: record.Type.VENDOR, isDynamic: true });
+
+                vendor.setValue({ fieldId: 'isperson', value: isPerson ? 'T' : 'F' });
+                if (isPerson) {
+                    // Persona física: NetSuite pide nombre/apellido; usamos la razón social completa.
+                    vendor.setValue({ fieldId: 'firstname', value: String(companyName).substring(0, 32) });
+                    vendor.setValue({ fieldId: 'lastname', value: String(companyName).substring(0, 32) });
+                } else {
+                    vendor.setValue({ fieldId: 'companyname', value: companyName });
+                }
+
+                if (email) {
+                    try { vendor.setValue({ fieldId: 'email', value: email }); } catch (_) {}
+                }
+
+                // RFC: intentar primero el campo estándar y, si no existe, el campo custom.
+                try {
+                    vendor.setValue({ fieldId: 'vatregnumber', value: rfc });
+                } catch (_) {
+                    try { vendor.setValue({ fieldId: 'custentity_mx_rfc', value: rfc }); } catch (__) {}
+                }
+
+                // Subsidiaria: obligatoria en cuentas OneWorld; se omite en cuentas simples.
+                if (subsidiaryId) {
+                    try { vendor.setValue({ fieldId: 'subsidiary', value: parseInt(subsidiaryId) }); } catch (_) {}
+                }
+
+                var newVendorId = vendor.save({ enableSourcing: true, ignoreMandatoryFields: false });
+                log.audit('Vendor creado exitosamente desde invitación', { newVendorId, rfc });
+
+                return {
+                    success: true,
+                    vendorId: newVendorId,
+                    message: 'Proveedor creado correctamente en NetSuite.'
                 };
             }
 

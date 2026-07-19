@@ -135,6 +135,10 @@ model Subsidiary {
   taxAddress       String
   logoUrl          String?
   poSuiteqlQuery   String?
+  // ID interno de la subsidiaria en NetSuite. Requerido solo en cuentas OneWorld
+  // para poder crear proveedores (Vendor) con su subsidiaria correcta. En cuentas
+  // simples se deja nulo y se omite al crear el vendor.
+  netsuiteSubsidiaryId String?
   isActive         Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
