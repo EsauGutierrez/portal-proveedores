@@ -26,6 +26,30 @@ async function querySuiteQLWithVatFallback(query: string, creds: SyncCreds): Pro
   }
 }
 
+// El campo custom 'custbody_es_consignacion' NO existe en todas las cuentas de NetSuite.
+// Cuando falta, NetSuite devuelve un 500 genérico (no un error de campo desconocido) que
+// no se puede detectar por mensaje, así que reintentamos sin ese campo (es_consignacion='F').
+// Envuelve el fallback de vatregnumber para cubrir ambos casos.
+function stripConsignmentField(query: string): string {
+  return query
+    .replace(/NVL\(\s*t\.custbody_es_consignacion\s*,\s*'F'\s*\)\s+AS\s+es_consignacion/gi, "'F' AS es_consignacion")
+    .replace(/t\.custbody_es_consignacion\s+AS\s+es_consignacion/gi, "'F' AS es_consignacion");
+}
+
+async function querySuiteQLResilient(query: string, creds: SyncCreds): Promise<any[]> {
+  try {
+    return await querySuiteQLWithVatFallback(query, creds);
+  } catch (err: any) {
+    const withoutConsignment = stripConsignmentField(query);
+    if (withoutConsignment !== query) {
+      // La cuenta no tiene el campo de consignación: reintentar sin él.
+      console.warn('[SYNC OC] Reintentando consulta sin custbody_es_consignacion (campo ausente en la cuenta de NetSuite).');
+      return await querySuiteQLWithVatFallback(withoutConsignment, creds);
+    }
+    throw err;
+  }
+}
+
 export interface SyncCreds {
   accountId: string;
   consumerKey: string;
@@ -183,14 +207,14 @@ export async function syncPurchaseOrdersForTenant(
         .replace(/\{rfcClause\}/g, rfcClause ?? "'NONE'")
         .replace(/\{entityClause\}/g, entityClause ?? "'NONE'")
         .replace(/\{whereCondition\}/g, whereCondition);
-      const subResults = await querySuiteQLWithVatFallback(customQuery, creds);
+      const subResults = await querySuiteQLResilient(customQuery, creds);
       results.push(...subResults);
     }
     const customSubNames = new Set(subsidiariesWithCustomQuery.map((s: any) => s.name));
-    const defaultResults = await querySuiteQLWithVatFallback(defaultQuery, creds);
+    const defaultResults = await querySuiteQLResilient(defaultQuery, creds);
     results.push(...defaultResults.filter((po: any) => !customSubNames.has(po.subsidiaria)));
   } else {
-    results = await querySuiteQLWithVatFallback(defaultQuery, creds);
+    results = await querySuiteQLResilient(defaultQuery, creds);
   }
 
   // Deduplicar por po_netsuite_id (puede haber solapamiento si el vendor estaba en ambas cláusulas)
