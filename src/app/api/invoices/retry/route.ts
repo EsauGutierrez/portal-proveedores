@@ -44,19 +44,33 @@ export async function POST(request: Request) {
       data: { syncStatus: 'PENDING_SYNC', syncError: null }
     });
 
-    // Reencolar en SQS
+    // Reencolar en SQS.
+    // IMPORTANTE: Amplify/Lambda reservan las variables con prefijo AWS_ y no permiten
+    // configurarlas, por eso la app usa APP_AWS_* para sus credenciales (igual que el
+    // upload en /api/invoices). Se deja fallback a AWS_* para funcionar también en local.
     const sqsClient = new SQSClient({
-      region: process.env.AWS_REGION || 'us-east-2',
+      region: process.env.APP_AWS_REGION || process.env.AWS_REGION || 'us-east-2',
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        accessKeyId: (process.env.APP_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID)!,
+        secretAccessKey: (process.env.APP_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY)!,
       },
     });
 
-    await sqsClient.send(new SendMessageCommand({
-      QueueUrl: (process.env.AWS_SQS_INVOICES_URL || process.env.SQS_INVOICES_URL)?.trim(),
-      MessageBody: JSON.stringify({ invoiceId })
-    }));
+    try {
+      await sqsClient.send(new SendMessageCommand({
+        QueueUrl: (process.env.SQS_INVOICES_URL || process.env.AWS_SQS_INVOICES_URL)?.trim(),
+        MessageBody: JSON.stringify({ invoiceId })
+      }));
+    } catch (sqsError: any) {
+      // Si falla el encolado, revertimos el estado para que la factura no quede colgada
+      // en "En validación" sin que nada la procese, y devolvemos un error claro.
+      console.error('[Retry] Error enviando a SQS:', sqsError);
+      await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { syncStatus: 'FAILED', syncError: `No se pudo reencolar la factura: ${sqsError?.message || 'error de SQS'}` },
+      });
+      return NextResponse.json({ message: 'No se pudo reencolar la factura para sincronización. Intenta de nuevo.' }, { status: 502 });
+    }
 
     console.log(`[Retry] Factura ${invoiceId} reencolada por usuario ${decoded.userId}`);
     return NextResponse.json({ message: 'Factura reencolada para sincronización.' }, { status: 200 });
