@@ -125,6 +125,29 @@ const AdminInvoicesPage = () => {
         }
     };
 
+    const handleRetryInvoice = async (id: string) => {
+        setRetryLoadingId(id);
+        setError(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/invoices/retry`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ invoiceId: id }),
+            });
+            const d = await res.json();
+            if (!res.ok) {
+                setError(d.message || 'Error al reintentar la sincronización.');
+            } else {
+                fetchDocuments();
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setRetryLoadingId(null);
+        }
+    };
+
     const handleDownloadZip = async () => {
         setIsDownloading(true);
         setError(null);
@@ -323,6 +346,17 @@ const AdminInvoicesPage = () => {
                                                         {doc.tipo === 'Complemento de Pago' && doc.estadoCentral === 'FAILED' && (
                                                             <button
                                                                 onClick={() => handleRetryComplement(doc.id)}
+                                                                disabled={retryLoadingId === doc.id}
+                                                                className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 text-xs font-semibold rounded disabled:opacity-50 transition-colors"
+                                                                title="Reintentar sincronización con NetSuite"
+                                                            >
+                                                                {retryLoadingId === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                                                Reintentar
+                                                            </button>
+                                                        )}
+                                                        {doc.tipo === 'Factura' && doc.estadoCentral === 'FAILED' && (
+                                                            <button
+                                                                onClick={() => handleRetryInvoice(doc.id)}
                                                                 disabled={retryLoadingId === doc.id}
                                                                 className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 text-xs font-semibold rounded disabled:opacity-50 transition-colors"
                                                                 title="Reintentar sincronización con NetSuite"
