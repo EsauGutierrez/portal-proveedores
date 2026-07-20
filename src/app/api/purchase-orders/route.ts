@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         include: {
           subsidiary: true,
           invoices: {
-            select: { id: true, syncStatus: true, pdfUrl: true, xmlUrl: true, total: true },
+            select: { id: true, syncStatus: true, syncError: true, pdfUrl: true, xmlUrl: true, total: true },
           },
           recepciones: {
             include: {
