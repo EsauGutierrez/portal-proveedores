@@ -177,6 +177,13 @@ export async function syncPurchaseOrdersForTenant(
     whereCondition = `v.vatregnumber IN (${rfcClause})`;
   }
 
+  // Solo traer OC PENDIENTES DE FACTURAR. Códigos de estado de PurchOrd en SuiteQL:
+  //   'F' = Pending Bill (pendiente de facturar)
+  //   'E' = Pending Billing/Partially Received (parcialmente recibida, ya facturable)
+  // Se excluyen: B/D (pendiente de recibir / parcial sin facturar), A (aprobación),
+  // G (ya facturada) y H (cerrada).
+  const statusFilter = `t.status IN ('F', 'E')`;
+
   const defaultQuery = `
     SELECT
       t.id                        AS po_netsuite_id,
@@ -194,6 +201,7 @@ export async function syncPurchaseOrdersForTenant(
       JOIN Vendor v ON t.entity = v.id
     WHERE
       t.type = 'PurchOrd'
+      AND ${statusFilter}
       AND ${whereCondition}
   `;
 
@@ -206,6 +214,7 @@ export async function syncPurchaseOrdersForTenant(
       const customQuery = sub.poSuiteqlQuery!
         .replace(/\{rfcClause\}/g, rfcClause ?? "'NONE'")
         .replace(/\{entityClause\}/g, entityClause ?? "'NONE'")
+        .replace(/\{statusFilter\}/g, statusFilter)
         .replace(/\{whereCondition\}/g, whereCondition);
       const subResults = await querySuiteQLResilient(customQuery, creds);
       results.push(...subResults);

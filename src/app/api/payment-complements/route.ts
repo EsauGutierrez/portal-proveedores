@@ -5,7 +5,7 @@ import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
-import { invokeRestlet } from '../../lib/netsuite';
+import { invokeRestlet, querySuiteQL } from '../../lib/netsuite';
 
 const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
 const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
@@ -219,7 +219,32 @@ export async function POST(request: Request) {
       _sum: { total: true },
     });
     const alreadyPaid = Number(existingComplementsAgg._sum.total ?? 0);
-    const pendingBalance = Number(invoice.total) - alreadyPaid;
+    let pendingBalance = Number(invoice.total) - alreadyPaid;
+
+    // Ajustar con el saldo REAL del bill en NetSuite (foreignamountunpaid). Esto considera
+    // pagos hechos fuera del portal, que el cálculo por complementos del portal no ve.
+    // Best-effort: si NetSuite no responde, se conserva el cálculo local.
+    try {
+      const t: any = invoice.tenant;
+      if (t?.netsuiteAccountId && t.netsuiteConsumerKey && t.netsuiteConsumerSec && t.netsuiteTokenId && t.netsuiteTokenSecret) {
+        const billId = parseInt(String(invoice.netsuiteId), 10);
+        if (!isNaN(billId)) {
+          const rows = await querySuiteQL(
+            `SELECT ABS(foreignamountunpaid) AS unpaid FROM transaction WHERE id = ${billId}`,
+            { accountId: t.netsuiteAccountId, consumerKey: t.netsuiteConsumerKey, consumerSecret: t.netsuiteConsumerSec, tokenId: t.netsuiteTokenId, tokenSecret: t.netsuiteTokenSecret }
+          );
+          if (rows && rows.length > 0 && rows[0].unpaid != null) {
+            const nsUnpaid = Number(rows[0].unpaid);
+            // Tomar el más conservador: el bill puede estar ya pagado en NetSuite aunque
+            // el portal no lo registre, o haber complementos en el portal aún sin sincronizar.
+            pendingBalance = Math.min(pendingBalance, nsUnpaid);
+          }
+        }
+      }
+    } catch (balanceErr: any) {
+      console.warn('[COMPLEMENTO] No se pudo verificar el saldo del bill en NetSuite:', balanceErr?.message);
+    }
+
     const invoiceTolerance = Number(invoice.tenant?.invoiceTolerance ?? 0.5);
     if (total > pendingBalance + invoiceTolerance) {
       return NextResponse.json(

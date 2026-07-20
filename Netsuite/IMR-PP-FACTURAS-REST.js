@@ -113,6 +113,30 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                     };
                 }
 
+                // Idempotencia: si ya existe un VendorPayment con este UUID (tranid), no crear
+                // otro. Cubre el caso en que un pago se creó pero el portal lo marcó FAILED y
+                // se reintenta. Se dedup por UUID (no por bill) para permitir pagos parciales
+                // con distinto UUID sobre la misma factura.
+                if (uuidComplemento) {
+                    try {
+                        var dupRows = query.runSuiteQL({
+                            query: "SELECT id FROM transaction WHERE type = 'VendPymt' AND tranid = ?",
+                            params: [String(uuidComplemento)]
+                        }).asMappedResults();
+                        if (dupRows && dupRows.length > 0) {
+                            log.audit('createVendorPayment: pago ya existente (idempotente)', { uuidComplemento, vendorPaymentId: dupRows[0].id });
+                            return {
+                                success: true,
+                                alreadyExists: true,
+                                vendorPaymentId: dupRows[0].id,
+                                message: 'El complemento ya estaba registrado en NetSuite; no se duplicó.'
+                            };
+                        }
+                    } catch (dupErr) {
+                        log.error('createVendorPayment: no se pudo verificar duplicado', dupErr.message);
+                    }
+                }
+
                 // Crear el VendorPayment en modo dinámico para que NS cargue
                 // automáticamente la cuenta bancaria configurada del proveedor
                 const payment = record.create({

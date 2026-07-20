@@ -129,9 +129,9 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
                 {/* Métricas */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <MetricCard title="Facturas Subidas" value={metrics.totalFacturas} icon={FileText} colorClass="text-blue-600" borderClass="border-blue-500" />
-                    <MetricCard title="Aprobadas" value={metrics.facturasAprobadas} icon={CheckCircle} colorClass="text-green-600" borderClass="border-green-500" />
+                    <MetricCard title="Sincronizadas" value={metrics.facturasAprobadas} icon={CheckCircle} colorClass="text-green-600" borderClass="border-green-500" />
                     <MetricCard title="Pendientes" value={metrics.facturasPendientes} icon={Clock} colorClass="text-yellow-600" borderClass="border-yellow-500" />
-                    <MetricCard title="Monto Aprobado" value={metrics.montoTotalAprobado} icon={TrendingUp} colorClass="text-purple-600" borderClass="border-purple-500" />
+                    <MetricCard title="Monto Facturado" value={metrics.montoTotalAprobado} icon={TrendingUp} colorClass="text-purple-600" borderClass="border-purple-500" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -302,9 +302,9 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Facturas</p>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <MetricCard title="Facturas Recibidas" value={metrics.facturasRecibidas} icon={FileText} colorClass="text-blue-600" borderClass="border-blue-500" />
-                        <MetricCard title="Aprobadas" value={metrics.facturasAprobadas} icon={CheckCircle} colorClass="text-green-600" borderClass="border-green-500" />
+                        <MetricCard title="Sincronizadas" value={metrics.facturasAprobadas} icon={CheckCircle} colorClass="text-green-600" borderClass="border-green-500" />
                         <MetricCard title="Pendientes" value={metrics.facturasPendientes} icon={Clock} colorClass="text-yellow-600" borderClass="border-yellow-500" />
-                        <MetricCard title="Monto Aprobado" value={metrics.montoTotalAprobado} icon={TrendingUp} colorClass="text-purple-600" borderClass="border-purple-500" />
+                        <MetricCard title="Monto Facturado" value={metrics.montoTotalAprobado} icon={TrendingUp} colorClass="text-purple-600" borderClass="border-purple-500" />
                     </div>
                 </div>
 
