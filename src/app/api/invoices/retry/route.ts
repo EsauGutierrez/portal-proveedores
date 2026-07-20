@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'No autorizado.' }, { status: 401 });
     }
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; role: string };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; role: string; tenantId?: string };
 
     const { invoiceId } = await request.json();
     if (!invoiceId) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     // Verificar que la factura existe y pertenece al usuario (o es admin)
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
-      select: { id: true, syncStatus: true, userId: true }
+      select: { id: true, syncStatus: true, userId: true, tenantId: true }
     });
 
     if (!invoice) {
@@ -31,6 +31,10 @@ export async function POST(request: Request) {
     const isOwner = invoice.userId === decoded.userId;
     const isAdmin = ['SUPERADMIN', 'TENANT_ADMIN'].includes(decoded.role);
     if (!isOwner && !isAdmin) {
+      return NextResponse.json({ message: 'Sin permisos para reintentar esta factura.' }, { status: 403 });
+    }
+    // Aislamiento por tenant: un TENANT_ADMIN solo puede reintentar facturas de su propio tenant.
+    if (decoded.role === 'TENANT_ADMIN' && invoice.tenantId !== decoded.tenantId) {
       return NextResponse.json({ message: 'Sin permisos para reintentar esta factura.' }, { status: 403 });
     }
 

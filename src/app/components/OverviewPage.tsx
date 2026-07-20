@@ -281,7 +281,7 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
                             <AlertBanner count={alertas.proveedoresEnLista69b} label="proveedores detectados en Lista 69B del SAT" color="red" onClick={onNavigate ? () => onNavigate('proveedores', 'lista69b') : undefined} />
                         )}
                         <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" color="amber" onClick={onNavigate ? () => onNavigate('proveedores', 'pendiente') : undefined} />
-                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" color="red" />
+                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" color="red" onClick={onNavigate ? () => onNavigate('facturas_admin') : undefined} />
                         <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" color="blue" />
                     </div>
                 )}
