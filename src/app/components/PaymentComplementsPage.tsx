@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, Clock, Download, Plus, X, Loader2, AlertCircle, ChevronDown, RefreshCw } from 'lucide-react';
 
 const SYNC_STATUS_MAP: Record<string, { label: string; color: string; bg: string; Icon: any }> = {
   SYNCED:       { label: 'Registrado en NetSuite', color: 'text-green-700',  bg: 'bg-green-50',  Icon: CheckCircle },
@@ -73,6 +73,8 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [xmlValidationError, setXmlValidationError] = useState<string | null>(null);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const toggleInvoice = (id: string) => {
     setSelectedIds(prev => {
@@ -137,6 +139,25 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleRetry = async (id: string) => {
+    setRetryingId(id);
+    setNotification(null);
+    try {
+      const res = await fetch(`/api/payment-complements/${id}/retry`, { method: 'POST', headers });
+      const d = await res.json();
+      if (!res.ok || d.success === false) {
+        setNotification({ type: 'error', message: d.message || 'No se pudo reenviar el complemento.' });
+      } else {
+        setNotification({ type: 'success', message: 'Complemento reenviado y sincronizado con NetSuite.' });
+      }
+      await load();
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message || 'Error al reenviar el complemento.' });
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   const resetForm = () => {
     setShowForm(false);
@@ -386,9 +407,26 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
                     <td className="px-4 py-3 text-center">
                       <SyncStatusBadge status={c.netsuiteSyncStatus} />
                       {c.netsuiteSyncStatus === 'FAILED' && c.netsuiteSyncError && (
-                        <p className="text-xs text-red-600 mt-1 max-w-[200px] truncate" title={c.netsuiteSyncError}>
+                        <button
+                          type="button"
+                          onClick={() => setErrorModal(c.netsuiteSyncError)}
+                          className="text-xs text-red-600 hover:text-red-800 underline mt-1 max-w-[200px] truncate block mx-auto"
+                          title="Ver error completo"
+                        >
                           {c.netsuiteSyncError}
-                        </p>
+                        </button>
+                      )}
+                      {c.netsuiteSyncStatus === 'FAILED' && (
+                        <button
+                          type="button"
+                          onClick={() => handleRetry(c.id)}
+                          disabled={retryingId === c.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 mt-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 text-xs font-semibold rounded disabled:opacity-50 transition-colors mx-auto"
+                          title="Reenviar el complemento a NetSuite"
+                        >
+                          {retryingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          Reenviar
+                        </button>
                       )}
                       {c.netsuiteSyncStatus === 'SYNCED' && c.netsuitePaymentId && (
                         <p className="text-xs text-green-700 mt-1">
@@ -428,6 +466,26 @@ const PaymentComplementsPage = ({ user }: { user: any }) => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal: detalle completo del error de sincronización */}
+      {errorModal && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={() => setErrorModal(null)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" /> Detalle del Error
+              </h3>
+              <button onClick={() => setErrorModal(null)} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="bg-red-50 border border-red-100 rounded-md p-4">
+              <p className="text-sm text-red-800 whitespace-pre-wrap break-words">{errorModal}</p>
+            </div>
+            <div className="flex justify-end mt-5">
+              <button onClick={() => setErrorModal(null)} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">Cerrar</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
