@@ -23,10 +23,6 @@ export async function POST(
     const token = authHeader.split(' ')[1];
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
 
-    if (decoded.role !== 'ADMIN' && decoded.role !== 'TENANT_ADMIN') {
-      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
-    }
-
     const { id } = await params;
 
     const complement = await prisma.paymentComplement.findUnique({
@@ -54,6 +50,17 @@ export async function POST(
 
     if (!complement) {
       return NextResponse.json({ message: 'Complemento no encontrado.' }, { status: 404 });
+    }
+
+    // Autorización: el proveedor dueño puede reintentar su propio complemento, o un admin.
+    const isOwner = complement.userId === decoded.userId;
+    const isAdmin = decoded.role === 'ADMIN' || decoded.role === 'TENANT_ADMIN';
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
+    }
+    // Aislamiento por tenant: un TENANT_ADMIN solo reintenta complementos de su propio tenant.
+    if (decoded.role === 'TENANT_ADMIN' && complement.invoice?.tenantId !== decoded.tenantId) {
+      return NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 });
     }
 
     if (complement.netsuiteSyncStatus !== 'FAILED') {
