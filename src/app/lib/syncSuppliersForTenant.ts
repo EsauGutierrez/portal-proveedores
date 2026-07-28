@@ -15,6 +15,10 @@ function isValidEmail(email: unknown): email is string {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
 }
 
+// RFCs genéricos del SAT: son COMPARTIDOS por muchos proveedores, así que no se pueden
+// usar como llave de emparejamiento (empatarían proveedores distintos entre sí).
+const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+
 export interface SupplierSyncResult {
   tenantId: string;
   tenantName: string;
@@ -146,7 +150,9 @@ export async function syncSuppliersForTenant(
     // canónico; si no, buscamos por netsuiteId y luego por RFC.
     let existing = userProfileGlobal; // aquí userProfileGlobal es null o de este tenant
     if (!existing) existing = await prisma.supplierProfile.findFirst({ where: { tenantId, netsuiteId: String(vendor.id) } });
-    if (!existing) existing = await prisma.supplierProfile.findFirst({ where: { tenantId, rfc } });
+    // Solo emparejar por RFC si NO es genérico: el genérico lo comparten muchos vendors,
+    // así que empatar por él colapsaría proveedores distintos en un mismo perfil.
+    if (!existing && !GENERIC_RFCS.includes(rfc)) existing = await prisma.supplierProfile.findFirst({ where: { tenantId, rfc } });
 
     try {
       if (existing) {

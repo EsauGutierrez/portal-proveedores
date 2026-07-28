@@ -103,7 +103,9 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                     vendorBillId,     // Internal ID del VendorBill al que aplica
                     amount,           // Monto del complemento
                     trandate,         // Fecha del complemento (ISO string)
-                    uuidComplemento   // UUID del CFDI de pago (folio único)
+                    uuidComplemento,  // UUID del CFDI de pago (folio único)
+                    complementoXMLUrl, // URL (presigned S3) del XML del complemento
+                    complementoPDFUrl  // URL (presigned S3) del PDF del complemento
                 } = requestBody;
 
                 if (!vendorNetsuiteId || !vendorBillId || !amount) {
@@ -124,11 +126,49 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                             params: [String(uuidComplemento)]
                         }).asMappedResults();
                         if (dupRows && dupRows.length > 0) {
-                            log.audit('createVendorPayment: pago ya existente (idempotente)', { uuidComplemento, vendorPaymentId: dupRows[0].id });
+                            var existingPaymentId = dupRows[0].id;
+                            log.audit('createVendorPayment: pago ya existente (idempotente)', { uuidComplemento, vendorPaymentId: existingPaymentId });
+
+                            // Backfill: si el pago existente no tiene el XML/PDF adjunto, lo
+                            // adjuntamos ahora (cubre pagos creados antes de este cambio).
+                            try {
+                                // Consultar los valores actuales por separado (no en el query de
+                                // duplicado, para no arriesgar la detección si el campo no fuera consultable).
+                                var curXml = null, curPdf = null;
+                                try {
+                                    var curRows = query.runSuiteQL({
+                                        query: "SELECT custbody_fe_sf_xml_sat, custbody_fe_sf_pdf FROM transaction WHERE id = ?",
+                                        params: [existingPaymentId]
+                                    }).asMappedResults();
+                                    if (curRows && curRows.length > 0) {
+                                        curXml = curRows[0].custbody_fe_sf_xml_sat;
+                                        curPdf = curRows[0].custbody_fe_sf_pdf;
+                                    }
+                                } catch (curErr) {
+                                    log.error('createVendorPayment: no se pudieron leer campos actuales', curErr.message);
+                                }
+                                var bfBase = uuidComplemento || ('pago_' + vendorBillId);
+                                var bfValues = {};
+                                if (complementoXMLUrl && !curXml) {
+                                    var bfXmlId = uploadToFileCabinet(complementoXMLUrl, bfBase + '.xml', file.Type.XMLDOC);
+                                    if (bfXmlId) bfValues.custbody_fe_sf_xml_sat = bfXmlId;
+                                }
+                                if (complementoPDFUrl && !curPdf) {
+                                    var bfPdfId = uploadToFileCabinet(complementoPDFUrl, bfBase + '.pdf', file.Type.PDF);
+                                    if (bfPdfId) bfValues.custbody_fe_sf_pdf = bfPdfId;
+                                }
+                                if (bfValues.custbody_fe_sf_xml_sat || bfValues.custbody_fe_sf_pdf) {
+                                    record.submitFields({ type: record.Type.VENDOR_PAYMENT, id: existingPaymentId, values: bfValues });
+                                    log.audit('createVendorPayment: XML/PDF adjuntados al pago existente', { existingPaymentId, bfValues });
+                                }
+                            } catch (bfErr) {
+                                log.error('createVendorPayment: no se pudo adjuntar XML/PDF al pago existente', bfErr.message);
+                            }
+
                             return {
                                 success: true,
                                 alreadyExists: true,
-                                vendorPaymentId: dupRows[0].id,
+                                vendorPaymentId: existingPaymentId,
                                 message: 'El complemento ya estaba registrado en NetSuite; no se duplicó.'
                             };
                         }
@@ -181,6 +221,24 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                         success: false,
                         error: 'El Vendor Bill ' + vendorBillId + ' no aparece en la sublista apply del proveedor ' + vendorNetsuiteId + '.'
                     };
+                }
+
+                // Adjuntar XML y PDF del complemento al File Cabinet y asignarlos a los
+                // campos custom (mismo patrón que createVendorBill).
+                var baseName = uuidComplemento || ('pago_' + vendorBillId);
+                if (complementoXMLUrl) {
+                    var pXmlFileId = uploadToFileCabinet(complementoXMLUrl, baseName + '.xml', file.Type.XMLDOC);
+                    if (pXmlFileId) {
+                        try { payment.setValue({ fieldId: 'custbody_fe_sf_xml_sat', value: pXmlFileId }); }
+                        catch (e) { log.error('createVendorPayment: no se pudo asignar custbody_fe_sf_xml_sat', e.message); }
+                    }
+                }
+                if (complementoPDFUrl) {
+                    var pPdfFileId = uploadToFileCabinet(complementoPDFUrl, baseName + '.pdf', file.Type.PDF);
+                    if (pPdfFileId) {
+                        try { payment.setValue({ fieldId: 'custbody_fe_sf_pdf', value: pPdfFileId }); }
+                        catch (e) { log.error('createVendorPayment: no se pudo asignar custbody_fe_sf_pdf', e.message); }
+                    }
                 }
 
                 const newPaymentId = payment.save({
