@@ -19,6 +19,10 @@ function isValidEmail(email: unknown): email is string {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+// RFCs genéricos del SAT: son COMPARTIDOS por muchos proveedores, así que no se pueden
+// usar como llave de emparejamiento (empatarían proveedores distintos entre sí).
+const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
+
 export async function GET(request: Request) {
   const apiKey = request.headers.get('x-sync-key');
   const tenantId = request.headers.get('x-tenant-id');
@@ -170,7 +174,9 @@ export async function GET(request: Request) {
           where: { tenantId, netsuiteId: String(vendor.id) },
         });
       }
-      if (!existing) {
+      // Solo emparejar por RFC si NO es genérico: el genérico lo comparten muchos vendors,
+      // así que empatar por él colapsaría proveedores distintos en un mismo perfil.
+      if (!existing && !GENERIC_RFCS.includes(rfcValue)) {
         existing = await prisma.supplierProfile.findFirst({
           where: { tenantId, rfc: rfcValue },
         });
@@ -203,7 +209,6 @@ export async function GET(request: Request) {
 
     // Verificar Lista 69B en batch solo para proveedores que califican (mismos
     // requisitos que la sincronización), para no gastar llamadas a Zentax de más.
-    const GENERIC_RFCS = ['XAXX010101000', 'XEXX010101000'];
     const rfcsToCheck = results
       .filter((v: any) => isValidRFC(v.rfc) && isValidEmail(v.email) && (v.companyname || v.name) && v.id)
       .map((v: any) => v.rfc.toUpperCase().replace(/\s/g, '').replace(/-/g, ''))
