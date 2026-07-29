@@ -221,28 +221,45 @@ export async function POST(request: Request) {
     const alreadyPaid = Number(existingComplementsAgg._sum.total ?? 0);
     let pendingBalance = Number(invoice.total) - alreadyPaid;
 
-    // Ajustar con el saldo REAL del bill en NetSuite (foreignamountunpaid). Esto considera
-    // pagos hechos fuera del portal, que el cálculo por complementos del portal no ve.
-    // Best-effort: si NetSuite no responde, se conserva el cálculo local.
+    // Verificar el bill en NetSuite: (a) que aún EXISTA (pudo haberse eliminado en el ERP),
+    // y (b) su saldo REAL (foreignamountunpaid), que considera pagos hechos fuera del portal.
+    // Best-effort: si NetSuite no responde, se conserva el cálculo local y no se bloquea.
+    let billMissingInNetsuite = false;
     try {
       const t: any = invoice.tenant;
       if (t?.netsuiteAccountId && t.netsuiteConsumerKey && t.netsuiteConsumerSec && t.netsuiteTokenId && t.netsuiteTokenSecret) {
         const billId = parseInt(String(invoice.netsuiteId), 10);
         if (!isNaN(billId)) {
           const rows = await querySuiteQL(
-            `SELECT ABS(foreignamountunpaid) AS unpaid FROM transaction WHERE id = ${billId}`,
+            `SELECT id, ABS(foreignamountunpaid) AS unpaid FROM transaction WHERE id = ${billId} AND type = 'VendBill'`,
             { accountId: t.netsuiteAccountId, consumerKey: t.netsuiteConsumerKey, consumerSecret: t.netsuiteConsumerSec, tokenId: t.netsuiteTokenId, tokenSecret: t.netsuiteTokenSecret }
           );
-          if (rows && rows.length > 0 && rows[0].unpaid != null) {
-            const nsUnpaid = Number(rows[0].unpaid);
-            // Tomar el más conservador: el bill puede estar ya pagado en NetSuite aunque
-            // el portal no lo registre, o haber complementos en el portal aún sin sincronizar.
-            pendingBalance = Math.min(pendingBalance, nsUnpaid);
+          if (rows && rows.length > 0) {
+            if (rows[0].unpaid != null) {
+              // Tomar el más conservador: el bill puede estar ya pagado en NetSuite aunque
+              // el portal no lo registre, o haber complementos en el portal aún sin sincronizar.
+              pendingBalance = Math.min(pendingBalance, Number(rows[0].unpaid));
+            }
+          } else {
+            // La consulta corrió pero el bill no existe → fue eliminado en NetSuite.
+            billMissingInNetsuite = true;
           }
         }
       }
     } catch (balanceErr: any) {
-      console.warn('[COMPLEMENTO] No se pudo verificar el saldo del bill en NetSuite:', balanceErr?.message);
+      console.warn('[COMPLEMENTO] No se pudo verificar el bill en NetSuite:', balanceErr?.message);
+    }
+
+    if (billMissingInNetsuite) {
+      // Marcar la factura para que el flujo normal (reenviar/reconciliar) la recupere.
+      await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { syncStatus: 'FAILED', syncError: 'La factura ya no existe en NetSuite (pudo haber sido eliminada). Debe re-registrarse antes de subir su complemento.' },
+      });
+      return NextResponse.json(
+        { message: 'La factura vinculada ya no existe en NetSuite (pudo haber sido eliminada). Re-registra la factura antes de subir el complemento de pago.' },
+        { status: 409 }
+      );
     }
 
     const invoiceTolerance = Number(invoice.tenant?.invoiceTolerance ?? 0.5);

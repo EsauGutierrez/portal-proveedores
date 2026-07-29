@@ -49,6 +49,30 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
             if (action === 'createVendorBill') {
                 const { fromId, fromType, uuidFactura, facturaXMLUrl, facturaPDFUrl } = requestBody;
 
+                // Idempotencia: si ya existe un VendorBill con este UUID (tranid), no crear otro.
+                // Cubre el caso de timeout: el bill se creó pero el portal no recibió respuesta y
+                // reintenta; así se reconoce el bill existente en vez de duplicar o dar
+                // "invalid reference" (la OC ya quedó Fully Billed).
+                if (uuidFactura) {
+                    try {
+                        var billDupRows = query.runSuiteQL({
+                            query: "SELECT id FROM transaction WHERE type = 'VendBill' AND tranid = ?",
+                            params: [String(uuidFactura)]
+                        }).asMappedResults();
+                        if (billDupRows && billDupRows.length > 0) {
+                            log.audit('createVendorBill: bill ya existente (idempotente)', { uuidFactura, vendorBillId: billDupRows[0].id });
+                            return {
+                                success: true,
+                                alreadyExists: true,
+                                vendorBillId: billDupRows[0].id,
+                                message: 'La factura ya estaba registrada en NetSuite; no se duplicó.'
+                            };
+                        }
+                    } catch (billDupErr) {
+                        log.error('createVendorBill: no se pudo verificar duplicado', billDupErr.message);
+                    }
+                }
+
                 const vendorBill = record.transform({
                     fromType: fromType,
                     fromId: fromId,
@@ -274,6 +298,25 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                         success: false,
                         error: 'Faltan campos requeridos: vendorNetsuiteId, uuidFactura, totalFactura'
                     };
+                }
+
+                // Idempotencia: no duplicar si ya existe un VendorBill con este UUID (tranid).
+                try {
+                    var stdDupRows = query.runSuiteQL({
+                        query: "SELECT id FROM transaction WHERE type = 'VendBill' AND tranid = ?",
+                        params: [String(uuidFactura)]
+                    }).asMappedResults();
+                    if (stdDupRows && stdDupRows.length > 0) {
+                        log.audit('createStandaloneVendorBill: bill ya existente (idempotente)', { uuidFactura, vendorBillId: stdDupRows[0].id });
+                        return {
+                            success: true,
+                            alreadyExists: true,
+                            vendorBillId: stdDupRows[0].id,
+                            message: 'La factura ya estaba registrada en NetSuite; no se duplicó.'
+                        };
+                    }
+                } catch (stdDupErr) {
+                    log.error('createStandaloneVendorBill: no se pudo verificar duplicado', stdDupErr.message);
                 }
 
                 const vendorBill = record.create({

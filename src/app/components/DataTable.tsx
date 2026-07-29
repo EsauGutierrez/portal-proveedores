@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Search, X, UploadCloud, FileText, CheckCircle, AlertTriangle, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, X, UploadCloud, FileText, CheckCircle, AlertTriangle, Loader2, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 
 // --- Helper para formatear moneda ---
 const formatCurrency = (number) => {
@@ -273,6 +273,44 @@ export const DataTable = ({ title, data, uploadedBy = null, supplierUserId = nul
   const handleOpenPaymentModal = (payment) => { setSelectedItem(payment); setIsPaymentModalOpen(true); };
   const handleClosePaymentModal = () => setIsPaymentModalOpen(false);
   const handleOpenSyncErrorModal = (message: string) => { setSyncErrorMessage(message); setIsSyncErrorModalOpen(true); };
+
+  const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
+  // Reenvío de factura por el propio proveedor (dueño). Al éxito recargamos para reflejar
+  // el nuevo estado; si falla, mostramos el motivo en el modal de error existente.
+  const handleRetryInvoice = async (invoiceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!invoiceId || retryingInvoiceId) return;
+    setRetryingInvoiceId(invoiceId);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/invoices/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ invoiceId }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        handleOpenSyncErrorModal(d.message || 'No se pudo reenviar la factura. Intenta de nuevo.');
+        setRetryingInvoiceId(null);
+      }
+    } catch {
+      handleOpenSyncErrorModal('Error de conexión al reenviar la factura. Intenta de nuevo.');
+      setRetryingInvoiceId(null);
+    }
+  };
+  const RetryInvoiceButton = ({ invoiceId }: { invoiceId: string }) => (
+    <button
+      onClick={(e) => handleRetryInvoice(invoiceId, e)}
+      disabled={retryingInvoiceId === invoiceId}
+      className="inline-flex items-center gap-1 text-xs text-orange-700 hover:text-orange-900 font-semibold leading-none disabled:opacity-50"
+      title="Reenviar la factura a NetSuite"
+    >
+      {retryingInvoiceId === invoiceId ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+      Reenviar
+    </button>
+  );
   const handleCloseSyncErrorModal = () => setIsSyncErrorModalOpen(false);
 
   const SortableHeader = ({ columnKey, children, className = '' }) => {
@@ -372,7 +410,10 @@ export const DataTable = ({ title, data, uploadedBy = null, supplierUserId = nul
                           ) : item.invoice?.syncStatus === 'FAILED' ? (
                             <span className="inline-flex flex-col items-center gap-1">
                               <span className="text-red-700 italic text-xs font-semibold px-2 py-1 bg-red-100 rounded-md whitespace-nowrap">Factura con error</span>
-                              <button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.invoice?.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button>
+                              <div className="flex items-center gap-2">
+                                <button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.invoice?.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button>
+                                <RetryInvoiceButton invoiceId={item.invoice?.id} />
+                              </div>
                             </span>
                           ) : (
                             <button
@@ -384,7 +425,7 @@ export const DataTable = ({ title, data, uploadedBy = null, supplierUserId = nul
                           )}
                         </td>
                       )}
-                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Sincronizada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex flex-col items-center gap-1"><span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span><button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button></span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En proceso</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
+                      {isInvoiceTable && <><td className="px-4 py-2 text-center">{item.syncStatus === 'SYNCED' ? (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Sincronizada</span>) : item.syncStatus === 'FAILED' ? (<span className="inline-flex flex-col items-center gap-1"><span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>Con error</span><div className="flex items-center gap-2"><button onClick={(e) => { e.stopPropagation(); handleOpenSyncErrorModal(item.syncError || ''); }} className="text-xs text-red-600 underline hover:text-red-800 leading-none">Ver error</button><RetryInvoiceButton invoiceId={item.id} /></div></span>) : (<span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse"></span>En proceso</span>)}</td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.pdfUrl, '_blank'); }} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver PDF</button></td><td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); window.open(item.xmlUrl, '_blank'); }} className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Ver XML</button></td></>}
                       {isPaymentTable && (<td className="px-4 py-2 text-center"><button onClick={(e) => { e.stopPropagation(); handleOpenPaymentModal(item); }} className="bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold py-1 px-3 rounded-md transition-colors duration-200">Subir Comprobante</button></td>)}
                     </tr>
                     {canExpand && isExpanded && (

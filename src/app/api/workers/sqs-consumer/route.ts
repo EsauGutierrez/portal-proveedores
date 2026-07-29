@@ -196,10 +196,18 @@ export async function POST(request: Request) {
                 }
 
             } catch (nsError: any) {
-                console.error(`[Worker] Excepción irrecuperable al llamar a NetSuite para factura ${invoiceId}:`, nsError);
-                await updateSyncStatus(invoiceId, 'FAILED', `Excepción de red/ERP: ${nsError.message}`);
+                // Distinguir TIMEOUT (resultado incierto: la factura pudo haberse creado) de
+                // otras excepciones de red. En ambos casos queda FAILED (para poder reenviar),
+                // pero con un MOTIVO claro y accionable para el usuario. Al reenviar, la
+                // idempotencia del RESTlet reconoce el bill si ya existía y lo marca SYNCED.
+                const isTimeout = nsError?.name === 'NetSuiteTimeout' || nsError?.name === 'AbortError';
+                const motivo = isTimeout
+                    ? 'Se agotó el tiempo de espera con NetSuite. La factura pudo haberse registrado; presiona "Reenviar" para verificar y completar la sincronización.'
+                    : `No se pudo conectar con NetSuite: ${nsError.message}. Presiona "Reenviar" para intentar de nuevo.`;
+                console.error(`[Worker] ${isTimeout ? 'TIMEOUT' : 'Excepción'} al llamar a NetSuite para factura ${invoiceId}:`, nsError);
+                await updateSyncStatus(invoiceId, 'FAILED', motivo);
                 // Re-tiramos el error SOLO si queremos que SQS reintente el mensaje completo más tarde
-                // throw nsError; 
+                // throw nsError;
             }
         } // End For Each Record
 

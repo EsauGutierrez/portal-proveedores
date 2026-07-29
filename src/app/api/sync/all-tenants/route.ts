@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/prisma';
 import { syncPurchaseOrdersForTenant } from '../../../lib/syncPurchaseOrdersForTenant';
 import { syncSuppliersForTenant } from '../../../lib/syncSuppliersForTenant';
+import { reconcileInvoicesForTenant } from '../../../lib/reconcileInvoices';
 
 export async function GET(request: Request) {
   const apiKey = request.headers.get('x-sync-key');
@@ -52,6 +53,16 @@ export async function GET(request: Request) {
     } catch (err: any) {
       console.error(`[SYNC ALL] ✗ Error sync OC ${tenant.name}: ${err.message}`);
       results.push({ tenantId: tenant.id, tenantName: tenant.name, status: 'FAILED', error: err.message });
+    }
+
+    // 3. Reconciliar facturas ↔ NetSuite (adopta bills creados en timeout; marca los eliminados)
+    try {
+      const rec = await reconcileInvoicesForTenant(tenant.id, tenant as any, 'sistema', 'SCHEDULED');
+      if (rec.adopted > 0 || rec.deleted > 0) {
+        console.log(`[SYNC ALL] ✓ Reconciliación ${tenant.name}: ${rec.adopted} adoptadas, ${rec.deleted} eliminadas en ERP`);
+      }
+    } catch (err: any) {
+      console.error(`[SYNC ALL] ✗ Error reconciliación facturas ${tenant.name}: ${err.message}`);
     }
   }
 
