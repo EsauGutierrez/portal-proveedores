@@ -115,6 +115,13 @@ export async function invokeRestlet(scriptId: string, deployId: string, creds: N
   const authHeader = oauth.toHeader(oauth.authorize(request_data, token));
   authHeader.Authorization += `, realm="${accountId}"`;
 
+  // Timeout controlado: si NetSuite no responde a tiempo, abortamos con un error
+  // reconocible (name='NetSuiteTimeout'). El worker lo trata como resultado INCIERTO
+  // (la operación pudo haberse completado), no como un fallo definitivo.
+  const timeoutMs = Number(process.env.NETSUITE_TIMEOUT_MS) || 60000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const fetchOptions: RequestInit = {
       method: method,
@@ -122,6 +129,7 @@ export async function invokeRestlet(scriptId: string, deployId: string, creds: N
         'Content-Type': 'application/json',
         'Authorization': authHeader.Authorization,
       },
+      signal: controller.signal,
     };
 
     if (body && (method === 'POST' || method === 'PUT')) {
@@ -138,8 +146,17 @@ export async function invokeRestlet(scriptId: string, deployId: string, creds: N
 
     const data = await response.json();
     return data;
-  } catch (error) {
+  } catch (error: any) {
+    // fetch abortado por el timeout → error de resultado incierto
+    if (error?.name === 'AbortError') {
+      console.error(`Timeout al invocar RESTlet de NetSuite (${timeoutMs}ms).`);
+      const timeoutErr = new Error(`Tiempo de espera excedido con NetSuite tras ${Math.round(timeoutMs / 1000)}s.`);
+      timeoutErr.name = 'NetSuiteTimeout';
+      throw timeoutErr;
+    }
     console.error('Error al invocar RESTlet:', error);
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
 }

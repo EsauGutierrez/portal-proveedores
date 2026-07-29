@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Loader2, TrendingUp, CheckCircle, Clock, AlertTriangle, Users,
     Building2, FileText, FileCheck, XCircle, Bell, ArrowRight,
-    DollarSign, UserPlus, ShieldCheck, ShieldAlert, ShieldX, CalendarDays
+    DollarSign, UserPlus, ShieldCheck, ShieldAlert, ShieldX, CalendarDays, RefreshCw
 } from 'lucide-react';
 import {
     BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -83,25 +83,40 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
     const [metrics, setMetrics] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [reconciling, setReconciling] = useState(false);
+    const [reconcileMsg, setReconcileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    useEffect(() => {
-        const fetchMetrics = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const res = await fetch('/api/metrics', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) throw new Error('Error al obtener métricas del dashboard');
-                const data = await res.json();
-                setMetrics(data);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchMetrics();
-    }, [user]);
+    const loadMetrics = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/metrics', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) throw new Error('Error al obtener métricas del dashboard');
+            setMetrics(await res.json());
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => { loadMetrics(); }, [user]);
+
+    const handleReconcile = async () => {
+        setReconciling(true);
+        setReconcileMsg(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/admin/sync/reconcile-invoices', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+            const d = await res.json();
+            if (!res.ok) throw new Error(d.message || 'No se pudo reconciliar.');
+            setReconcileMsg({ type: 'success', text: d.message || 'Reconciliación completada.' });
+            await loadMetrics();
+        } catch (err: any) {
+            setReconcileMsg({ type: 'error', text: err.message });
+        } finally {
+            setReconciling(false);
+        }
+    };
 
     if (isLoading) return (
         <div className="flex justify-center items-center h-64">
@@ -306,6 +321,37 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
                         <MetricCard title="Pendientes" value={metrics.facturasPendientes} icon={Clock} colorClass="text-yellow-600" borderClass="border-yellow-500" />
                         <MetricCard title="Monto Facturado" value={metrics.montoTotalAprobado} icon={TrendingUp} colorClass="text-purple-600" borderClass="border-purple-500" />
                     </div>
+                </div>
+
+                {/* Reconciliación de facturas con NetSuite */}
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div
+                            onClick={onNavigate ? () => onNavigate('facturas_admin') : undefined}
+                            className={`flex items-center gap-3 ${onNavigate ? 'cursor-pointer' : ''}`}
+                        >
+                            <div className={`w-11 h-11 rounded-lg flex items-center justify-center ${((metrics.facturasPendientes || 0) + (metrics.facturasFallidas || 0)) > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-gray-800 leading-none">{(metrics.facturasPendientes || 0) + (metrics.facturasFallidas || 0)}</p>
+                                <p className="text-xs text-gray-500 mt-1">Facturas sin sincronizar <span className="text-gray-400">(pendientes + con error)</span></p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleReconcile}
+                            disabled={reconciling}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors self-start sm:self-auto"
+                            title="Verifica el estado real de las facturas en NetSuite y corrige las divergencias"
+                        >
+                            {reconciling ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            {reconciling ? 'Reconciliando…' : 'Reconciliar ahora'}
+                        </button>
+                    </div>
+                    {reconcileMsg && (
+                        <p className={`text-xs mt-3 ${reconcileMsg.type === 'success' ? 'text-green-700' : 'text-red-600'}`}>{reconcileMsg.text}</p>
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-2">La reconciliación también corre automáticamente en cada sincronización programada. El detalle queda en el Log de Sincronización.</p>
                 </div>
 
                 {/* Gráficos */}
