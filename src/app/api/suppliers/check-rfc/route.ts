@@ -15,7 +15,7 @@ function isValidRFC(rfc: string) {
 }
 
 export async function GET(request: Request) {
-  const auth = requireAuth(request, ['ADMIN', 'TENANT_ADMIN']);
+  const auth = await requireAuth(request, ['ADMIN', 'TENANT_ADMIN']);
   if (auth.error) return auth.error;
   const { decoded } = auth;
 

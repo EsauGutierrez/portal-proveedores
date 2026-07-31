@@ -24,7 +24,7 @@ function isValidRFC(rfc: string) {
 // Función para obtener proveedores, filtrando por estado y tenant
 export async function GET(request: Request) {
   try {
-    const auth = requireAuth(request, ['ADMIN', 'TENANT_ADMIN', 'SUPERADMIN']);
+    const auth = await requireAuth(request, ['ADMIN', 'TENANT_ADMIN', 'SUPERADMIN']);
     if (auth.error) return auth.error;
     const { decoded } = auth;
 

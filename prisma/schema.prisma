@@ -72,6 +72,10 @@ model User {
   passwordResetExpires DateTime?
   failedLoginAttempts  Int                 @default(0)
   lockedUntil          DateTime?
+  // Se incluye en el JWT al iniciar sesión. Incrementarlo invalida TODOS los
+  // tokens emitidos antes del cambio (logout global / respuesta a cuenta
+  // comprometida), sin necesidad de una tabla de tokens revocados.
+  tokenVersion         Int                 @default(0)
   invoices             Invoice[]
   paymentComplements   PaymentComplement[]
   purchaseOrders       PurchaseOrder[]

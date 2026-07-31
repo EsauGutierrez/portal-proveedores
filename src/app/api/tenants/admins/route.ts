@@ -7,7 +7,7 @@ import { requireAuth } from '../../../lib/auth';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 export async function POST(request: Request) {
-    const { error } = requireAuth(request, ['SUPERADMIN']);
+    const { error } = await requireAuth(request, ['SUPERADMIN']);
     if (error) return error;
 
     try {

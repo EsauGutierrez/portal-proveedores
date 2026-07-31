@@ -144,7 +144,7 @@ const DashboardPage = ({ user, onLogout }) => {
             case 'pagos': return <PaymentComplementsPage user={user} />;
             case 'pagos_masivos': return <BulkPaymentComplementsPage user={user} />;
             case 'mis_documentos': return <SupplierDocumentsPage user={user} />;
-            case 'perfil': return <ProfilePage />;
+            case 'perfil': return <ProfilePage onLogout={onLogout} />;
             case 'documentacion': return <DocumentationPage />;
             case 'proveedores': return <SupplierApprovalPage initialFilter={viewFilter} />;
             case 'subsidiarias': return <SubsidiariesPage />;

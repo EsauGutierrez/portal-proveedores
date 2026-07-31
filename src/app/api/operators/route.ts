@@ -7,7 +7,7 @@ import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../lib/passwordPoli
 
 // GET /api/operators — listar cargadores del tenant
 export async function GET(request: Request) {
-  const { decoded, error } = requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
+  const { decoded, error } = await requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
   if (error) return error;
 
   const operators = await prisma.user.findMany({
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
 // POST /api/operators — crear cargador
 export async function POST(request: Request) {
-  const { decoded, error } = requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
+  const { decoded, error } = await requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
   if (error) return error;
 
   const { name, email, password } = await request.json();

@@ -4,6 +4,7 @@
 
 import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
+import { prisma } from './prisma';
 
 export type DecodedToken = {
   userId: string;
@@ -13,6 +14,7 @@ export type DecodedToken = {
   assignedSupplierIds?: string[];
   email?: string;
   name?: string;
+  tokenVersion?: number;
 };
 
 export type AuthResult =
@@ -22,9 +24,11 @@ export type AuthResult =
 /**
  * Extrae y valida el JWT del header Authorization: Bearer <token>.
  * Si se pasa allowedRoles, además exige que decoded.role esté en esa lista.
+ * Verifica tokenVersion contra la BD: si no coincide, el token fue invalidado
+ * (logout global o cambio de contraseña) aunque no haya expirado.
  * Devuelve { decoded } en éxito o { error } con la respuesta 401/403 ya armada.
  */
-export function requireAuth(request: Request, allowedRoles?: string[]): AuthResult {
+export async function requireAuth(request: Request, allowedRoles?: string[]): Promise<AuthResult> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return { error: NextResponse.json({ message: 'No autorizado.' }, { status: 401 }) };
@@ -39,6 +43,16 @@ export function requireAuth(request: Request, allowedRoles?: string[]): AuthResu
 
   if (allowedRoles && !allowedRoles.includes(decoded.role)) {
     return { error: NextResponse.json({ message: 'Acceso denegado.' }, { status: 403 }) };
+  }
+
+  if (decoded.tokenVersion !== undefined) {
+    const current = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { tokenVersion: true },
+    });
+    if (!current || current.tokenVersion !== decoded.tokenVersion) {
+      return { error: NextResponse.json({ message: 'Tu sesión fue cerrada. Inicia sesión de nuevo.' }, { status: 401 }) };
+    }
   }
 
   return { decoded };

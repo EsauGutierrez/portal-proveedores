@@ -5,7 +5,7 @@ import { requireAuth } from '../../../lib/auth';
 
 // PATCH /api/operators/[id] — actualizar nombre y/o email
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { decoded, error } = requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
+  const { decoded, error } = await requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
   if (error) return error;
 
   const { id } = await params;
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 // DELETE /api/operators/[id] — eliminar cargador y sus asignaciones
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { decoded, error } = requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
+  const { decoded, error } = await requireAuth(request, ['TENANT_ADMIN', 'SUPERADMIN']);
   if (error) return error;
 
   const { id } = await params;

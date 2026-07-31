@@ -174,10 +174,13 @@ export async function POST(request: Request) {
         firstLogin: user.firstLogin,
         subscriptionWarning: isInGrace,
         assignedSupplierIds,
+        tokenVersion: user.tokenVersion,
       },
       process.env.JWT_SECRET!,
       {
-        expiresIn: '1d',
+        // TTL corto + tokenVersion: reduce la ventana de una sesión robada y permite
+        // invalidar todos los tokens de un usuario (logout global) sin más infraestructura.
+        expiresIn: '8h',
       }
     );
 

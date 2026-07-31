@@ -219,6 +219,18 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
                     <p className="text-gray-500 mt-1 text-sm">Aquí tienes un resumen de tu actividad en el portal.</p>
                 </div>
 
+                {/* Alertas */}
+                {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0 || alertas.proveedoresEnLista69b > 0) && (
+                    <div className="space-y-2">
+                        {alertas.proveedoresEnLista69b > 0 && (
+                            <AlertBanner count={alertas.proveedoresEnLista69b} label="proveedores detectados en Lista 69B del SAT" color="red" onClick={onNavigate ? () => onNavigate('proveedores', 'lista69b') : undefined} />
+                        )}
+                        <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" color="amber" onClick={onNavigate ? () => onNavigate('proveedores', 'pendiente') : undefined} />
+                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" color="red" onClick={onNavigate ? () => onNavigate('facturas_admin') : undefined} />
+                        <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" color="blue" />
+                    </div>
+                )}
+
                 {/* ── Suscripción ─────────────────────────────────────────── */}
                 {hasSuscripcion && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -286,18 +298,6 @@ const OverviewPage = ({ user, onNavigate }: { user: any, onNavigate?: (view: str
                                 );
                             })()}
                         </div>
-                    </div>
-                )}
-
-                {/* Alertas */}
-                {(alertas.proveedoresSinAprobar > 0 || alertas.facturasFallidas > 0 || alertas.proveedoresEnLista69b > 0) && (
-                    <div className="space-y-2">
-                        {alertas.proveedoresEnLista69b > 0 && (
-                            <AlertBanner count={alertas.proveedoresEnLista69b} label="proveedores detectados en Lista 69B del SAT" color="red" onClick={onNavigate ? () => onNavigate('proveedores', 'lista69b') : undefined} />
-                        )}
-                        <AlertBanner count={alertas.proveedoresSinAprobar} label="proveedores pendientes de aprobación" color="amber" onClick={onNavigate ? () => onNavigate('proveedores', 'pendiente') : undefined} />
-                        <AlertBanner count={alertas.facturasFallidas} label="facturas con error de sincronización" color="red" onClick={onNavigate ? () => onNavigate('facturas_admin') : undefined} />
-                        <AlertBanner count={alertas.facturasSinProcesar} label="facturas pendientes de procesar" color="blue" />
                     </div>
                 )}
 

@@ -11,7 +11,7 @@ import { sendEmail } from '../../../lib/mailer';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 export async function POST(request: Request) {
-  const { decoded, error } = requireAuth(request);
+  const { decoded, error } = await requireAuth(request);
   if (error) return error;
 
   // Rate limit por usuario: 5 intentos cada 15 minutos, evita fuerza bruta contra la contraseña actual
@@ -50,9 +50,11 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+    // tokenVersion++ invalida cualquier JWT emitido antes de este cambio (incluida
+    // la sesión actual, que el frontend cierra explícitamente tras esta respuesta).
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, tokenVersion: { increment: 1 } },
     });
 
     if (user.email) {

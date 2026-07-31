@@ -7,7 +7,7 @@ import { requireAuth } from '../../../lib/auth';
 import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../../../lib/passwordPolicy';
 
 export async function POST(request: Request) {
-  const { decoded, error } = requireAuth(request);
+  const { decoded, error } = await requireAuth(request);
   if (error) return error;
   const { userId } = decoded;
 
@@ -21,12 +21,14 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Actualizar la contraseña y marcar que ya no es el primer login
+    // Actualizar la contraseña y marcar que ya no es el primer login.
+    // tokenVersion++ invalida cualquier JWT emitido antes de este cambio.
     await prisma.user.update({
       where: { id: userId },
       data: {
         password: hashedPassword,
         firstLogin: false,
+        tokenVersion: { increment: 1 },
       },
     });
 

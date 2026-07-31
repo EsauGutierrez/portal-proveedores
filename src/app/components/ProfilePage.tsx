@@ -279,7 +279,7 @@ const ErrorModal = ({ isOpen, message, onClose }) => {
 };
 
 // --- Componente Modal para Cambiar Contraseña ---
-const ChangePasswordModal = ({ isOpen, onClose }) => {
+const ChangePasswordModal = ({ isOpen, onClose, onLogout }) => {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -350,11 +350,12 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           <div className="p-6 text-center">
             <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
             <p className="text-gray-700 text-sm">Tu contraseña se actualizó correctamente.</p>
+            <p className="text-gray-500 text-xs mt-2">Por seguridad, tu sesión se cerrará. Inicia sesión con tu nueva contraseña.</p>
             <button
-              onClick={handleClose}
+              onClick={onLogout}
               className="mt-6 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
             >
-              Cerrar
+              Ir a iniciar sesión
             </button>
           </div>
         ) : (
@@ -429,7 +430,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
 };
 
 // --- Componente Principal de la Página de Perfil ---
-const ProfilePage = () => {
+const ProfilePage = ({ onLogout }: { onLogout?: () => void }) => {
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -437,6 +438,7 @@ const ProfilePage = () => {
   const [uploadingDocs, setUploadingDocs] = useState<Record<string, boolean>>({});
   const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
   const [ocrModalConfig, setOcrModalConfig] = useState({ isOpen: false, data: null, isMatch: false, wasRejected: false, documentType: '' });
   const [docRequirements, setDocRequirements] = useState<any[]>([]);
   const [editFormData, setEditFormData] = useState({
@@ -492,6 +494,23 @@ const ProfilePage = () => {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  const handleLogoutAll = async () => {
+    if (!window.confirm('¿Cerrar todas tus sesiones activas? Tendrás que iniciar sesión de nuevo en todos tus dispositivos.')) return;
+    setIsLoggingOutAll(true);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/auth/logout-all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+    } catch {
+      // Aunque falle la llamada, seguimos cerrando la sesión local para no dejar al usuario en un estado inconsistente.
+    } finally {
+      setIsLoggingOutAll(false);
+      onLogout?.();
+    }
+  };
 
   const handleEditClick = () => {
     if (profile?.supplierProfile) {
@@ -838,6 +857,15 @@ const ProfilePage = () => {
             <Lock className="w-4 h-4 mr-2" />
             Cambiar Contraseña
           </button>
+          <button
+            onClick={handleLogoutAll}
+            disabled={isLoggingOutAll}
+            title="Invalida el acceso desde cualquier otro dispositivo o navegador donde hayas iniciado sesión"
+            className="w-full md:w-auto flex items-center justify-center bg-white border border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-700 text-gray-700 font-bold py-2 px-4 rounded-lg transition duration-300 disabled:opacity-50"
+          >
+            <Lock className="w-4 h-4 mr-2" />
+            {isLoggingOutAll ? 'Cerrando...' : 'Cerrar sesión en todos los dispositivos'}
+          </button>
         </div>
       </div>
 
@@ -853,6 +881,7 @@ const ProfilePage = () => {
       <ChangePasswordModal
         isOpen={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}
+        onLogout={onLogout}
       />
 
       <OcrResultModal

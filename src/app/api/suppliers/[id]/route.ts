@@ -16,7 +16,7 @@ export async function GET(
 ) {
   try {
     // Sin allowedRoles: el acceso depende de la relación con el recurso (dueño, cargador asignado, tenant, superadmin)
-    const auth = requireAuth(request);
+    const auth = await requireAuth(request);
     if (auth.error) return auth.error;
     const { decoded } = auth;
 
@@ -61,7 +61,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = requireAuth(request, ['ADMIN', 'TENANT_ADMIN', 'SUPERADMIN']);
+    const auth = await requireAuth(request, ['ADMIN', 'TENANT_ADMIN', 'SUPERADMIN']);
     if (auth.error) return auth.error;
     const { decoded } = auth;
 

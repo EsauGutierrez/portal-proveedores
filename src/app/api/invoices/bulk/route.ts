@@ -128,6 +128,21 @@ export async function POST(request: Request) {
 
   if (!zipFile) return NextResponse.json({ message: 'Se requiere un archivo ZIP.' }, { status: 400 });
 
+  // Proveedores asignados al CARGADOR (para validar cada factura del ZIP contra
+  // OperatorAssignment). Sin esto, un CARGADOR podía cargar facturas para
+  // cualquier proveedor del tenant con solo indicar su userId o su RFC.
+  let assignedSupplierUserIds: Set<string> | null = null;
+  if (isCargador) {
+    const assignments = await prisma.operatorAssignment.findMany({
+      where: { operatorId: decoded.userId },
+      select: { supplierProfile: { select: { userId: true } } },
+    });
+    assignedSupplierUserIds = new Set(assignments.map(a => a.supplierProfile.userId));
+    if (supplierUserId && !assignedSupplierUserIds.has(supplierUserId)) {
+      return NextResponse.json({ message: 'No tienes asignado a este proveedor.' }, { status: 403 });
+    }
+  }
+
   // Crear el BulkUploadJob
   const job = await prisma.bulkUploadJob.create({
     data: {
@@ -183,6 +198,14 @@ export async function POST(request: Request) {
         select: { userId: true },
       });
       if (profile) invoiceUserId = profile.userId;
+    }
+
+    // El proveedor resuelto (por parámetro o por hint de RFC) debe estar asignado
+    // al CARGADOR. Se valida por archivo porque el hint de RFC puede resolver a un
+    // proveedor distinto al indicado en `supplierUserId`.
+    if (isCargador && !assignedSupplierUserIds!.has(invoiceUserId)) {
+      results.push({ xmlName: pair.xmlName, uuid: cfdi.uuid, status: 'error', message: 'No tienes asignado a este proveedor.' });
+      continue;
     }
 
     // Matching en cascada: buscar OC

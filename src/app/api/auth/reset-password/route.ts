@@ -44,6 +44,7 @@ export async function POST(request: Request) {
         firstLogin: false,
         passwordResetToken: null,
         passwordResetExpires: null,
+        tokenVersion: { increment: 1 }, // invalida cualquier sesión activa previa
       },
     });
 

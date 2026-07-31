@@ -125,17 +125,62 @@ export async function GET(request: Request) {
 // --- Función POST para crear una factura (con validación de XML) ---
 export async function POST(request: Request) {
   try {
+    // --- AUTENTICACIÓN Y AUTORIZACIÓN ---
+    // Este endpoint NO tenía verificación de token: confiaba ciegamente en el campo
+    // `userId` del formulario. Cualquiera podía crear facturas a nombre de cualquier
+    // proveedor. Ahora se exige JWT y el dueño de la factura se resuelve del lado
+    // del servidor, nunca del formulario.
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ message: 'No autorizado: token no proporcionado.' }, { status: 401 });
+    }
+    let decoded: { userId: string; role: string; tenantId?: string };
+    try {
+      decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET!) as any;
+    } catch {
+      return NextResponse.json({ message: 'No autorizado: token inválido o expirado.' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const receptionIdsRaw = formData.get('receptionIds') as string | null; // JSON array string
     const receptionIds: string[] = receptionIdsRaw ? JSON.parse(receptionIdsRaw) : [];
     const purchaseOrderId = formData.get('purchaseOrderId') as string | null;
-    const userId = formData.get('userId') as string;
-    const uploadedBy = formData.get('uploadedBy') as string | null;
+    const requestedUserId = formData.get('userId') as string | null; // solo usado para CARGADOR
     const xmlFile = formData.get('xmlFile') as File;
     const pdfFile = formData.get('pdfFile') as File;
 
-    if ((!receptionIds.length && !purchaseOrderId) || !userId || !xmlFile || !pdfFile) {
+    if ((!receptionIds.length && !purchaseOrderId) || !xmlFile || !pdfFile) {
       return NextResponse.json({ message: 'Faltan datos requeridos.' }, { status: 400 });
+    }
+
+    // --- RESOLVER EL DUEÑO REAL DE LA FACTURA (nunca confiar en el formulario) ---
+    let userId: string;
+    let uploadedBy: string | null = null;
+
+    if (decoded.role === 'SUPPLIER') {
+      // El proveedor solo puede subir facturas para sí mismo.
+      userId = decoded.userId;
+    } else if (decoded.role === 'CARGADOR') {
+      if (!requestedUserId) {
+        return NextResponse.json({ message: 'Falta especificar el proveedor (userId) para la carga.' }, { status: 400 });
+      }
+      const targetProfile = await prisma.supplierProfile.findFirst({
+        where: { userId: requestedUserId },
+        select: { id: true },
+      });
+      if (!targetProfile) {
+        return NextResponse.json({ message: 'Proveedor no encontrado.' }, { status: 404 });
+      }
+      const assignment = await prisma.operatorAssignment.findFirst({
+        where: { operatorId: decoded.userId, supplierProfileId: targetProfile.id },
+      });
+      if (!assignment) {
+        return NextResponse.json({ message: 'No tienes asignado a este proveedor.' }, { status: 403 });
+      }
+      userId = requestedUserId;
+      uploadedBy = decoded.userId;
+    } else {
+      return NextResponse.json({ message: 'Tu rol no tiene permiso para subir facturas.' }, { status: 403 });
     }
 
     // --- EXTRACCIÓN BÁSICA DEL XML ---
@@ -281,24 +326,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Error al subir los archivos a AWS S3.', error: (uploadError as Error).message }, { status: 500 });
     }
 
-    // --- OBTENER EL TENANT ID ---
+    // --- OBTENER EL TENANT ID Y VALIDAR PROPIEDAD/AISLAMIENTO ---
+    // La OC/recepción a facturar debe pertenecer al mismo tenant del usuario y al
+    // proveedor resuelto (userId). Sin esto, cualquiera podía pasar un id de OC de
+    // otro proveedor/empresa y quedar facturado a su nombre.
     let tenantIdStr = '';
     if (receptionIds.length) {
       const receptionContext = await prisma.reception.findUnique({
         where: { id: receptionIds[0] },
-        select: { tenantId: true }
+        select: { tenantId: true, purchaseOrder: { select: { userId: true } } }
       });
       if (!receptionContext) {
         return NextResponse.json({ message: 'La recepción asociada no existe.' }, { status: 404 });
+      }
+      if (decoded.tenantId && receptionContext.tenantId !== decoded.tenantId) {
+        return NextResponse.json({ message: 'La recepción no pertenece a tu empresa.' }, { status: 403 });
+      }
+      if (receptionContext.purchaseOrder?.userId !== userId) {
+        return NextResponse.json({ message: 'La recepción no pertenece a este proveedor.' }, { status: 403 });
       }
       tenantIdStr = receptionContext.tenantId;
     } else if (purchaseOrderId) {
       const poContext = await prisma.purchaseOrder.findUnique({
         where: { id: purchaseOrderId },
-        select: { tenantId: true }
+        select: { tenantId: true, userId: true }
       });
       if (!poContext) {
         return NextResponse.json({ message: 'La orden de compra asociada no existe.' }, { status: 404 });
+      }
+      if (decoded.tenantId && poContext.tenantId !== decoded.tenantId) {
+        return NextResponse.json({ message: 'La orden de compra no pertenece a tu empresa.' }, { status: 403 });
+      }
+      if (poContext.userId !== userId) {
+        return NextResponse.json({ message: 'La orden de compra no pertenece a este proveedor.' }, { status: 403 });
       }
       tenantIdStr = poContext.tenantId;
     }

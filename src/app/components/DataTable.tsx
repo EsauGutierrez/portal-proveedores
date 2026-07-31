@@ -92,15 +92,18 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
     } else if (order?.id) {
       formData.append('purchaseOrderId', order.id);
     }
-    // Si es CARGADOR: userId = proveedor (para RFC), uploadedBy = cargador (auditoría)
-    formData.append('userId', supplierUserId || order.userId);
-    if (uploadedBy) formData.append('uploadedBy', uploadedBy);
+    // userId: solo se usa cuando el CARGADOR indica a qué proveedor pertenece la
+    // carga; el servidor valida la asignación y resuelve el dueño real de la
+    // factura a partir del token, nunca de este valor.
+    if (supplierUserId) formData.append('userId', supplierUserId);
     formData.append('xmlFile', xmlFile);
     formData.append('pdfFile', pdfFile);
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/invoices', {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
 
