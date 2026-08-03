@@ -5,9 +5,6 @@ import { prisma } from './prisma';
 import { downloadFileFromS3, uploadBufferToS3, getPresignedUrl } from './s3';
 import { querySuiteQL, invokeRestlet, NetSuiteCredentials } from './netsuite';
 
-const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
-const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
-
 export interface BulkFileResult {
   filename: string;
   complementUUID: string | null;
@@ -189,8 +186,21 @@ export async function processBulkPaymentComplements(
       tokenSecret: user.tenant.netsuiteTokenSecret!,
     } : null;
 
-    const scriptId = (user.tenant as any).netsuiteScriptId || FALLBACK_SCRIPT_ID;
-    const deployId = (user.tenant as any).netsuiteDeployId || FALLBACK_DEPLOY_ID;
+    // Cada tenant tiene su propia cuenta/bundle de NetSuite: no existe un
+    // Script/Deploy ID "por defecto" válido para todos. Si falta, fallamos con
+    // un mensaje claro en vez de usar silenciosamente el de otro cliente.
+    const scriptId = (user.tenant as any).netsuiteScriptId as string | null;
+    const deployId = (user.tenant as any).netsuiteDeployId as string | null;
+    if (!scriptId || !deployId) {
+      await prisma.bulkPaymentComplementLog.update({
+        where: { id: bulkLogId },
+        data: {
+          status: 'FAILED',
+          results: [{ filename: '—', complementUUID: null, invoiceUUID: null, status: 'error', error: 'Este tenant no tiene configurado el Script ID / Deploy ID de NetSuite. Contacta a soporte para configurarlo en Ajustes de Empresa.' }],
+        },
+      });
+      return;
+    }
 
     // ── Fase 1: Parsear XMLs y resolver facturas ──────────────────────────────
     interface ParsedItem {

@@ -7,9 +7,6 @@ import { parseStringPromise } from 'xml2js';
 import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
 import { invokeRestlet, querySuiteQL } from '../../lib/netsuite';
 
-const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
-const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
-
 // GET: Listar complementos de pago del proveedor autenticado
 export async function GET(request: Request) {
   try {
@@ -365,8 +362,14 @@ export async function POST(request: Request) {
       } catch {}
 
       try {
-        const scriptId = tenant.netsuiteScriptId || FALLBACK_SCRIPT_ID;
-        const deployId = tenant.netsuiteDeployId || FALLBACK_DEPLOY_ID;
+        // Cada tenant tiene su propia cuenta/bundle de NetSuite: no existe un
+        // Script/Deploy ID "por defecto" válido para todos. Si falta, fallamos con
+        // un mensaje claro en vez de usar silenciosamente el de otro cliente.
+        if (!tenant.netsuiteScriptId || !tenant.netsuiteDeployId) {
+          throw new Error('Este tenant no tiene configurado el Script ID / Deploy ID de NetSuite. Contacta a soporte para configurarlo en Ajustes de Empresa.');
+        }
+        const scriptId = tenant.netsuiteScriptId;
+        const deployId = tenant.netsuiteDeployId;
         const nsResponse = await invokeRestlet(scriptId, deployId, nsCreds, 'POST', {
           action:            'createVendorPayment',
           vendorNetsuiteId:  vendorNsId,

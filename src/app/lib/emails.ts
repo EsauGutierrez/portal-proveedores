@@ -75,3 +75,76 @@ export function buildLista69bAlertEmail(opts: {
     </div>
   </div>`;
 }
+
+export interface PaidInvoiceEntry {
+  folio: string;
+  total: number;
+  fecha: Date;
+}
+
+/**
+ * Genera el HTML del correo que avisa a un proveedor que una o más de sus
+ * facturas ya fueron pagadas, para que emita su Complemento de Pago (CFDI) si aún no lo ha hecho.
+ */
+export function buildInvoicePaidEmail(opts: {
+  supplierName: string;
+  invoices: PaidInvoiceEntry[];
+  date?: Date;
+}): string {
+  const { supplierName, invoices, date = new Date() } = opts;
+  const dateStr = date.toLocaleDateString('es-MX', { dateStyle: 'long' });
+  const fmt = (n: number) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+
+  const rows = invoices
+    .map(
+      (i) => `
+      <tr style="border-bottom:1px solid #bbf7d0">
+        <td style="padding:11px 16px;font-family:monospace;font-size:13px;color:#374151">${i.folio.slice(-12)}</td>
+        <td style="padding:11px 16px;color:#111827;font-size:14px">${i.fecha.toLocaleDateString('es-MX')}</td>
+        <td style="padding:11px 16px;color:#111827;font-size:14px;text-align:right">${fmt(i.total)}</td>
+      </tr>`
+    )
+    .join('');
+
+  const contextMessage =
+    invoices.length === 1
+      ? 'Te informamos que la siguiente factura ya fue pagada:'
+      : `Te informamos que las siguientes <strong>${invoices.length} facturas</strong> ya fueron pagadas:`;
+
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9fafb;padding:24px">
+    <div style="background:linear-gradient(135deg,#15803d 0%,#22c55e 100%);padding:32px;border-radius:12px 12px 0 0;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">💰</div>
+      <h1 style="color:white;margin:0;font-size:22px;font-weight:700">¡Factura pagada!</h1>
+      <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px">Portal de Proveedores</p>
+    </div>
+
+    <div style="background:white;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+      <p style="color:#374151;font-size:15px;margin-top:0">Hola, <strong>${supplierName}</strong></p>
+      <p style="color:#374151;font-size:15px">${contextMessage}</p>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;overflow:hidden;margin:20px 0">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#dcfce7">
+              <th style="padding:10px 16px;text-align:left;font-size:12px;color:#14532d;text-transform:uppercase;letter-spacing:0.05em;font-weight:700">Factura</th>
+              <th style="padding:10px 16px;text-align:left;font-size:12px;color:#14532d;text-transform:uppercase;letter-spacing:0.05em;font-weight:700">Fecha</th>
+              <th style="padding:10px 16px;text-align:right;font-size:12px;color:#14532d;text-transform:uppercase;letter-spacing:0.05em;font-weight:700">Total</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+
+      <div style="padding:12px 16px;background:#fff7ed;border-left:3px solid #f97316;border-radius:4px;margin-bottom:24px">
+        <p style="color:#9a3412;font-size:13px;margin:0">
+          Si aún no lo has hecho, recuerda subir tu <strong>Complemento de Pago (CFDI)</strong> correspondiente en el portal para cumplir con tus obligaciones fiscales ante el SAT.
+        </p>
+      </div>
+
+      <div style="border-top:1px solid #e5e7eb;padding-top:20px;text-align:center">
+        <p style="color:#9ca3af;font-size:12px;margin:0">Portal de Proveedores &nbsp;·&nbsp; ${dateStr}</p>
+      </div>
+    </div>
+  </div>`;
+}

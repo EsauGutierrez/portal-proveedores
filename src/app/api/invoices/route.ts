@@ -106,6 +106,7 @@ export async function GET(request: Request) {
         recepcion: receptionFolio,
         syncStatus: invoice.syncStatus,
         syncError: invoice.syncError ?? null,
+        paidAt: (invoice as any).paidAt ? (invoice as any).paidAt.toISOString() : null,
         pdfUrl: pdfPresignedUrl || invoice.pdfUrl,
         xmlUrl: xmlPresignedUrl || invoice.xmlUrl,
       };

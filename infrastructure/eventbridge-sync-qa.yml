@@ -29,6 +29,14 @@ Parameters:
         cron(0 6 1 * ? *)   — día 1 de cada mes a las 6am UTC
         rate(5 minutes)     — cada 5 minutos (para pruebas)
 
+  InvoicePaymentsScheduleExpression:
+    Type: String
+    Default: "rate(1 day)"
+    Description: >
+      Frecuencia de verificación de facturas pagadas en NetSuite. Ejemplos:
+        rate(1 day)         — una vez al día
+        rate(5 minutes)     — cada 5 minutos (para pruebas)
+
 Resources:
 
   SyncConnectionQa:
@@ -62,6 +70,16 @@ Resources:
       InvocationEndpoint: !Sub "${AppUrl}/api/sync/lista-69b"
       InvocationRateLimitPerSecond: 1
 
+  InvoicePaymentsApiDestinationQa:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: portal-proveedores-invoice-payments-qa
+      Description: "GET /api/sync/invoice-payments — detecta facturas pagadas en NetSuite y notifica al proveedor (QA)"
+      ConnectionArn: !GetAtt SyncConnectionQa.Arn
+      HttpMethod: GET
+      InvocationEndpoint: !Sub "${AppUrl}/api/sync/invoice-payments"
+      InvocationRateLimitPerSecond: 1
+
   EventBridgeRoleQa:
     Type: AWS::IAM::Role
     Properties:
@@ -83,6 +101,7 @@ Resources:
                 Resource:
                   - !GetAtt SyncApiDestinationQa.Arn
                   - !GetAtt Lista69bApiDestinationQa.Arn
+                  - !GetAtt InvoicePaymentsApiDestinationQa.Arn
 
   OCSyncRuleQa:
     Type: AWS::Events::Rule
@@ -114,6 +133,21 @@ Resources:
             MaximumRetryAttempts: 2
             MaximumEventAgeInSeconds: 3600
 
+  InvoicePaymentsRuleQa:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: portal-proveedores-invoice-payments-qa
+      Description: "Verificación de facturas pagadas en NetSuite y notificación al proveedor — QA"
+      ScheduleExpression: !Ref InvoicePaymentsScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: InvoicePaymentsTargetQa
+          Arn: !GetAtt InvoicePaymentsApiDestinationQa.Arn
+          RoleArn: !GetAtt EventBridgeRoleQa.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
 Outputs:
   RuleName:
     Description: "Nombre de la regla de sync de OC creada"
@@ -130,3 +164,11 @@ Outputs:
   Lista69bEndpoint:
     Description: "Endpoint de Lista 69B que será llamado según el schedule configurado"
     Value: !Sub "${AppUrl}/api/sync/lista-69b"
+
+  InvoicePaymentsRuleName:
+    Description: "Nombre de la regla de facturas pagadas creada"
+    Value: !Ref InvoicePaymentsRuleQa
+
+  InvoicePaymentsEndpoint:
+    Description: "Endpoint de facturas pagadas que será llamado según el schedule configurado"
+    Value: !Sub "${AppUrl}/api/sync/invoice-payments"

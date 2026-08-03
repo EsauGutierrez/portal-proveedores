@@ -226,6 +226,10 @@ model Invoice {
   bulkJobId          String?
   matchMethod        MatchMethod?
   pendingAssignment  Boolean             @default(false)
+  // Se marca cuando el job de sync/invoice-payments detecta que el Vendor Bill
+  // en NetSuite ya quedó totalmente pagado (foreignamountunpaid ~ 0). Dispara la
+  // notificación por correo al proveedor una sola vez (presencia = ya notificado).
+  paidAt             DateTime?
   purchaseOrder      PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
   receptions         Reception[]
   tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)

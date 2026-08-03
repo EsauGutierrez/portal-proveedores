@@ -7,9 +7,6 @@ import { invokeRestlet } from '../../../../lib/netsuite';
 import { getPresignedUrl } from '../../../../lib/s3';
 import { sendEmail } from '../../../../lib/mailer';
 
-const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
-const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -107,8 +104,14 @@ export async function PATCH(
       };
 
       try {
-        const scriptId = tenant?.netsuiteScriptId || FALLBACK_SCRIPT_ID;
-        const deployId = tenant?.netsuiteDeployId || FALLBACK_DEPLOY_ID;
+        // Cada tenant tiene su propia cuenta/bundle de NetSuite: no existe un
+        // Script/Deploy ID "por defecto" válido para todos. Si falta, fallamos con
+        // un mensaje claro en vez de usar silenciosamente el de otro cliente.
+        if (!tenant?.netsuiteScriptId || !tenant?.netsuiteDeployId) {
+          throw new Error('Este tenant no tiene configurado el Script ID / Deploy ID de NetSuite. Contacta a soporte para configurarlo en Ajustes de Empresa.');
+        }
+        const scriptId = tenant.netsuiteScriptId;
+        const deployId = tenant.netsuiteDeployId;
         console.log(`[Approve] Enviando VendorPayment a NetSuite para complemento ${id}`, nsPayload);
         const nsResponse = await invokeRestlet(scriptId, deployId, nsCreds, 'POST', nsPayload);
 

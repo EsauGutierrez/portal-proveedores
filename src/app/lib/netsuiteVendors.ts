@@ -4,9 +4,6 @@
 
 import { querySuiteQL, invokeRestlet, NetSuiteCredentials } from './netsuite';
 
-const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
-const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
-
 export function normalizeRfc(rfc: string): string {
   return (rfc || '').toUpperCase().replace(/\s/g, '').replace(/-/g, '');
 }
@@ -71,8 +68,10 @@ export interface CreateVendorResult {
 }
 
 /**
- * Crea un Vendor en NetSuite vía el RESTlet. Usa el script/deploy del tenant si están
- * configurados, o los valores por defecto del entorno.
+ * Crea un Vendor en NetSuite vía el RESTlet. Requiere el Script/Deploy ID del
+ * tenant: cada tenant tiene su propia cuenta/bundle de NetSuite, así que no existe
+ * un valor "por defecto" válido para todos (usar el de otro cliente sería silenciosamente
+ * incorrecto, no solo un placeholder inocuo).
  */
 export async function createVendorInNetSuite(
   input: CreateVendorInput,
@@ -80,6 +79,13 @@ export async function createVendorInNetSuite(
   scriptId?: string | null,
   deployId?: string | null
 ): Promise<CreateVendorResult> {
+  if (!scriptId || !deployId) {
+    return {
+      success: false,
+      error: 'Este tenant no tiene configurado el Script ID / Deploy ID de NetSuite. Contacta a soporte para configurarlo en Ajustes de Empresa.',
+    };
+  }
+
   const payload = {
     action: 'createVendor',
     companyName: input.companyName,
@@ -90,8 +96,8 @@ export async function createVendorInNetSuite(
   };
 
   const response = await invokeRestlet(
-    scriptId || FALLBACK_SCRIPT_ID,
-    deployId || FALLBACK_DEPLOY_ID,
+    scriptId,
+    deployId,
     creds,
     'POST',
     payload

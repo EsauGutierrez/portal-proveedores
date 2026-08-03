@@ -21,6 +21,14 @@ Parameters:
         rate(4 hours)           — cada 4 horas
         cron(0 12,20 * * ? *)   — a las 6am y 2pm (UTC = CST+6)
 
+  InvoicePaymentsScheduleExpression:
+    Type: String
+    Default: "rate(1 day)"
+    Description: >
+      Frecuencia de verificación de facturas pagadas en NetSuite. Ejemplos:
+        rate(1 day)         — una vez al día
+        rate(30 minutes)    — cada 30 minutos (para pruebas)
+
 Resources:
 
   # Conexión con autenticación: agrega x-sync-key en cada request
@@ -46,7 +54,18 @@ Resources:
       InvocationEndpoint: !Sub "${AppUrl}/api/sync/all-tenants"
       InvocationRateLimitPerSecond: 1
 
-  # Rol IAM que permite a EventBridge invocar el API Destination
+  # Destino HTTP: endpoint que detecta facturas ya pagadas en NetSuite y notifica al proveedor
+  InvoicePaymentsApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: portal-proveedores-invoice-payments
+      Description: "GET /api/sync/invoice-payments — detecta facturas pagadas en NetSuite y notifica al proveedor"
+      ConnectionArn: !GetAtt SyncConnection.Arn
+      HttpMethod: GET
+      InvocationEndpoint: !Sub "${AppUrl}/api/sync/invoice-payments"
+      InvocationRateLimitPerSecond: 1
+
+  # Rol IAM que permite a EventBridge invocar los API Destinations
   EventBridgeRole:
     Type: AWS::IAM::Role
     Properties:
@@ -65,7 +84,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: events:InvokeApiDestination
-                Resource: !GetAtt SyncApiDestination.Arn
+                Resource:
+                  - !GetAtt SyncApiDestination.Arn
+                  - !GetAtt InvoicePaymentsApiDestination.Arn
 
   # EventBridge Rule: dispara el sync según el intervalo configurado
   OCSyncRule:
@@ -83,6 +104,22 @@ Resources:
             MaximumRetryAttempts: 2
             MaximumEventAgeInSeconds: 3600
 
+  # EventBridge Rule: verifica facturas pagadas según el intervalo configurado
+  InvoicePaymentsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: portal-proveedores-invoice-payments
+      Description: "Verificación de facturas pagadas en NetSuite y notificación al proveedor"
+      ScheduleExpression: !Ref InvoicePaymentsScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: InvoicePaymentsTarget
+          Arn: !GetAtt InvoicePaymentsApiDestination.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
 Outputs:
   RuleName:
     Description: "Nombre de la regla creada"
@@ -91,6 +128,14 @@ Outputs:
   SyncEndpoint:
     Description: "Endpoint que será llamado automáticamente"
     Value: !Sub "${AppUrl}/api/sync/all-tenants"
+
+  InvoicePaymentsRuleName:
+    Description: "Nombre de la regla de facturas pagadas creada"
+    Value: !Ref InvoicePaymentsRule
+
+  InvoicePaymentsEndpoint:
+    Description: "Endpoint de facturas pagadas que será llamado automáticamente"
+    Value: !Sub "${AppUrl}/api/sync/invoice-payments"
 
   NextSteps:
     Description: "Para un tenant con schedule propio, despliega eventbridge-sync-per-tenant.yml con su TenantId"

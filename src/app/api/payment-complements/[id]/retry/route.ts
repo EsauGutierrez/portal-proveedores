@@ -7,9 +7,6 @@ import jwt from 'jsonwebtoken';
 import { invokeRestlet } from '../../../../lib/netsuite';
 import { getPresignedUrl } from '../../../../lib/s3';
 
-const FALLBACK_SCRIPT_ID = process.env.NETSUITE_SCRIPT_ID || '3878';
-const FALLBACK_DEPLOY_ID = process.env.NETSUITE_DEPLOY_ID || '1';
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -81,6 +78,16 @@ export async function POST(
       );
     }
 
+    // Cada tenant tiene su propia cuenta/bundle de NetSuite: no existe un
+    // Script/Deploy ID "por defecto" válido para todos. Si falta, fallamos con
+    // un mensaje claro en vez de usar silenciosamente el de otro cliente.
+    if (!tenant.netsuiteScriptId || !tenant.netsuiteDeployId) {
+      return NextResponse.json(
+        { message: 'Este tenant no tiene configurado el Script ID / Deploy ID de NetSuite. Contacta a soporte para configurarlo en Ajustes de Empresa.' },
+        { status: 422 }
+      );
+    }
+
     // Reset a PENDING_SYNC antes de reintentar
     await prisma.paymentComplement.update({
       where: { id },
@@ -115,8 +122,8 @@ export async function POST(
       complementoPDFUrl: complementPdfUrl,
     };
 
-    const scriptId = complement.tenant?.netsuiteScriptId || FALLBACK_SCRIPT_ID;
-    const deployId = complement.tenant?.netsuiteDeployId || FALLBACK_DEPLOY_ID;
+    const scriptId = tenant.netsuiteScriptId;
+    const deployId = tenant.netsuiteDeployId;
     console.log(`[Retry] Reintentando VendorPayment para complemento ${id}`, nsPayload);
     const nsResponse = await invokeRestlet(scriptId, deployId, nsCreds, 'POST', nsPayload);
 

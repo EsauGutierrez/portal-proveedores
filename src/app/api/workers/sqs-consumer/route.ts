@@ -134,8 +134,14 @@ export async function POST(request: Request) {
 
             // 7. Sincronización a NETSUITE mediante RESTlet
             try {
-                const SCRIPT_ID = invoice.tenant.netsuiteScriptId || process.env.NETSUITE_SCRIPT_ID || '3878';
-                const DEPLOY_ID = invoice.tenant.netsuiteDeployId || process.env.NETSUITE_DEPLOY_ID || '1';
+                // Cada tenant tiene su propia cuenta/bundle de NetSuite: no existe un
+                // Script/Deploy ID "por defecto" válido para todos. Si falta, fallamos con
+                // un mensaje claro en vez de usar silenciosamente el de otro cliente.
+                if (!invoice.tenant.netsuiteScriptId || !invoice.tenant.netsuiteDeployId) {
+                    throw new Error('Este tenant no tiene configurado el Script ID / Deploy ID de NetSuite. Contacta a soporte para configurarlo en Ajustes de Empresa.');
+                }
+                const SCRIPT_ID = invoice.tenant.netsuiteScriptId;
+                const DEPLOY_ID = invoice.tenant.netsuiteDeployId;
 
                 const isStandalone = (invoice as any).matchMethod === 'STANDALONE';
 

@@ -574,12 +574,14 @@ WHERE
                                     <input type="password" value={editingTenant.netsuiteTokenSecret || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteTokenSecret: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Script ID (RESTlet)</label>
-                                    <input type="text" value={editingTenant.netsuiteScriptId || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteScriptId: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="Ej: 3878" />
+                                    <label className="block text-sm font-medium text-gray-700">Script ID (RESTlet) *</label>
+                                    <input required type="text" value={editingTenant.netsuiteScriptId || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteScriptId: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="ID del script RESTlet en la cuenta de NetSuite de ESTE cliente" />
+                                    <p className="mt-1 text-xs text-gray-500">Específico de la cuenta de NetSuite de este cliente. No reutilices el de otro tenant.</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Deploy ID</label>
-                                    <input type="text" value={editingTenant.netsuiteDeployId || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteDeployId: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="Ej: 1" />
+                                    <label className="block text-sm font-medium text-gray-700">Deploy ID *</label>
+                                    <input required type="text" value={editingTenant.netsuiteDeployId || ''} onChange={(e) => setEditingTenant({ ...editingTenant, netsuiteDeployId: e.target.value })} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900 bg-white font-medium" placeholder="ID del deployment en la cuenta de NetSuite de ESTE cliente" />
+                                    <p className="mt-1 text-xs text-gray-500">Específico de la cuenta de NetSuite de este cliente. No reutilices el de otro tenant.</p>
                                 </div>
                                 <div className="col-span-1 md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700">Correos de Contacto con Proveedores</label>

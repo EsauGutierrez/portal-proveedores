@@ -142,6 +142,7 @@ export async function GET(request: Request) {
                     pdfUrl,
                     xmlUrl,
                     estadoCentral: inv.syncStatus,
+                    paidAt: inv.paidAt ? inv.paidAt.toISOString() : null,
                 });
             }));
 
@@ -220,6 +221,7 @@ export async function GET(request: Request) {
                 estadoCentral: string;
                 proveedor: string;
                 rfc: string;
+                paidAt: Date | null;
             };
 
             // Run COUNT and DATA queries in parallel
@@ -243,7 +245,8 @@ export async function GET(request: Request) {
                             i."xmlUrl",
                             i."syncStatus"::text AS "estadoCentral",
                             COALESCE(sp."companyName", u.name, 'Desconocido') AS proveedor,
-                            COALESCE(sp.rfc, 'N/A') AS rfc
+                            COALESCE(sp.rfc, 'N/A') AS rfc,
+                            i."paidAt"
                         FROM "Invoice" i
                         JOIN "User" u ON i."userId" = u.id
                         LEFT JOIN "SupplierProfile" sp ON sp."userId" = i."userId"
@@ -262,7 +265,8 @@ export async function GET(request: Request) {
                             CASE WHEN p.status::text = 'REJECTED' THEN 'REJECTED'
                                  ELSE p."netsuiteSyncStatus"::text END AS "estadoCentral",
                             COALESCE(sp."companyName", u.name, 'Desconocido') AS proveedor,
-                            COALESCE(sp.rfc, 'N/A') AS rfc
+                            COALESCE(sp.rfc, 'N/A') AS rfc,
+                            CAST(NULL AS TIMESTAMP) AS "paidAt"
                         FROM "PaymentComplement" p
                         JOIN "User" u ON p."userId" = u.id
                         LEFT JOIN "SupplierProfile" sp ON sp."userId" = p."userId"
@@ -293,6 +297,7 @@ export async function GET(request: Request) {
                     pdfUrl,
                     xmlUrl,
                     estadoCentral: row.estadoCentral,
+                    paidAt: row.paidAt ? (row.paidAt instanceof Date ? row.paidAt.toISOString() : row.paidAt) : null,
                 });
             }));
         }
