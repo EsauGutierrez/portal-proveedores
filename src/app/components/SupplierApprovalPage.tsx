@@ -353,6 +353,34 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
   const [isSubmittingReject, setIsSubmittingReject] = React.useState(false);
   const [docRequirements, setDocRequirements] = React.useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = React.useState(false);
+  const [isExportingExpediente, setIsExportingExpediente] = React.useState(false);
+
+  const handleExportExpediente = async () => {
+    setIsExportingExpediente(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/admin/suppliers/${supplier.id}/expediente`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'No se pudo generar el expediente.');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Expediente_Materialidad_${supplier.companyName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Error al descargar el expediente.');
+    } finally {
+      setIsExportingExpediente(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!isOpen || !supplier) return;
@@ -419,7 +447,18 @@ const DocumentValidationModal = ({ supplier, isOpen, onClose, onApprove, onRejec
             <h3 className="text-2xl font-bold text-gray-800">{supplier.companyName}</h3>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X className="w-6 h-6" /></button>
           </div>
-          <p className="text-gray-600 mb-6">RFC: {supplier.rfc} | Contacto: {supplier.user.name}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+            <p className="text-gray-600">RFC: {supplier.rfc} | Contacto: {supplier.user.name}</p>
+            <button
+              onClick={handleExportExpediente}
+              disabled={isExportingExpediente}
+              title="Descarga un ZIP con documentos aprobados, facturas, complementos de pago y estatus de Lista 69B — apoyo para auditorías de materialidad"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-md disabled:opacity-50 transition-colors"
+            >
+              {isExportingExpediente ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {isExportingExpediente ? 'Generando...' : 'Descargar Expediente de Materialidad'}
+            </button>
+          </div>
 
           <h4 className="text-lg font-semibold text-gray-700 mb-4">
             Validación de Documentos
