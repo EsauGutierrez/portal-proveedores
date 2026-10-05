@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Settings, Save, CheckCircle, AlertTriangle, Loader2, UploadCloud, FileText } from 'lucide-react';
+import InvoiceExtraDocsSection from './InvoiceExtraDocsSection';
 
 const Toggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) => (
     <button
@@ -88,7 +89,7 @@ export default function InvoiceSettingsPage() {
     }
 
     return (
-        <div className="max-w-2xl space-y-6">
+        <div className="max-w-3xl space-y-6">
             <div>
                 <h2 className="text-2xl font-bold text-gray-800">Preferencias Generales</h2>
                 <p className="text-gray-500 mt-1 text-sm">Configura las opciones disponibles para proveedores y cargadores de tu empresa.</p>
@@ -145,6 +146,9 @@ export default function InvoiceSettingsPage() {
                     onToggle={() => setBulkUploadForSuppliers(p => !p)}
                 />
             </div>
+
+            {/* ── Sección: Documentos adicionales de factura (guarda por su cuenta, no usa el botón de abajo) ── */}
+            <InvoiceExtraDocsSection />
 
             {/* ── Sección: Complementos de Pago ── */}
             <div className="bg-white rounded-lg shadow-md p-6 space-y-5">

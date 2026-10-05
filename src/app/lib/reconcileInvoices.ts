@@ -7,6 +7,7 @@
 
 import { prisma } from './prisma';
 import { querySuiteQL, NetSuiteCredentials } from './netsuite';
+import { syncInvoiceAttachments } from './syncInvoiceAttachments';
 
 export interface ReconcileResult {
   tenantId: string;
@@ -141,6 +142,8 @@ export async function reconcileInvoicesForTenant(
           data: { syncStatus: 'SYNCED', netsuiteId: billId, syncError: null },
         });
         console.log(`[RECONCILE] Factura ${inv.folio} adoptada como SYNCED (bill ${billId} ya existía en NetSuite).`);
+        // Si la factura trae documentos adicionales, enviarlos ahora que el bill está confirmado
+        await syncInvoiceAttachments(inv.id);
         adopted++;
       } else {
         unchanged++;

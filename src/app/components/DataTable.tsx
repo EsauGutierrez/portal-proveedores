@@ -3,7 +3,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Search, X, UploadCloud, FileText, CheckCircle, AlertTriangle, Loader2, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, X, UploadCloud, FileText, CheckCircle, AlertTriangle, Loader2, ArrowUp, ArrowDown, RefreshCw, Paperclip } from 'lucide-react';
+import { validateExtraFile, describeAllowedTypes, MAX_EXTRA_FILE_MB } from '../lib/invoiceExtraDocTypes';
+
+type ExtraDocRequirement = { id: string; name: string; isRequired: boolean; allowedTypes: string[]; accept: string };
 
 // --- Helper para formatear moneda ---
 const formatCurrency = (number) => {
@@ -66,10 +69,51 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  // Documentos adicionales que el admin configuró para esta factura
+  const [extraDocs, setExtraDocs] = useState<ExtraDocRequirement[]>([]);
+  const [extraLoading, setExtraLoading] = useState(true);
+  const [extraFiles, setExtraFiles] = useState<Record<string, File>>({});
+  const [extraErrors, setExtraErrors] = useState<Record<string, string>>({});
 
-  const resetState = () => { setXmlFile(null); setPdfFile(null); setStatus('idle'); setErrorMessage(''); };
+  // Mismo criterio que el envío: a qué OC/recepción se factura
+  const getTargetParams = (): Record<string, string> => {
+    if (isConsignment && order?.id) return { purchaseOrderId: order.id };
+    if (receptionIds.length > 0) return { receptionId: receptionIds[0] };
+    if (order?.id) return { purchaseOrderId: order.id };
+    return {};
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(getTargetParams());
+    if (!params.toString()) { setExtraLoading(false); return; }
+    const token = localStorage.getItem('token');
+    fetch(`/api/invoices/extra-documents?${params}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : { documents: [] }))
+      .then(data => setExtraDocs(data.documents ?? []))
+      // Si no se pudo consultar, no se bloquea la carga: el servidor valida los obligatorios.
+      .catch(() => setExtraDocs([]))
+      .finally(() => setExtraLoading(false));
+  }, []);
+
+  const resetState = () => { setXmlFile(null); setPdfFile(null); setExtraFiles({}); setExtraErrors({}); setStatus('idle'); setErrorMessage(''); };
   const handleClose = () => { resetState(); onClose(); };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => { if (e.target.files && e.target.files[0]) { setFile(e.target.files[0]); } };
+
+  const handleExtraFileChange = async (e: React.ChangeEvent<HTMLInputElement>, doc: ExtraDocRequirement) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const fileError = await validateExtraFile(file, doc.allowedTypes);
+    setExtraErrors(prev => ({ ...prev, [doc.id]: fileError ?? '' }));
+    if (!fileError) setExtraFiles(prev => ({ ...prev, [doc.id]: file }));
+  };
+  const removeExtraFile = (docId: string) => {
+    setExtraFiles(prev => { const next = { ...prev }; delete next[docId]; return next; });
+    setExtraErrors(prev => ({ ...prev, [docId]: '' }));
+  };
+
+  const missingRequiredExtras = extraDocs.filter(d => d.isRequired && !extraFiles[d.id]);
+  const canSubmit = !!xmlFile && !!pdfFile && !extraLoading && missingRequiredExtras.length === 0;
 
   // Determinar modo: recepciones múltiples, 1 recepción, o OC entera
   const isMultiReception = receptionIds.length > 1;
@@ -78,6 +122,10 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
   const handleSubmit = async () => {
     if (!xmlFile || !pdfFile) {
       alert("Por favor, adjunta ambos archivos (XML y PDF).");
+      return;
+    }
+    if (missingRequiredExtras.length > 0) {
+      alert(`Falta adjuntar: ${missingRequiredExtras.map(d => d.name).join(', ')}.`);
       return;
     }
 
@@ -98,6 +146,10 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
     if (supplierUserId) formData.append('userId', supplierUserId);
     formData.append('xmlFile', xmlFile);
     formData.append('pdfFile', pdfFile);
+    for (const doc of extraDocs) {
+      const file = extraFiles[doc.id];
+      if (file) formData.append(`extra_${doc.id}`, file);
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -148,10 +200,51 @@ const UploadInvoiceModal = ({ isOpen, onClose, reception, order, receptionIds = 
               Estás cargando 1 sola factura integral para la Orden de Compra <span className="font-bold">{order?.folio}</span>.
             </p>
           </div>
-        )}</div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo XML</label><label htmlFor="xml-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{xmlFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{xmlFile ? <span className="font-semibold">{xmlFile.name}</span> : 'Adjuntar XML'}</p></div></label><input id="xml-upload-invoice" type="file" className="hidden" accept=".xml,text/xml" onChange={(e) => handleFileChange(e, setXmlFile)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo PDF</label><label htmlFor="pdf-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{pdfFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{pdfFile ? <span className="font-semibold">{pdfFile.name}</span> : 'Adjuntar PDF'}</p></div></label><input id="pdf-upload-invoice" type="file" className="hidden" accept="application/pdf" onChange={(e) => handleFileChange(e, setPdfFile)} /></div></div><div className="mt-8 flex justify-end space-x-4"><button onClick={handleClose} className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-100">Cancelar</button><button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300" disabled={!xmlFile || !pdfFile}>Subir Factura</button></div></>);
+        )}</div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo XML</label><label htmlFor="xml-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{xmlFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{xmlFile ? <span className="font-semibold">{xmlFile.name}</span> : 'Adjuntar XML'}</p></div></label><input id="xml-upload-invoice" type="file" className="hidden" accept=".xml,text/xml" onChange={(e) => handleFileChange(e, setXmlFile)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Archivo PDF</label><label htmlFor="pdf-upload-invoice" className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-50"><div className="text-center">{pdfFile ? <CheckCircle className="mx-auto w-10 h-10 text-green-500" /> : <UploadCloud className="mx-auto w-10 h-10 text-gray-400" />}<p className="mt-2 text-sm text-gray-600">{pdfFile ? <span className="font-semibold">{pdfFile.name}</span> : 'Adjuntar PDF'}</p></div></label><input id="pdf-upload-invoice" type="file" className="hidden" accept="application/pdf" onChange={(e) => handleFileChange(e, setPdfFile)} /></div>
+        {extraLoading && (<p className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Consultando documentos adicionales...</p>)}
+        {extraDocs.length > 0 && (
+          <div className="pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-800 mb-3">Documentos adicionales</h4>
+            <div className="space-y-3">
+              {extraDocs.map(doc => {
+                const file = extraFiles[doc.id];
+                const inputId = `extra-upload-${doc.id}`;
+                return (
+                  <div key={doc.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-700">
+                          {doc.name}{' '}
+                          {doc.isRequired
+                            ? <span className="ml-1 text-xs font-semibold text-red-600">Obligatorio</span>
+                            : <span className="ml-1 text-xs text-gray-400">Opcional</span>}
+                        </p>
+                        <p className="text-xs text-gray-400">{describeAllowedTypes(doc.allowedTypes)} · máx. {MAX_EXTRA_FILE_MB} MB</p>
+                      </div>
+                      {file ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          <span className="text-sm text-gray-700 truncate max-w-[10rem]" title={file.name}>{file.name}</span>
+                          <button type="button" onClick={() => removeExtraFile(doc.id)} className="text-gray-400 hover:text-red-600 flex-shrink-0" title="Quitar archivo"><X className="w-4 h-4" /></button>
+                        </div>
+                      ) : (
+                        <label htmlFor={inputId} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 font-medium cursor-pointer hover:border-blue-500 hover:bg-gray-50 flex-shrink-0">
+                          <Paperclip className="w-4 h-4" /> Adjuntar
+                        </label>
+                      )}
+                      <input id={inputId} type="file" className="hidden" accept={doc.accept} onChange={(e) => handleExtraFileChange(e, doc)} />
+                    </div>
+                    {extraErrors[doc.id] && (<p className="mt-1 text-xs text-red-600">{extraErrors[doc.id]}</p>)}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        </div><div className="mt-8 flex justify-end space-x-4"><button onClick={handleClose} className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-100">Cancelar</button><button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300" disabled={!canSubmit}>Subir Factura</button></div></>);
     }
   };
-  return <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50"><div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">{renderContent()}</div></div>;
+  return <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4"><div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto">{renderContent()}</div></div>;
 };
 
 // --- Componente: Modal para mostrar el error de sincronización de factura ---

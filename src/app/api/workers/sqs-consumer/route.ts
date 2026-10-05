@@ -4,6 +4,7 @@ import { prisma } from '../../../lib/prisma';
 import { invokeRestlet } from '../../../lib/netsuite';
 import { getPresignedUrl } from '../../../lib/s3';
 import { processBulkPaymentComplements } from '../../../lib/processBulkPaymentComplements';
+import { syncInvoiceAttachments } from '../../../lib/syncInvoiceAttachments';
 
 // This endpoint matches the SQS Event Payload signature
 export async function POST(request: Request) {
@@ -77,6 +78,8 @@ export async function POST(request: Request) {
             if (invoice.netsuiteId) {
                 console.log(`[Worker] Factura ${invoiceId} ya tiene VendorBill en NetSuite (NS ID: ${invoice.netsuiteId}). Corrigiendo estado a SYNCED.`);
                 await updateSyncStatus(invoiceId, 'SYNCED', null, invoice.netsuiteId);
+                // Completa los adjuntos que hubieran quedado pendientes en un intento anterior
+                await syncInvoiceAttachments(invoiceId);
                 continue;
             }
 
@@ -196,6 +199,8 @@ export async function POST(request: Request) {
                     console.log(`[Worker] Factura ${invoiceId} sincronizada con NetSuite! Internal ID: ${netsuiteResponse.vendorBillId}`);
                     // 8. ÉXITO: Actualizar el estado a SYNCED y guardar el ID interno del VendorBill
                     await updateSyncStatus(invoiceId, 'SYNCED', null, String(netsuiteResponse.vendorBillId));
+                    // Documentos adicionales: paso aparte y best-effort; un fallo aquí no afecta a la factura.
+                    await syncInvoiceAttachments(invoiceId);
                 } else {
                     console.error(`[Worker] NetSuite rechazó la transacción:`, netsuiteResponse);
                     await updateSyncStatus(invoiceId, 'FAILED', `Error ERP: ${netsuiteResponse.error || JSON.stringify(netsuiteResponse)}`);

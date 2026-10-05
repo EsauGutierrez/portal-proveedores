@@ -60,14 +60,19 @@ export async function GET(request: Request) {
             const invoices = await prisma.invoice.findMany({
                 where: baseWhere,
                 include: {
-                    user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } }
+                    user: { select: { name: true, supplierProfile: { select: { companyName: true, rfc: true } } } },
+                    attachments: { select: { name: true, fileName: true, fileUrl: true } },
                 }
             });
 
+            const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_');
             invoices.forEach(inv => {
                 const supplierName = inv.user?.supplierProfile?.companyName || inv.user?.name || 'Desconocido';
                 if (inv.pdfUrl) documentsToDownload.push({ name: `${supplierName}/Factura_${inv.folio}.pdf`, urlKey: inv.pdfUrl });
                 if (inv.xmlUrl) documentsToDownload.push({ name: `${supplierName}/Factura_${inv.folio}.xml`, urlKey: inv.xmlUrl });
+                inv.attachments.forEach(a => {
+                    documentsToDownload.push({ name: `${supplierName}/Factura_${inv.folio}_adjuntos/${safe(a.name)}_${safe(a.fileName)}`, urlKey: a.fileUrl });
+                });
             });
         }
 

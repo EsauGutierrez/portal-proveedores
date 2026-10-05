@@ -1,0 +1,111 @@
+<!--
+  Registro personalizado: Documento adicional de factura (Portal de Proveedores)
+  Hijo del Vendor Bill. Lo crea la acción `createInvoiceAttachment` de IMR-PP-FACTURAS-REST.js.
+
+  REFERENCIA SDF — no se ha desplegado ni validado contra una cuenta; revísalo con
+  `suitecloud project:validate` antes de incluirlo en el bundle. Alternativa equivalente:
+  crearlo desde Customization > Lists, Records & Fields > Record Types con estos mismos IDs.
+
+  Pasos manuales posteriores al despliegue:
+    1. Dar al ROL DE INTEGRACIÓN (el del token del RESTlet) permiso sobre este registro
+       (pestaña Permissions del record type) con nivel Create/Edit.
+    2. Hacer visible el subtab en el formulario del Vendor Bill (formulario personalizado >
+       pestaña Subtabs/Custom Records) para que el contador vea los documentos en la factura.
+    3. Actualizar el script del RESTlet con la versión de este repo.
+-->
+<customrecordtype scriptid="customrecord_imr_pp_factura_doc">
+  <accesstype>USEPERMISSIONLIST</accesstype>
+  <allowattachments>F</allowattachments>
+  <allowinlineediting>F</allowinlineediting>
+  <allowmobileaccess>F</allowmobileaccess>
+  <allownumberingupdate>F</allownumberingupdate>
+  <allowquickadd>F</allowquickadd>
+  <allowquicksearch>F</allowquicksearch>
+  <allowuiaccess>T</allowuiaccess>
+  <description>Documentos adicionales que el proveedor adjunta a su factura en el Portal de Proveedores.</description>
+  <enabledle>T</enabledle>
+  <enablekeywords>T</enablekeywords>
+  <enablemailmerge>F</enablemailmerge>
+  <enablenumbering>F</enablenumbering>
+  <enableoptimisticlocking>T</enableoptimisticlocking>
+  <enablesystemnotes>T</enablesystemnotes>
+  <hierarchical>F</hierarchical>
+  <includeinsearchmenu>T</includeinsearchmenu>
+  <includename>T</includename>
+  <isinactive>F</isinactive>
+  <isordered>F</isordered>
+  <recordname>Documento adicional de factura (Portal)</recordname>
+  <showcreationdate>T</showcreationdate>
+  <showcreationdateonlist>F</showcreationdateonlist>
+  <showid>F</showid>
+  <showlastmodified>T</showlastmodified>
+  <showlastmodifiedonlist>F</showlastmodifiedonlist>
+  <shownotes>F</shownotes>
+  <showowner>F</showowner>
+  <showownerallowchange>F</showownerallowchange>
+  <showowneronlist>F</showowneronlist>
+  <customrecordcustomfields>
+    <!-- Padre: hace que el registro aparezca como subtab dentro del Vendor Bill -->
+    <customrecordcustomfield scriptid="custrecord_imr_pp_doc_bill">
+      <accesslevel>2</accesslevel>
+      <allowquickadd>F</allowquickadd>
+      <applyformatting>F</applyformatting>
+      <checkspelling>F</checkspelling>
+      <defaultchecked>F</defaultchecked>
+      <description>Vendor Bill al que pertenece el documento.</description>
+      <displaytype>NORMAL</displaytype>
+      <fieldtype>SELECT</fieldtype>
+      <isformula>F</isformula>
+      <ismandatory>T</ismandatory>
+      <isparent>T</isparent>
+      <label>Factura</label>
+      <searchlevel>2</searchlevel>
+      <selectrecordtype>-30</selectrecordtype>
+      <showinlist>T</showinlist>
+      <storevalue>T</storevalue>
+    </customrecordcustomfield>
+    <customrecordcustomfield scriptid="custrecord_imr_pp_doc_file">
+      <accesslevel>2</accesslevel>
+      <applyformatting>F</applyformatting>
+      <checkspelling>F</checkspelling>
+      <defaultchecked>F</defaultchecked>
+      <description>Archivo cargado por el proveedor (guardado en el File Cabinet).</description>
+      <displaytype>NORMAL</displaytype>
+      <fieldtype>DOCUMENT</fieldtype>
+      <isformula>F</isformula>
+      <ismandatory>T</ismandatory>
+      <label>Archivo</label>
+      <searchlevel>2</searchlevel>
+      <showinlist>T</showinlist>
+      <storevalue>T</storevalue>
+    </customrecordcustomfield>
+    <!-- Llave de idempotencia: ID del adjunto en el Portal. No editable desde la UI. -->
+    <customrecordcustomfield scriptid="custrecord_imr_pp_doc_portal_id">
+      <accesslevel>2</accesslevel>
+      <applyformatting>F</applyformatting>
+      <checkspelling>F</checkspelling>
+      <defaultchecked>F</defaultchecked>
+      <description>ID del adjunto en el Portal de Proveedores (evita duplicados al reintentar).</description>
+      <displaytype>DISABLED</displaytype>
+      <fieldtype>TEXT</fieldtype>
+      <isformula>F</isformula>
+      <ismandatory>T</ismandatory>
+      <label>ID Portal</label>
+      <searchlevel>2</searchlevel>
+      <showinlist>F</showinlist>
+      <storevalue>T</storevalue>
+    </customrecordcustomfield>
+  </customrecordcustomfields>
+  <permissions>
+    <permission>
+      <permittedlevel>FULL</permittedlevel>
+      <permittedrole>ADMINISTRATOR</permittedrole>
+    </permission>
+    <!-- Agrega aquí el rol de integración, p. ej.:
+    <permission>
+      <permittedlevel>EDIT</permittedlevel>
+      <permittedrole>[scriptid=customrole_imr_pp_integracion]</permittedrole>
+    </permission>
+    -->
+  </permissions>
+</customrecordtype>

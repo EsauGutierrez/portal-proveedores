@@ -5,7 +5,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js'; // Se añade la importación para leer XML
-import { uploadFileToS3, getPresignedUrl } from '../../lib/s3';
+import { uploadFileToS3, getPresignedUrl, deleteFromS3 } from '../../lib/s3';
+import { getApplicableRequirements } from '../../lib/invoiceExtraDocs';
+import { validateExtraFile } from '../../lib/invoiceExtraDocTypes';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
 // Helper para formatear moneda
@@ -216,7 +218,7 @@ export async function POST(request: Request) {
     }
     const supplierProfile = await prisma.supplierProfile.findFirst({
       where: { userId },
-      select: { id: true, rfc: true },
+      select: { id: true, rfc: true, supplierType: true },
     });
     if (supplierProfile) {
       const rfcRegistrado = supplierProfile.rfc.toUpperCase();
@@ -316,26 +318,16 @@ export async function POST(request: Request) {
       console.log('[Invoices] CFDI sin sección de impuestos trasladados, se omite validación de IVA.');
     }
 
-    // --- SUBIDA A AWS S3 ---
-    let pdfUrl = '';
-    let xmlUrl = '';
-    try {
-      const folderId = receptionIds[0] || purchaseOrderId;
-      pdfUrl = await uploadFileToS3(pdfFile, `invoices/${userId}/${folderId}`);
-      xmlUrl = await uploadFileToS3(xmlFile, `invoices/${userId}/${folderId}`);
-    } catch (uploadError) {
-      return NextResponse.json({ message: 'Error al subir los archivos a AWS S3.', error: (uploadError as Error).message }, { status: 500 });
-    }
-
     // --- OBTENER EL TENANT ID Y VALIDAR PROPIEDAD/AISLAMIENTO ---
     // La OC/recepción a facturar debe pertenecer al mismo tenant del usuario y al
     // proveedor resuelto (userId). Sin esto, cualquiera podía pasar un id de OC de
     // otro proveedor/empresa y quedar facturado a su nombre.
     let tenantIdStr = '';
+    let poSubsidiaryId: string | null = null;
     if (receptionIds.length) {
       const receptionContext = await prisma.reception.findUnique({
         where: { id: receptionIds[0] },
-        select: { tenantId: true, purchaseOrder: { select: { userId: true } } }
+        select: { tenantId: true, purchaseOrder: { select: { userId: true, subsidiaryId: true } } }
       });
       if (!receptionContext) {
         return NextResponse.json({ message: 'La recepción asociada no existe.' }, { status: 404 });
@@ -347,10 +339,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: 'La recepción no pertenece a este proveedor.' }, { status: 403 });
       }
       tenantIdStr = receptionContext.tenantId;
+      poSubsidiaryId = receptionContext.purchaseOrder?.subsidiaryId ?? null;
     } else if (purchaseOrderId) {
       const poContext = await prisma.purchaseOrder.findUnique({
         where: { id: purchaseOrderId },
-        select: { tenantId: true, userId: true }
+        select: { tenantId: true, userId: true, subsidiaryId: true }
       });
       if (!poContext) {
         return NextResponse.json({ message: 'La orden de compra asociada no existe.' }, { status: 404 });
@@ -362,6 +355,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: 'La orden de compra no pertenece a este proveedor.' }, { status: 403 });
       }
       tenantIdStr = poContext.tenantId;
+      poSubsidiaryId = poContext.subsidiaryId;
     }
 
     // --- VALIDACIÓN DE SALDO PARA OC DE CONSIGNACIÓN ---
@@ -390,24 +384,85 @@ export async function POST(request: Request) {
       }
     }
 
+    // --- DOCUMENTOS ADICIONALES CONFIGURADOS POR EL ADMIN ---
+    // Se validan TODOS antes de subir cualquier archivo a S3, para no dejar
+    // archivos huérfanos si falta un obligatorio o alguno no es válido.
+    const extraRequirements = await getApplicableRequirements(
+      tenantIdStr,
+      poSubsidiaryId,
+      supplierProfile?.supplierType ?? 'NATIONAL',
+    );
+    const extraUploads: { requirement: (typeof extraRequirements)[number]; file: File }[] = [];
+    for (const requirement of extraRequirements) {
+      const entry = formData.get(`extra_${requirement.id}`);
+      const file = entry instanceof File && entry.size > 0 ? entry : null;
+      if (!file) {
+        if (requirement.isRequired) {
+          return NextResponse.json({ message: `Falta el documento obligatorio: ${requirement.name}.` }, { status: 422 });
+        }
+        continue;
+      }
+      const fileError = await validateExtraFile(file, requirement.allowedTypes);
+      if (fileError) {
+        return NextResponse.json({ message: `${requirement.name}: ${fileError}` }, { status: 422 });
+      }
+      extraUploads.push({ requirement, file });
+    }
+
+    // --- SUBIDA A AWS S3 ---
+    const uploadedKeys: string[] = [];
+    let pdfUrl = '';
+    let xmlUrl = '';
+    const attachmentsData: { name: string; fileName: string; fileUrl: string; fileSize: number; requirementId: string; tenantId: string }[] = [];
+    try {
+      const folderId = receptionIds[0] || purchaseOrderId;
+      pdfUrl = await uploadFileToS3(pdfFile, `invoices/${userId}/${folderId}`);
+      uploadedKeys.push(pdfUrl);
+      xmlUrl = await uploadFileToS3(xmlFile, `invoices/${userId}/${folderId}`);
+      uploadedKeys.push(xmlUrl);
+      for (const { requirement, file } of extraUploads) {
+        const fileUrl = await uploadFileToS3(file, `invoices/${userId}/${folderId}/extra`);
+        uploadedKeys.push(fileUrl);
+        attachmentsData.push({
+          name: requirement.name,
+          fileName: file.name,
+          fileUrl,
+          fileSize: file.size,
+          requirementId: requirement.id,
+          tenantId: tenantIdStr,
+        });
+      }
+    } catch (uploadError) {
+      await Promise.allSettled(uploadedKeys.map(deleteFromS3));
+      return NextResponse.json({ message: 'Error al subir los archivos a AWS S3.', error: (uploadError as Error).message }, { status: 500 });
+    }
+
     // --- GUARDADO INICIAL EN BASE DE DATOS COMO PENDING ---
-    const newInvoice = await prisma.invoice.create({
-      data: {
-        folio: folioFiscal,
-        fecha: new Date(comprobante.$.Fecha),
-        subtotal: xmlSubtotal,
-        tax: xmlTax,
-        total: xmlTotal,
-        pdfUrl: pdfUrl,
-        xmlUrl: xmlUrl,
-        syncStatus: 'PENDING_SYNC',
-        tenant: { connect: { id: tenantIdStr } },
-        user: { connect: { id: userId } },
-        ...(purchaseOrderId ? { purchaseOrder: { connect: { id: purchaseOrderId } } } : {}),
-        ...(receptionIds.length ? { receptions: { connect: receptionIds.map(id => ({ id })) } } : {}),
-        ...(uploadedBy ? { uploadedByUser: { connect: { id: uploadedBy } } } : {}),
-      } as any,
-    });
+    let newInvoice;
+    try {
+      newInvoice = await prisma.invoice.create({
+        data: {
+          folio: folioFiscal,
+          fecha: new Date(comprobante.$.Fecha),
+          subtotal: xmlSubtotal,
+          tax: xmlTax,
+          total: xmlTotal,
+          pdfUrl: pdfUrl,
+          xmlUrl: xmlUrl,
+          syncStatus: 'PENDING_SYNC',
+          tenant: { connect: { id: tenantIdStr } },
+          user: { connect: { id: userId } },
+          ...(purchaseOrderId ? { purchaseOrder: { connect: { id: purchaseOrderId } } } : {}),
+          ...(receptionIds.length ? { receptions: { connect: receptionIds.map(id => ({ id })) } } : {}),
+          ...(uploadedBy ? { uploadedByUser: { connect: { id: uploadedBy } } } : {}),
+          ...(attachmentsData.length ? { attachments: { create: attachmentsData } } : {}),
+        } as any,
+      });
+    } catch (createError) {
+      // La factura no se guardó (p. ej. UUID duplicado): se limpian los archivos ya subidos.
+      await Promise.allSettled(uploadedKeys.map(deleteFromS3));
+      throw createError;
+    }
 
     // --- ENVIAR MENSAJE A SQS PARA VALIDACIÓN ASÍNCRONA ---
     const sqsClient = new SQSClient({

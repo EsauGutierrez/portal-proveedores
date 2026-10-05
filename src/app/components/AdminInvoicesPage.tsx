@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Search, Filter, FileText, Download, AlertCircle, FileDigit, RefreshCw } from 'lucide-react';
+import { Loader2, Search, Filter, FileText, Download, AlertCircle, FileDigit, RefreshCw, Paperclip, X } from 'lucide-react';
 
 const AdminInvoicesPage = () => {
     // --- Estado principal ---
@@ -11,6 +11,51 @@ const AdminInvoicesPage = () => {
 
     // --- Estado de retry de complementos de pago ---
     const [retryLoadingId, setRetryLoadingId] = useState<string | null>(null);
+
+    // Factura cuyos documentos adicionales se están consultando
+    const [attachmentsDoc, setAttachmentsDoc] = useState<any | null>(null);
+    const [attachmentsRetrying, setAttachmentsRetrying] = useState(false);
+    const [attachmentsFeedback, setAttachmentsFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const ATTACHMENT_STATUS: Record<string, { label: string; className: string }> = {
+        SYNCED: { label: 'Enviado a NetSuite', className: 'bg-green-100 text-green-800 border-green-200' },
+        PENDING_SYNC: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+        FAILED: { label: 'Falló', className: 'bg-red-100 text-red-800 border-red-200' },
+    };
+
+    const openAttachments = (doc: any) => {
+        setAttachmentsFeedback(null);
+        setAttachmentsDoc(doc);
+    };
+
+    const handleRetryAttachments = async () => {
+        if (!attachmentsDoc) return;
+        setAttachmentsRetrying(true);
+        setAttachmentsFeedback(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/invoices/retry-attachments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ invoiceId: attachmentsDoc.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+
+            const byId = new Map<string, any>(data.attachments.map((a: any) => [a.id, a]));
+            const updated = {
+                ...attachmentsDoc,
+                attachments: attachmentsDoc.attachments.map((a: any) => ({ ...a, ...(byId.get(a.id) ?? {}) })),
+            };
+            setAttachmentsDoc(updated);
+            setDocuments(prev => prev.map(d => (d.id === updated.id ? updated : d)));
+            setAttachmentsFeedback({ type: data.failed > 0 || data.skipped ? 'error' : 'success', text: data.message });
+        } catch (e: any) {
+            setAttachmentsFeedback({ type: 'error', text: e.message || 'Error al reintentar el envío.' });
+        } finally {
+            setAttachmentsRetrying(false);
+        }
+    };
 
     // Filtros
     const [startDate, setStartDate] = useState('');
@@ -380,6 +425,16 @@ const AdminInvoicesPage = () => {
                                                                 <Download className="w-5 h-5" />
                                                             </a>
                                                         )}
+                                                        {doc.attachments?.length > 0 && (
+                                                            <button
+                                                                onClick={() => openAttachments(doc)}
+                                                                className="relative p-1.5 text-gray-500 hover:bg-gray-100 rounded hover:text-amber-600 transition-colors"
+                                                                title={`${doc.attachments.length} documento(s) adicional(es)`}
+                                                            >
+                                                                <Paperclip className="w-5 h-5" />
+                                                                <span className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{doc.attachments.length}</span>
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </>
@@ -436,6 +491,67 @@ const AdminInvoicesPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* --- Documentos adicionales de una factura --- */}
+            {attachmentsDoc && (
+                <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={() => setAttachmentsDoc(null)}>
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-800">Documentos adicionales</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">Factura {String(attachmentsDoc.folio).slice(-8)} · {attachmentsDoc.proveedor}</p>
+                            </div>
+                            <button onClick={() => setAttachmentsDoc(null)} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+                        </div>
+                        <ul className="divide-y divide-gray-100">
+                            {attachmentsDoc.attachments.map((a: any) => {
+                                const status = ATTACHMENT_STATUS[a.netsuiteSyncStatus] ?? ATTACHMENT_STATUS.PENDING_SYNC;
+                                return (
+                                    <li key={a.id} className="py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-gray-800">{a.name}</p>
+                                                <p className="text-xs text-gray-500 truncate" title={a.fileName}>{a.fileName}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3 flex-shrink-0">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${status.className}`}>{status.label}</span>
+                                                <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800">
+                                                    <Download className="w-4 h-4" /> Abrir
+                                                </a>
+                                            </div>
+                                        </div>
+                                        {a.netsuiteSyncStatus === 'FAILED' && a.netsuiteSyncError && (
+                                            <p className="mt-1 text-xs text-red-600 break-words">{a.netsuiteSyncError}</p>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+
+                        {attachmentsDoc.attachments.some((a: any) => a.netsuiteSyncStatus !== 'SYNCED') && (
+                            attachmentsDoc.estadoCentral === 'SYNCED' ? (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <button
+                                        onClick={handleRetryAttachments}
+                                        disabled={attachmentsRetrying}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 text-sm font-semibold rounded disabled:opacity-50 transition-colors"
+                                    >
+                                        {attachmentsRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                        Reintentar envío a NetSuite
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
+                                    Estos documentos se enviarán a NetSuite automáticamente cuando la factura se sincronice.
+                                </p>
+                            )
+                        )}
+                        {attachmentsFeedback && (
+                            <p className={`mt-3 text-sm ${attachmentsFeedback.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>{attachmentsFeedback.text}</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

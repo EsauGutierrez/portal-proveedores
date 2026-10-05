@@ -302,6 +302,28 @@ export async function GET(request: Request) {
             }));
         }
 
+        // Documentos adicionales cargados junto con cada factura (se resuelven en una sola consulta)
+        const invoiceIds = results.filter(r => r.tipo === 'Factura').map(r => r.id);
+        if (invoiceIds.length > 0) {
+            const attachments = await prisma.invoiceAttachment.findMany({
+                where: { invoiceId: { in: invoiceIds }, ...(role !== 'SUPERADMIN' ? { tenantId } : {}) },
+                orderBy: { createdAt: 'asc' },
+            });
+            const byInvoice = new Map<string, { id: string; name: string; fileName: string; url: string; netsuiteSyncStatus: string; netsuiteSyncError: string | null }[]>();
+            await Promise.all(attachments.map(async (a) => {
+                const entry = {
+                    id: a.id,
+                    name: a.name,
+                    fileName: a.fileName,
+                    url: await getPresignedUrl(a.fileUrl),
+                    netsuiteSyncStatus: a.netsuiteSyncStatus,
+                    netsuiteSyncError: a.netsuiteSyncError,
+                };
+                byInvoice.set(a.invoiceId, [...(byInvoice.get(a.invoiceId) ?? []), entry]);
+            }));
+            results.forEach(r => { if (r.tipo === 'Factura') r.attachments = byInvoice.get(r.id) ?? []; });
+        }
+
         // Suppliers list for the filter dropdown (only fetch once — frontend caches it)
         const filterSuppliersWhere: any = { role: 'SUPPLIER' };
         if (role !== 'SUPERADMIN') filterSuppliersWhere.tenantId = tenantId;

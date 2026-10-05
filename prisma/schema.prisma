@@ -39,6 +39,7 @@ model Tenant {
   bulkPaymentLogs      BulkPaymentComplementLog[]
   operatorAssignments  OperatorAssignment[]
   bulkUploadJobs       BulkUploadJob[]
+  invoiceDocumentRequirements InvoiceDocumentRequirement[]
 }
 
 model DocumentRequirement {
@@ -237,8 +238,56 @@ model Invoice {
   uploadedByUser     User?               @relation("InvoiceUploadedBy", fields: [uploadedBy], references: [id])
   bulkJob            BulkUploadJob?      @relation(fields: [bulkJobId], references: [id])
   paymentComplements PaymentComplement[]
+  attachments        InvoiceAttachment[]
 
   @@unique([tenantId, folio])
+}
+
+// Documentos adicionales (además de XML+PDF) que el admin del tenant configura para
+// pedirlos al proveedor al subir una factura. subsidiaryIds vacío = aplica a todas.
+model InvoiceDocumentRequirement {
+  id            String              @id @default(cuid())
+  name          String
+  isRequired    Boolean             @default(false)
+  isActive      Boolean             @default(true)
+  supplierType  SupplierType        @default(BOTH)
+  allowedTypes  String[]
+  subsidiaryIds String[]
+  tenantId      String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attachments   InvoiceAttachment[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// Archivo adicional cargado junto con una factura. `name` es una copia del nombre del
+// requisito al momento de la carga, para conservar el histórico si el requisito se elimina.
+// El envío a NetSuite (registro personalizado hijo del Vendor Bill) tiene su propio estatus,
+// independiente del de la factura: un adjunto fallido nunca invalida el Vendor Bill.
+model InvoiceAttachment {
+  id                 String                      @id @default(cuid())
+  name               String
+  fileName           String
+  fileUrl            String
+  fileSize           Int
+  invoiceId          String
+  requirementId      String?
+  tenantId           String
+  createdAt          DateTime                    @default(now())
+  netsuiteSyncStatus InvoiceSyncStatus           @default(PENDING_SYNC)
+  netsuiteRecordId   String?
+  // Vendor Bill contra el que se sincronizó: si la factura se re-sincroniza con otro bill, se reenvía.
+  netsuiteBillId     String?
+  netsuiteSyncError  String?
+  netsuiteSyncedAt   DateTime?
+  invoice            Invoice                     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  requirement        InvoiceDocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([tenantId])
 }
 
 model PaymentComplement {
