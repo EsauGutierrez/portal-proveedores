@@ -231,14 +231,14 @@ export default function InvoiceExtraDocsSection() {
         flashSuccess(wasEdit ? 'Documento actualizado.' : 'Documento agregado.');
     };
 
-    const handleToggleActive = async (doc: ExtraDoc) => {
+    const handleToggle = async (doc: ExtraDoc, field: 'isActive' | 'isRequired') => {
         setBusyId(doc.id);
         setError('');
         try {
             const res = await fetch(`/api/admin/invoice-documents/${doc.id}`, {
                 method: 'PATCH',
                 headers: authHeaders(),
-                body: JSON.stringify({ isActive: !doc.isActive }),
+                body: JSON.stringify({ [field]: !doc[field] }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message);
@@ -320,9 +320,6 @@ export default function InvoiceExtraDocsSection() {
                             <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <p className="text-sm font-semibold text-gray-800">{doc.name}</p>
-                                    {doc.isRequired
-                                        ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Obligatorio</span>
-                                        : <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Opcional</span>}
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SUPPLIER_TYPE_STYLES[doc.supplierType]}`}>{SUPPLIER_TYPE_LABELS[doc.supplierType]}</span>
                                 </div>
                                 <p className="text-xs text-gray-500 mt-1">
@@ -340,9 +337,14 @@ export default function InvoiceExtraDocsSection() {
                                     </div>
                                 ) : (
                                     <>
-                                        <span title={doc.isActive ? 'Activo: se pide al subir facturas' : 'Inactivo: no se pide'}>
-                                            <Toggle enabled={doc.isActive} onToggle={() => handleToggleActive(doc)} disabled={busyId === doc.id} />
-                                        </span>
+                                        <div className="flex flex-col items-center gap-1" title={doc.isRequired ? 'Obligatorio: el proveedor no puede enviar la factura sin este documento' : 'Opcional: el proveedor puede omitirlo'}>
+                                            <Toggle enabled={doc.isRequired} onToggle={() => handleToggle(doc, 'isRequired')} disabled={busyId === doc.id} />
+                                            <span className={`text-[11px] font-medium ${doc.isRequired ? 'text-red-600' : 'text-gray-500'}`}>{doc.isRequired ? 'Obligatorio' : 'Opcional'}</span>
+                                        </div>
+                                        <div className="flex flex-col items-center gap-1" title={doc.isActive ? 'Activo: se pide al subir facturas' : 'Inactivo: no se pide'}>
+                                            <Toggle enabled={doc.isActive} onToggle={() => handleToggle(doc, 'isActive')} disabled={busyId === doc.id} />
+                                            <span className="text-[11px] font-medium text-gray-500">{doc.isActive ? 'Activo' : 'Inactivo'}</span>
+                                        </div>
                                         <button onClick={() => setModal({ doc })} className="text-gray-400 hover:text-blue-600" title="Editar"><Pencil className="w-4 h-4" /></button>
                                         <button onClick={() => setConfirmDeleteId(doc.id)} className="text-gray-400 hover:text-red-600" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
                                     </>
