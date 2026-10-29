@@ -3,16 +3,26 @@
  * @NScriptType Restlet
  * @NModuleScope SameAccount
  */
-define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, https, query) {
+define(['N/record', 'N/file', 'N/https', 'N/query', 'N/search'], function (record, file, https, query, search) {
 
     const FOLDER_ID = 135902; // Carpeta destino en el File Cabinet de NetSuite
 
-    // Registro personalizado hijo del Vendor Bill para los documentos adicionales de factura.
-    // Definición: Netsuite/objects/customrecord_imr_pp_factura_doc.xml
-    const ATTACH_RECORD_TYPE = 'customrecord_imr_pp_factura_doc';
-    const ATTACH_FIELD_BILL = 'custrecord_imr_pp_doc_bill';
-    const ATTACH_FIELD_FILE = 'custrecord_imr_pp_doc_file';
-    const ATTACH_FIELD_PORTAL_ID = 'custrecord_imr_pp_doc_portal_id';
+    // Límite práctico del nombre de archivo en el File Cabinet de NetSuite
+    const MAX_FILE_NAME = 95;
+
+    /**
+     * Nombre con el que se guarda un documento adicional: "<Documento> - <archivo> [<idPortal>].<ext>".
+     * Se ve legible en Communication > Files del Vendor Bill, y el ID del Portal en el nombre lo
+     * hace único y permite reconocer el archivo al reintentar (idempotencia).
+     */
+    function attachmentStoredName(documentName, fileName, portalAttachmentId) {
+        var clean = function (v) { return String(v || '').replace(/[\\\/:*?"<>|\[\]]/g, '_').trim(); };
+        var dot = String(fileName).lastIndexOf('.');
+        var ext = dot > 0 ? clean(String(fileName).substring(dot + 1)) : '';
+        var base = clean(documentName) + ' - ' + clean(dot > 0 ? String(fileName).substring(0, dot) : fileName);
+        var suffix = ' [' + portalAttachmentId + ']' + (ext ? '.' + ext : '');
+        return base.substring(0, Math.max(10, MAX_FILE_NAME - suffix.length)) + suffix;
+    }
 
     /** Tipo de archivo de NetSuite según la extensión del documento. */
     function fileTypeFor(fileName) {
@@ -462,14 +472,15 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                 };
             }
 
-            // ─── Acción 5: Registrar un documento adicional de factura ───────────────────
-            // Crea un registro personalizado hijo del Vendor Bill con el archivo adjunto.
-            // El Portal la invoca DESPUÉS de crear el bill y de forma independiente: un fallo
-            // aquí nunca invalida la factura. Es idempotente por ID del adjunto en el Portal.
+            // ─── Acción 5: Adjuntar un documento adicional a la factura ──────────────────
+            // Sube el archivo al File Cabinet y lo adjunta al Vendor Bill (subtab Communication >
+            // Files). El Portal la invoca DESPUÉS de crear el bill y de forma independiente: un
+            // fallo aquí nunca invalida la factura. Es idempotente: se reconoce el archivo por su
+            // nombre (incluye el ID del adjunto en el Portal) y se verifica si ya está adjunto.
             if (action === 'createInvoiceAttachment') {
                 const {
-                    vendorBillId,       // Internal ID del Vendor Bill padre
-                    portalAttachmentId, // ID del adjunto en el Portal (llave de idempotencia)
+                    vendorBillId,       // Internal ID del Vendor Bill
+                    portalAttachmentId, // ID del adjunto en el Portal
                     documentName,       // Nombre del documento configurado (ej. "Evidencia de entrega")
                     fileName,           // Nombre original del archivo
                     fileUrl             // URL (presigned S3) para descargar el archivo
@@ -481,35 +492,20 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                         error: 'Faltan campos requeridos: vendorBillId, portalAttachmentId, fileName, fileUrl'
                     };
                 }
+                var billId = parseInt(vendorBillId, 10);
 
                 // El bill debe existir (pudo haberse eliminado en NetSuite después de sincronizarse)
                 var billRows = query.runSuiteQL({
                     query: "SELECT id FROM transaction WHERE id = ? AND type = 'VendBill'",
-                    params: [parseInt(vendorBillId, 10)]
+                    params: [billId]
                 }).asMappedResults();
                 if (!billRows || billRows.length === 0) {
                     return { success: false, error: 'El Vendor Bill ' + vendorBillId + ' no existe en NetSuite.' };
                 }
 
-                // Idempotencia: si este adjunto ya se registró contra este bill, devolver el existente
-                var attDupRows = query.runSuiteQL({
-                    query: 'SELECT id FROM ' + ATTACH_RECORD_TYPE + ' WHERE ' + ATTACH_FIELD_PORTAL_ID + ' = ? AND ' + ATTACH_FIELD_BILL + ' = ?',
-                    params: [String(portalAttachmentId), parseInt(vendorBillId, 10)]
-                }).asMappedResults();
-                if (attDupRows && attDupRows.length > 0) {
-                    log.audit('createInvoiceAttachment: adjunto ya existente (idempotente)', { portalAttachmentId, recordId: attDupRows[0].id });
-                    return {
-                        success: true,
-                        alreadyExists: true,
-                        recordId: attDupRows[0].id,
-                        message: 'El documento ya estaba registrado en NetSuite; no se duplicó.'
-                    };
-                }
+                var storedName = attachmentStoredName(documentName || fileName, fileName, portalAttachmentId);
 
-                // El ID del Portal en el nombre evita choques de nombre en la carpeta
-                var storedName = String(portalAttachmentId) + '_' + String(fileName).replace(/[\\\/:*?"<>|]/g, '_');
-
-                // Si un intento anterior subió el archivo pero falló al crear el registro, reutilizarlo
+                // Si un intento anterior ya subió el archivo, reutilizarlo en vez de subirlo otra vez
                 var attFileId = null;
                 try {
                     var attFileRows = query.runSuiteQL({
@@ -530,19 +526,40 @@ define(['N/record', 'N/file', 'N/https', 'N/query'], function (record, file, htt
                     };
                 }
 
-                var attRec = record.create({ type: ATTACH_RECORD_TYPE });
-                attRec.setValue({ fieldId: 'name', value: String(documentName || fileName).substring(0, 80) });
-                attRec.setValue({ fieldId: ATTACH_FIELD_BILL, value: parseInt(vendorBillId, 10) });
-                attRec.setValue({ fieldId: ATTACH_FIELD_FILE, value: attFileId });
-                attRec.setValue({ fieldId: ATTACH_FIELD_PORTAL_ID, value: String(portalAttachmentId) });
-                var attRecId = attRec.save();
+                // ¿Ya está adjunto a este bill? Si no se puede verificar, se intenta adjuntar de todos modos.
+                try {
+                    var attachedRows = search.create({
+                        type: 'transaction',
+                        filters: [['internalid', 'anyof', billId], 'AND', ['mainline', 'is', 'T']],
+                        columns: [search.createColumn({ name: 'internalid', join: 'file' })]
+                    }).run().getRange({ start: 0, end: 1000 });
+                    for (var i = 0; i < attachedRows.length; i++) {
+                        var attachedId = attachedRows[i].getValue({ name: 'internalid', join: 'file' });
+                        if (attachedId && String(attachedId) === String(attFileId)) {
+                            log.audit('createInvoiceAttachment: archivo ya adjunto (idempotente)', { vendorBillId: billId, fileId: attFileId });
+                            return {
+                                success: true,
+                                alreadyExists: true,
+                                recordId: attFileId,
+                                message: 'El documento ya estaba adjunto a la factura en NetSuite; no se duplicó.'
+                            };
+                        }
+                    }
+                } catch (attSearchErr) {
+                    log.error('createInvoiceAttachment: no se pudo verificar adjuntos existentes', attSearchErr.message);
+                }
 
-                log.audit('Documento adicional registrado', { vendorBillId: vendorBillId, portalAttachmentId: portalAttachmentId, recordId: attRecId });
+                record.attach({
+                    record: { type: 'file', id: attFileId },
+                    to: { type: record.Type.VENDOR_BILL, id: billId }
+                });
+
+                log.audit('Documento adicional adjuntado', { vendorBillId: billId, portalAttachmentId: portalAttachmentId, fileId: attFileId });
 
                 return {
                     success: true,
-                    recordId: attRecId,
-                    message: 'Documento adicional registrado correctamente.'
+                    recordId: attFileId,
+                    message: 'Documento adicional adjuntado correctamente a la factura.'
                 };
             }
 

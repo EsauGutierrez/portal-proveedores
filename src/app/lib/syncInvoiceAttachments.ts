@@ -1,8 +1,8 @@
 // Envío de los documentos adicionales de una factura a NetSuite.
-// Cada adjunto se registra en NetSuite como un registro personalizado hijo del
-// Vendor Bill (acción `createInvoiceAttachment` del RESTlet). Es "best-effort":
+// Cada adjunto se sube al File Cabinet y se adjunta al Vendor Bill (subtab Communication >
+// Files) mediante la acción `createInvoiceAttachment` del RESTlet. Es "best-effort":
 // nunca lanza ni cambia el estatus de la factura; cada adjunto lleva su propio
-// estatus y el RESTlet es idempotente por ID del adjunto, así que reintentar es seguro.
+// estatus y el RESTlet es idempotente (reconoce el archivo por el ID del adjunto en su nombre), así que reintentar es seguro.
 
 import { prisma } from './prisma';
 import { invokeRestlet, NetSuiteCredentials } from './netsuite';

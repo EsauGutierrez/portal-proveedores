@@ -265,7 +265,7 @@ model InvoiceDocumentRequirement {
 
 // Archivo adicional cargado junto con una factura. `name` es una copia del nombre del
 // requisito al momento de la carga, para conservar el histórico si el requisito se elimina.
-// El envío a NetSuite (registro personalizado hijo del Vendor Bill) tiene su propio estatus,
+// El envío a NetSuite (archivo adjunto al Vendor Bill, Communication > Files) tiene su propio estatus,
 // independiente del de la factura: un adjunto fallido nunca invalida el Vendor Bill.
 model InvoiceAttachment {
   id                 String                      @id @default(cuid())
@@ -278,6 +278,7 @@ model InvoiceAttachment {
   tenantId           String
   createdAt          DateTime                    @default(now())
   netsuiteSyncStatus InvoiceSyncStatus           @default(PENDING_SYNC)
+  // ID interno del archivo adjuntado en el File Cabinet de NetSuite
   netsuiteRecordId   String?
   // Vendor Bill contra el que se sincronizó: si la factura se re-sincroniza con otro bill, se reenvía.
   netsuiteBillId     String?
